@@ -2,6 +2,8 @@ import gspread
 from google.oauth2.service_account import Credentials
 import datetime
 import re
+import os
+import json
 
 # ==========================================
 # 👇 SPREADSHEET CONFIGURATION 👇
@@ -17,11 +19,25 @@ class ThunderData:
         self.sheet_results = None
         self.sheet_dates = None
         
+        # Initialize variables so they exist even if loading fails
+        self.all_players = {}
+        self.season_stats = {}
+        self.season_starts = {} 
+        self.seasons_list = []
+        self.divisions_list = set()
+        
         try:
-            self.creds = Credentials.from_service_account_file("credentials.json", scopes=self.scopes)
+            # Check for Render environment variable first, then local file
+            creds_json = os.environ.get("GOOGLE_CREDS_JSON")
+            if creds_json:
+                info = json.loads(creds_json)
+                self.creds = Credentials.from_service_account_info(info, scopes=self.scopes)
+            else:
+                self.creds = Credentials.from_service_account_file("credentials.json", scopes=self.scopes)
+            
             self.client = gspread.authorize(self.creds)
-        except FileNotFoundError:
-            print("❌ Error: 'credentials.json' not found.")
+        except Exception as e:
+            print(f"❌ Error: Could not load credentials. {e}")
             return
 
         if self.client:
@@ -35,12 +51,6 @@ class ThunderData:
                 self._ensure_review_tab()
             except Exception as e:
                 print(f"❌ Error connecting to sheets: {e}")
-
-        self.all_players = {}
-        self.season_stats = {}
-        self.season_starts = {} 
-        self.seasons_list = []
-        self.divisions_list = set()
         
         if self.sheet_results:
             self.refresh_data()
@@ -263,7 +273,9 @@ class ThunderData:
         return logs
 
     # --- GETTERS ---
-    def get_all_players(self): return self.all_players
+    def get_all_players(self): 
+        return self.all_players if self.all_players else {}
+    
     def get_seasons(self): return self.seasons_list
     def get_divisions(self): return sorted(list(self.divisions_list))
     
@@ -288,10 +300,7 @@ class ThunderData:
                 filtered = []
                 for m in hist:
                     match_date = self._parse_date(m.get('date'))
-                    if not match_date: 
-                        # If filtering by date, we usually skip undated matches.
-                        # OR you can include them. Here we skip them for strict filtering.
-                        continue 
+                    if not match_date: continue 
                     if start_obj and match_date < start_obj: continue
                     if end_obj and match_date > end_obj: continue
                     filtered.append(m)
