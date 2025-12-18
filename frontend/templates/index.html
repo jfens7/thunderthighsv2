@@ -3,212 +3,506 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Thunder Thighs V2</title>
+    <title>Gold Coast Stats v2.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         body { background-color: #0f172a; color: #e2e8f0; font-family: 'Inter', sans-serif; }
-        .card { background-color: #1e293b; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-        
-        #suggestions-list, #compare-suggestions-list {
-            position: absolute;
-            background-color: #1e293b;
-            border: 1px solid #334155;
-            width: 100%;
-            max-height: 200px;
-            overflow-y: auto;
-            z-index: 50;
-            border-radius: 0 0 8px 8px;
-            display: none;
-        }
+        .glass-panel { background-color: #1e293b; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .nav-item { cursor: pointer; padding: 10px 20px; border-bottom: 2px solid transparent; transition: all 0.2s; color: #94a3b8; font-weight: 600; }
+        .nav-item:hover { color: white; }
+        .nav-item.active { border-bottom-color: #f97316; color: #f97316; }
+        #suggestions-list { position: absolute; background-color: #1e293b; border: 1px solid #334155; width: 100%; max-height: 200px; overflow-y: auto; z-index: 50; top: 100%; left: 0; border-radius: 0 0 8px 8px; display: none; }
         .suggestion-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #334155; }
         .suggestion-item:hover { background-color: #334155; }
-
-        .match-row { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #334155; }
+        .card { background-color: #1e293b; border-radius: 12px; padding: 20px; text-align: center; }
+        .match-row { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #334155; }
         .match-row:last-child { border-bottom: none; }
         .win-text { color: #4ade80; font-weight: bold; }
         .loss-text { color: #f87171; font-weight: bold; }
-        
         .filter-btn { padding: 8px 16px; border-radius: 99px; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; border: 1px solid #334155; color: #94a3b8; }
         .filter-btn:hover { background-color: #334155; color: white; }
         .filter-btn.active { background-color: #f97316; border-color: #f97316; color: white; }
         .modal-bg { background-color: rgba(0,0,0,0.85); }
-        
-        /* Date Input Styling */
-        input[type="date"] {
-            color-scheme: dark;
+        input[type="date"] { color-scheme: dark; }
+
+        /* NEW: GREEN PULSE ANIMATION (Search) */
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); background-color: rgba(74, 222, 128, 0.1); border-color: #4ade80; }
+            70% { box-shadow: 0 0 0 10px rgba(74, 222, 128, 0); background-color: rgba(74, 222, 128, 0.2); }
+            100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); background-color: transparent; border-color: #4ade80; }
+        }
+        .highlight-pulse {
+            animation: pulse-green 2s infinite;
+            border: 1px solid #4ade80 !important;
+            z-index: 10;
+            position: relative;
+        }
+
+        /* NEW: YELLOW PULSE ANIMATION (Fill-ins) */
+        @keyframes pulse-yellow {
+            0% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.7); background-color: rgba(234, 179, 8, 0.1); border-color: #eab308; }
+            70% { box-shadow: 0 0 0 10px rgba(234, 179, 8, 0); background-color: rgba(234, 179, 8, 0.2); }
+            100% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0); background-color: transparent; border-color: #eab308; }
+        }
+        .highlight-pulse-yellow {
+            animation: pulse-yellow 2s infinite;
+            border: 1px solid #eab308 !important;
+            z-index: 10;
+            position: relative;
         }
     </style>
 </head>
-<body class="flex flex-col items-center min-h-screen p-6 relative">
+<body class="flex flex-col items-center min-h-screen relative" onclick="removeHighlights(event)">
 
-    <h1 class="text-4xl font-bold text-orange-500 mb-2">THUNDER THIGHS V2</h1>
-    <p class="text-gray-400 mb-8">Career Tracker</p>
-
-    <div class="w-full max-w-xl relative mb-8">
-        <div class="relative">
-            <input type="text" id="playerSearch" 
-                   class="w-full p-4 pl-12 rounded-lg bg-slate-800 border border-slate-700 focus:outline-none focus:border-orange-500 text-lg shadow-lg" 
-                   placeholder="Search player..." autocomplete="off">
-            <i class="fa-solid fa-magnifying-glass absolute left-4 top-5 text-gray-500"></i>
+    <div class="w-full bg-slate-900 border-b border-slate-700 p-4 sticky top-0 z-40 shadow-xl">
+        <div class="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-orange-600 rounded-full flex items-center justify-center text-white font-bold text-xl"><i class="fa-solid fa-bolt"></i></div>
+                <div><h1 class="text-xl font-bold text-white tracking-tight">GOLD COAST STATS v2.2</h1><div class="text-xs text-orange-500 font-mono">GCTTA TRACKER</div></div>
+            </div>
+            <div class="relative w-full max-w-md">
+                <input type="text" id="playerSearch" class="w-full p-2 pl-10 rounded-lg bg-slate-800 border border-slate-700 focus:outline-none focus:border-orange-500 text-white placeholder-slate-500" placeholder="Search for a player..." autocomplete="off">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-500"></i>
+                <div id="suggestions-list"></div>
+            </div>
         </div>
-        <div id="suggestions-list"></div>
     </div>
 
-    <div id="statsContainer" class="w-full max-w-4xl hidden mb-20"> 
-        
-        <h2 id="playerName" class="text-3xl font-bold text-center mb-2 text-white"></h2>
-        
-        <div class="flex justify-center gap-2 mb-6">
-            <button onclick="switchMode('regular')" id="btn-regular" class="filter-btn active">Regular</button>
-            <button onclick="switchMode('combined')" id="btn-combined" class="filter-btn">Combined</button>
-            <button onclick="switchMode('fillin')" id="btn-fillin" class="filter-btn">Fill-in Only</button>
+    <div class="w-full bg-slate-800 border-b border-slate-700 mb-8">
+        <div class="max-w-5xl mx-auto flex overflow-x-auto no-scrollbar">
+            <div onclick="switchTab('home')" id="nav-home" class="nav-item active">Home</div>
+            <div onclick="switchTab('week')" id="nav-week" class="nav-item">Results Week</div>
+            <div onclick="switchTab('sheets')" id="nav-sheets" class="nav-item">Division Results</div>
+            <div onclick="switchTab('live')" id="nav-live" class="nav-item">Live Standings</div>
+            <div onclick="switchTab('rules')" id="nav-rules" class="nav-item">Club Rules</div>
+            <div onclick="switchTab('contact')" id="nav-contact" class="nav-item">Contact</div>
         </div>
-
-        <div class="flex flex-wrap justify-center items-center gap-3 mb-8 bg-slate-800 p-4 rounded-xl border border-slate-700">
-            <select id="seasonSelect" class="bg-slate-900 border border-slate-600 p-2 rounded text-white text-sm min-w-[120px]"></select>
-            
-            <select id="divisionSelect" class="bg-slate-900 border border-slate-600 p-2 rounded text-white text-sm min-w-[120px]">
-                <option value="All">All Divisions</option>
-            </select>
-            
-            <div class="h-8 w-px bg-slate-600 mx-2 hidden sm:block"></div>
-
-            <div class="flex items-center gap-2">
-                <input type="date" id="startDate" class="bg-slate-900 border border-slate-600 p-2 rounded text-white text-sm" placeholder="Start">
-                <span class="text-gray-500">-</span>
-                <input type="date" id="endDate" class="bg-slate-900 border border-slate-600 p-2 rounded text-white text-sm" placeholder="End">
-            </div>
-
-            <div class="h-8 w-px bg-slate-600 mx-2 hidden sm:block"></div>
-            
-            <button onclick="openCompareModal()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded border border-slate-600 text-sm">
-                <i class="fa-solid fa-scale-balanced mr-1"></i> Compare
-            </button>
-        </div>
-
-        <div class="grid grid-cols-3 gap-4 mb-4">
-            <div class="card">
-                <div id="matchesPlayed" class="text-4xl font-bold text-blue-400">0</div>
-                <div class="text-sm text-gray-400 mt-1">MATCHES</div>
-            </div>
-            <div class="card">
-                <div id="wins" class="text-4xl font-bold text-green-400">0</div>
-                <div class="text-sm text-gray-400 mt-1">WINS</div>
-            </div>
-            <div class="card">
-                <div id="losses" class="text-4xl font-bold text-red-400">0</div>
-                <div class="text-sm text-gray-400 mt-1">LOSSES</div>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-3 gap-4 mb-8">
-            <div class="card">
-                <div id="winRate" class="text-4xl font-bold text-orange-400">0%</div>
-                <div class="text-sm text-gray-400 mt-1">WIN %</div>
-            </div>
-            <div class="card bg-slate-800 border border-slate-700">
-                <div id="setsWon" class="text-4xl font-bold text-purple-400">0</div>
-                <div class="text-sm text-gray-400 mt-1">SETS WON</div>
-            </div>
-            <div class="card bg-slate-800 border border-slate-700">
-                <div id="setsLost" class="text-4xl font-bold text-pink-400">0</div>
-                <div class="text-sm text-gray-400 mt-1">SETS LOST</div>
-            </div>
-        </div>
-
-        <div class="w-full">
-            <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-600 pb-2">Match History</h3>
-            <div id="matchHistory" class="bg-slate-800 rounded-lg shadow-lg mb-4"></div>
-            <button id="seeAllBtn" onclick="toggleHistory()" class="w-full py-3 text-center text-slate-400 hover:text-white bg-slate-800 rounded-lg border border-slate-700 hidden">
-                View All Matches <i class="fa-solid fa-chevron-down ml-1"></i>
-            </button>
-        </div>
-
     </div>
 
-    <div class="mt-auto py-6 text-center border-t border-slate-800 w-full">
-        <button onclick="openReportModal()" class="text-sm text-slate-500 hover:text-orange-500 underline flex items-center justify-center gap-2 mx-auto">
-            <i class="fa-solid fa-flag"></i> Report Incorrect Result
-        </button>
-        <div class="text-xs text-slate-700 mt-2">Thunder Thighs V2 • Built for GCTTA</div>
+    <div id="tab-home" class="w-full max-w-4xl px-4 animate-fade-in block">
+        <div class="text-center mb-12 mt-8">
+            <div class="w-24 h-24 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-slate-700 shadow-xl text-5xl text-orange-500"><i class="fa-solid fa-table-tennis-paddle-ball"></i></div>
+            <h2 class="text-3xl font-bold text-white mb-4">Welcome to the GCTTA Tracker</h2>
+            <p class="text-slate-400 max-w-2xl mx-auto leading-relaxed">This application is designed to track player performance, match history, and seasonal progress for the Gold Coast Table Tennis Association.</p>
+        </div>
+        <div class="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+            <a href="https://www.goldcoasttabletennis.org.au/" target="_blank" class="glass-panel p-6 rounded-xl hover:border-orange-500 transition-colors group flex items-center gap-4">
+                <div class="w-12 h-12 bg-blue-900 rounded-lg flex items-center justify-center text-blue-300 group-hover:bg-blue-600 group-hover:text-white transition-colors"><i class="fa-solid fa-globe text-xl"></i></div>
+                <div class="text-left"><div class="font-bold text-white">Official Website</div><div class="text-xs text-slate-400">goldcoasttabletennis.org.au</div></div>
+            </a>
+            <a href="https://www.facebook.com/GoldCoastTableTennis" target="_blank" class="glass-panel p-6 rounded-xl hover:border-orange-500 transition-colors group flex items-center gap-4">
+                <div class="w-12 h-12 bg-blue-900 rounded-lg flex items-center justify-center text-blue-300 group-hover:bg-blue-600 group-hover:text-white transition-colors"><i class="fa-brands fa-facebook text-xl"></i></div>
+                <div class="text-left"><div class="font-bold text-white">Facebook Page</div><div class="text-xs text-slate-400">Latest news & updates</div></div>
+            </a>
+        </div>
     </div>
 
-    <div id="compareModal" class="fixed inset-0 flex items-center justify-center hidden z-50 modal-bg">
-        <div class="bg-slate-900 rounded-xl p-6 w-full max-w-md border border-slate-700 shadow-2xl relative">
-            <button onclick="closeCompareModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white">
-                <i class="fa-solid fa-xmark text-xl"></i>
-            </button>
-            <h3 class="text-2xl font-bold text-white mb-4">Head-to-Head</h3>
-            <div class="relative mb-6">
-                <input type="text" id="compareInput" class="w-full p-3 rounded bg-slate-800 border border-slate-700 text-white focus:border-orange-500 focus:outline-none" placeholder="Enter opponent name..." autocomplete="off">
-                <div id="compare-suggestions-list"></div>
+    <div id="tab-week" class="w-full max-w-5xl px-4 hidden">
+        <div class="flex flex-col md:flex-row justify-between items-end mb-6 border-b border-slate-700 pb-4 gap-4">
+            <div><h2 class="text-2xl font-bold text-white">Results Week</h2><p class="text-sm text-slate-400">Select a week to view matches.</p></div>
+            <div class="flex gap-2">
+                <select id="resSeason" class="bg-slate-800 border border-slate-600 p-2 rounded text-white text-sm" onchange="loadResultsSheet()"></select>
+                <select id="resWeek" class="bg-slate-800 border border-slate-600 p-2 rounded text-white text-sm" onchange="loadResultsSheet()"><script>for(let i=1; i<=25; i++) document.write(`<option value="${i}">Week ${i}</option>`);</script></select>
+                <select id="resDiv" class="bg-slate-800 border border-slate-600 p-2 rounded text-white text-sm" onchange="filterResultsSheet()"><option value="All">All Divisions</option></select>
             </div>
-            <div id="compareResults" class="hidden">
-                <div class="flex justify-between items-center mb-6">
-                    <div class="text-center w-1/3">
-                        <div class="text-orange-500 font-bold text-lg truncate" id="comp-p1-name">P1</div>
-                        <div class="text-4xl font-bold text-white" id="comp-p1-wins">0</div>
-                        <div class="text-xs text-gray-400">WINS</div>
+        </div>
+        <div id="resultsSheetContent" class="grid md:grid-cols-2 gap-4"><div class="text-slate-500 col-span-2 text-center py-12">Select a week to load matches.</div></div>
+    </div>
+
+    <div id="tab-sheets" class="w-full max-w-5xl px-4 hidden">
+        <div class="glass-panel rounded-xl p-6 shadow-2xl">
+            <div class="flex flex-col xl:flex-row justify-between items-center mb-6 gap-4">
+                <div class="text-center xl:text-left">
+                    <h2 class="text-2xl font-bold text-white">Division Results</h2>
+                    <p class="text-sm text-gray-400">Division Standings</p>
+                </div>
+                
+                <div class="flex flex-col items-end gap-2">
+                    <div class="flex items-center gap-4 bg-slate-900 p-2 rounded border border-slate-700">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" id="toggleShowFillIns" onchange="loadDivisionLeaderboard()" class="w-4 h-4 rounded bg-slate-700 border-slate-500 text-orange-600 focus:ring-orange-500">
+                            <span class="text-xs font-bold text-gray-300">Show Fill-ins</span>
+                        </label>
+                        
+                        <div id="fillInModeContainer" class="hidden flex items-center gap-2 border-l border-slate-600 pl-4">
+                            <span class="text-xs text-gray-500 uppercase font-bold">Mode:</span>
+                            <label class="flex items-center gap-1 cursor-pointer">
+                                <input type="radio" name="fiMode" value="separate" checked onchange="loadDivisionLeaderboard()" class="text-orange-600 focus:ring-orange-500 bg-slate-700">
+                                <span class="text-xs text-gray-300">Separate</span>
+                            </label>
+                            <label class="flex items-center gap-1 cursor-pointer">
+                                <input type="radio" name="fiMode" value="combine" onchange="loadDivisionLeaderboard()" class="text-orange-600 focus:ring-orange-500 bg-slate-700">
+                                <span class="text-xs text-gray-300">Combine</span>
+                            </label>
+                        </div>
                     </div>
-                    <div class="text-gray-500 font-bold">VS</div>
-                    <div class="text-center w-1/3">
-                        <div class="text-blue-500 font-bold text-lg truncate" id="comp-p2-name">P2</div>
-                        <div class="text-4xl font-bold text-white" id="comp-p2-wins">0</div>
-                        <div class="text-xs text-gray-400">WINS</div>
+
+                    <div class="flex flex-wrap gap-2 justify-end items-center">
+                        <div class="relative">
+                            <input type="text" id="divSearch" onkeyup="if(event.key === 'Enter') highlightRow('divSearch', 'leaderboardContent')" placeholder="Find..." class="bg-slate-900 border border-slate-600 p-2 pl-8 rounded text-white text-sm w-24 focus:w-40 transition-all">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-500 text-xs"></i>
+                        </div>
+                        <select id="boardSort" class="bg-slate-800 border border-orange-900/50 text-orange-400 p-2 rounded text-sm font-bold" onchange="loadDivisionLeaderboard()">
+                            <option value="wins">Sort: Wins</option><option value="percent">Sort: Win %</option><option value="losses">Sort: Least Losses</option>
+                        </select>
+                        <select id="boardSeason" class="bg-slate-800 border border-slate-600 p-2 rounded text-white text-sm" onchange="loadDivisionLeaderboard()"></select>
+                        <select id="boardDiv" class="bg-slate-800 border border-slate-600 p-2 rounded text-white text-sm" onchange="loadDivisionLeaderboard()"></select>
+                        <select id="boardWeek" class="bg-slate-800 border border-slate-600 p-2 rounded text-white text-sm" onchange="loadDivisionLeaderboard()">
+                            <option value="Latest">Through Latest</option><script>for(let i=1; i<=25; i++) document.write(`<option value="${i}">Through Week ${i}</option>`);</script>
+                        </select>
                     </div>
                 </div>
-                <h4 class="text-gray-400 text-sm mb-2 border-b border-gray-700 pb-1">Match Log</h4>
-                <div id="compareLog" class="max-h-40 overflow-y-auto text-sm"></div>
             </div>
+            <div class="grid grid-cols-6 text-xs text-gray-500 mb-2 px-2 uppercase font-bold tracking-wider"><div class="col-span-2">Player</div><div class="text-center">M</div><div class="text-center">W</div><div class="text-center">L</div><div class="text-center">%</div></div>
+            <div id="leaderboardContent" class="space-y-1 min-h-[150px]"><div class="text-center text-gray-500 py-10">Loading...</div></div>
         </div>
     </div>
 
-    <div id="reportModal" class="fixed inset-0 flex items-center justify-center hidden z-50 modal-bg">
-        <div class="bg-slate-900 rounded-xl p-6 w-full max-w-lg border border-slate-700 shadow-2xl relative">
-            <button onclick="closeReportModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white">
-                <i class="fa-solid fa-xmark text-xl"></i>
-            </button>
-            <h3 class="text-2xl font-bold text-white mb-4 text-orange-500">Report Issue</h3>
-            
-            <label class="block text-gray-400 text-sm mb-1">Your Name (Optional)</label>
-            <input id="repName" type="text" class="w-full p-2 mb-3 rounded bg-slate-800 border border-slate-700 text-white" placeholder="e.g. John Smith">
-            
-            <label class="block text-gray-400 text-sm mb-1">Season / Match</label>
-            <input id="repMatch" type="text" class="w-full p-2 mb-3 rounded bg-slate-800 border border-slate-700 text-white" placeholder="e.g. Spring 2025 - Me vs Steve">
-            
-            <label class="block text-gray-400 text-sm mb-1">Description of Error</label>
-            <textarea id="repDesc" class="w-full p-2 mb-4 rounded bg-slate-800 border border-slate-700 text-white h-24" placeholder="e.g. The score was actually 3-2, not 3-0..."></textarea>
-            
-            <button onclick="submitReport()" class="w-full py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded">Submit Report</button>
+    <div id="tab-live" class="w-full max-w-5xl px-4 hidden">
+        <div class="glass-panel rounded-xl p-6 shadow-2xl">
+            <div class="flex flex-col xl:flex-row justify-between items-center mb-6 gap-4">
+                <div class="text-center xl:text-left">
+                    <h2 class="text-2xl font-bold text-white flex items-center justify-center xl:justify-start gap-2"><i class="fa-solid fa-trophy text-yellow-500"></i> Live Standings</h2>
+                    <p class="text-xs text-orange-400 font-mono mt-1 uppercase tracking-wide"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Based on Wins • Not representative of highest skilled player</p>
+                </div>
+                
+                <div class="flex flex-wrap gap-2 items-center justify-end">
+                    <div class="relative">
+                        <input type="text" id="liveSearch" onkeyup="if(event.key === 'Enter') highlightRow('liveSearch', 'globalContent')" placeholder="Find in list..." class="bg-slate-900 border border-slate-600 p-2 pl-8 rounded text-white text-sm w-32 focus:w-48 transition-all focus:border-orange-500 focus:outline-none">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-500 text-xs"></i>
+                    </div>
+
+                    <div class="h-8 w-px bg-slate-700 mx-2"></div>
+
+                    <input type="number" id="filterMinGames" placeholder="Min Games" class="bg-slate-800 border border-slate-600 p-2 rounded text-white text-sm w-24" onchange="loadGlobalStandings()">
+                    
+                    <select id="globalSort" class="bg-slate-800 border border-orange-900/50 text-orange-400 p-2 rounded text-sm font-bold" onchange="loadGlobalStandings()">
+                        <option value="wins_desc">Most Wins</option>
+                        <option value="percent_desc">Highest %</option>
+                        <option value="losses_asc">Least Losses</option>
+                        <option value="losses_desc">Most Losses</option>
+                        <option value="percent_asc">Lowest %</option>
+                        <option value="matches_desc">Most Games</option>
+                    </select>
+
+                    <select id="globalSeason" class="bg-slate-800 border border-slate-600 p-2 rounded text-white text-sm" onchange="loadGlobalStandings()">
+                        <option value="Career">Career (All Time)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid grid-cols-6 text-xs text-gray-500 mb-2 px-2 uppercase font-bold tracking-wider"><div class="col-span-2">Player</div><div class="text-center">M</div><div class="text-center">W</div><div class="text-center">L</div><div class="text-center">%</div></div>
+            <div id="globalContent" class="space-y-1 min-h-[150px]"><div class="text-center text-gray-500 py-10">Loading global rankings...</div></div>
         </div>
     </div>
+
+    <div id="tab-rules" class="w-full max-w-4xl px-4 hidden text-center py-20 text-slate-500"><i class="fa-solid fa-book text-4xl mb-4"></i><h2 class="text-2xl font-bold text-white">Club Rules</h2></div>
+    <div id="tab-contact" class="w-full max-w-4xl px-4 hidden text-center py-20 text-slate-500"><i class="fa-solid fa-envelope text-4xl mb-4"></i><h2 class="text-2xl font-bold text-white">Contact Us</h2></div>
+
+    <div id="statsContainer" class="w-full max-w-4xl hidden mb-20 relative px-4 mt-4"> 
+        <button onclick="closeProfile()" class="mb-4 text-slate-400 hover:text-white flex items-center gap-2 transition-colors bg-slate-800 px-4 py-2 rounded-lg border border-slate-700"><i class="fa-solid fa-arrow-left"></i> Back to <span id="backTargetName">Home</span></button>
+        <div class="flex flex-col items-center"><h2 id="playerName" class="text-4xl font-bold text-center mb-2 text-white"></h2><div class="flex justify-center gap-2 mb-6"><button onclick="switchMode('regular')" id="btn-regular" class="filter-btn active">Regular</button><button onclick="switchMode('combined')" id="btn-combined" class="filter-btn">Combined</button><button onclick="switchMode('fillin')" id="btn-fillin" class="filter-btn">Fill-in Only</button></div></div>
+        <div class="flex flex-wrap justify-center items-center gap-3 mb-8 bg-slate-800 p-4 rounded-xl border border-slate-700">
+            <select id="seasonSelect" class="bg-slate-900 border border-slate-600 p-2 rounded text-white text-sm min-w-[120px]"></select>
+            <select id="divisionSelect" class="bg-slate-900 border border-slate-600 p-2 rounded text-white text-sm min-w-[120px]"><option value="All">All Divisions</option></select>
+            <select id="weekSelect" class="bg-slate-900 border border-slate-600 p-2 rounded text-white text-sm min-w-[100px]"><option value="All">All Weeks</option><script>for(let i=1; i<=25; i++) document.write(`<option value="${i}">Week ${i}</option>`);</script></select>
+            <div class="flex items-center gap-2"><input type="date" id="startDate" class="bg-slate-900 border border-slate-600 p-2 rounded text-white text-sm"><span class="text-gray-500">-</span><input type="date" id="endDate" class="bg-slate-900 border border-slate-600 p-2 rounded text-white text-sm"></div>
+            <button onclick="openCompareModal()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded border border-slate-600 text-sm"><i class="fa-solid fa-scale-balanced mr-1"></i> Compare</button>
+        </div>
+        <div class="grid grid-cols-3 gap-4 mb-4"><div class="card"><div id="matchesPlayed" class="text-4xl font-bold text-blue-400">0</div><div class="text-sm text-gray-400 mt-1">MATCHES</div></div><div class="card"><div id="wins" class="text-4xl font-bold text-green-400">0</div><div class="text-sm text-gray-400 mt-1">WINS</div></div><div class="card"><div id="losses" class="text-4xl font-bold text-red-400">0</div><div class="text-sm text-gray-400 mt-1">LOSSES</div></div></div>
+        <div class="grid grid-cols-3 gap-4 mb-8"><div class="card"><div id="winRate" class="text-4xl font-bold text-orange-400">0%</div><div class="text-sm text-gray-400 mt-1">WIN %</div></div><div class="card bg-slate-800 border border-slate-700"><div id="setsWon" class="text-4xl font-bold text-purple-400">0</div><div class="text-sm text-gray-400 mt-1">SETS WON</div></div><div class="card bg-slate-800 border border-slate-700"><div id="setsLost" class="text-4xl font-bold text-pink-400">0</div><div class="text-sm text-gray-400 mt-1">SETS LOST</div></div></div>
+        <div class="w-full"><h3 class="text-xl font-bold text-white mb-4 border-b border-gray-600 pb-2">Match History</h3><div id="matchHistory" class="bg-slate-800 rounded-lg shadow-lg mb-4"></div><button id="seeAllBtn" onclick="toggleHistory()" class="w-full py-3 text-center text-slate-400 hover:text-white bg-slate-800 rounded-lg border border-slate-700 hidden">View All Matches <i class="fa-solid fa-chevron-down ml-1"></i></button></div>
+    </div>
+
+    <div class="mt-auto py-6 text-center border-t border-slate-800 w-full bg-slate-900">
+        <button onclick="openReportModal()" class="text-sm text-slate-500 hover:text-orange-500 underline flex items-center justify-center gap-2 mx-auto"><i class="fa-solid fa-flag"></i> Report Incorrect Result / Feedback</button>
+        <div class="text-xs text-slate-700 mt-2">Gold Coast Stats v2.2 • Built for GCTTA</div>
+    </div>
+
+    <button id="backToTopBtn" onclick="scrollToTop()" class="fixed bottom-6 right-6 bg-orange-600 text-white p-4 rounded-full shadow-2xl hidden hover:bg-orange-700 transition-all z-50 border border-orange-400"><i class="fa-solid fa-arrow-up text-xl"></i></button>
+
+    <div id="reportModal" class="fixed inset-0 flex items-center justify-center hidden z-50 modal-bg"><div class="bg-slate-900 rounded-xl p-6 w-full max-w-lg border border-slate-700 shadow-2xl relative"><button onclick="closeReportModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button><h3 class="text-2xl font-bold text-white mb-4 text-orange-500">Report Issue</h3><label class="block text-gray-400 text-sm mb-1">Your Name</label><input id="repName" type="text" class="w-full p-2 mb-3 rounded bg-slate-800 border border-slate-700 text-white"><label class="block text-gray-400 text-sm mb-1">Your Email (for updates)</label><input id="repEmail" type="email" class="w-full p-2 mb-3 rounded bg-slate-800 border border-slate-700 text-white" placeholder="Optional"><label class="block text-gray-400 text-sm mb-1">Season / Match</label><input id="repMatch" type="text" class="w-full p-2 mb-3 rounded bg-slate-800 border border-slate-700 text-white font-mono text-sm bg-slate-950" readonly><label class="block text-gray-400 text-sm mb-1">Description of Error</label><textarea id="repDesc" class="w-full p-2 mb-4 rounded bg-slate-800 border border-slate-700 text-white h-24"></textarea><button onclick="submitReport()" class="w-full py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded">Submit Report</button></div></div>
+    <div id="compareModal" class="fixed inset-0 flex items-center justify-center hidden z-50 modal-bg"><div class="bg-slate-900 rounded-xl p-6 w-full max-w-md border border-slate-700 shadow-2xl relative"><button onclick="closeCompareModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button><h3 class="text-2xl font-bold text-white mb-4">Head-to-Head</h3><div class="relative mb-6"><input type="text" id="compareInput" class="w-full p-3 rounded bg-slate-800 border border-slate-700 text-white focus:border-orange-500 focus:outline-none" placeholder="Enter opponent name..." autocomplete="off"><div id="compare-suggestions-list"></div></div><div id="compareResults" class="hidden"><div class="flex justify-between items-center mb-6"><div class="text-center w-1/3"><div class="text-orange-500 font-bold text-lg truncate" id="comp-p1-name">P1</div><div class="text-4xl font-bold text-white" id="comp-p1-wins">0</div><div class="text-xs text-gray-400">WINS</div></div><div class="text-gray-500 font-bold">VS</div><div class="text-center w-1/3"><div class="text-blue-500 font-bold text-lg truncate" id="comp-p2-name">P2</div><div class="text-4xl font-bold text-white" id="comp-p2-wins">0</div><div class="text-xs text-gray-400">WINS</div></div></div><h4 class="text-gray-400 text-sm mb-2 border-b border-gray-700 pb-1">Match Log</h4><div id="compareLog" class="max-h-40 overflow-y-auto text-sm"></div></div></div></div>
 
     <script>
-        let allPlayers = [], currentSeason = "Career", currentDivision = "All", currentPlayerStats = null, currentMode = "regular", historyExpanded = false;
-        let startDate = "", endDate = "";
+        let allPlayers = [], currentSeason = "Career", currentDivision = "All", currentWeek = "All";
+        let currentPlayerStats = null, currentMode = "regular", historyExpanded = false;
+        let weekMatchesCache = []; 
+        let currentActiveTab = "home"; 
+        
+        window.onscroll = function() {
+            const btn = document.getElementById("backToTopBtn");
+            if (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300) btn.classList.remove("hidden");
+            else btn.classList.add("hidden");
+        };
+        function scrollToTop() { window.scrollTo({top: 0, behavior: 'smooth'}); }
 
         window.onload = async () => {
             const pRes = await fetch('/api/players'); allPlayers = await pRes.json();
             const sRes = await fetch('/api/seasons'); const seasons = await sRes.json();
-            const seasonSelect = document.getElementById('seasonSelect');
-            seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; seasonSelect.appendChild(opt); });
-
             const dRes = await fetch('/api/divisions'); const divisions = await dRes.json();
-            const divisionSelect = document.getElementById('divisionSelect');
-            divisions.forEach(d => { let opt = document.createElement('option'); opt.value = d; opt.innerText = d; divisionSelect.appendChild(opt); });
+            
+            const selects = {
+                season: [document.getElementById('seasonSelect'), document.getElementById('boardSeason'), document.getElementById('resSeason'), document.getElementById('globalSeason')],
+                division: [document.getElementById('divisionSelect'), document.getElementById('boardDiv'), document.getElementById('resDiv')]
+            };
 
-            // Event Listeners
-            seasonSelect.addEventListener('change', (e) => { currentSeason = e.target.value; reloadStats(); });
-            divisionSelect.addEventListener('change', (e) => { currentDivision = e.target.value; reloadStats(); });
-            document.getElementById('startDate').addEventListener('change', (e) => { startDate = e.target.value; reloadStats(); });
-            document.getElementById('endDate').addEventListener('change', (e) => { endDate = e.target.value; reloadStats(); });
+            seasons.forEach(s => selects.season.forEach(el => { 
+                if(el.id === 'globalSeason') { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; el.appendChild(opt); }
+                else { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; el.appendChild(opt); }
+            }));
+            
+            divisions.forEach(d => selects.division.forEach(el => { let opt = document.createElement('option'); opt.value = d; opt.innerText = d; el.appendChild(opt); }));
+
+            if(seasons.length > 0) {
+                const latest = seasons[seasons.length - 1];
+                document.getElementById('seasonSelect').value = latest;
+                document.getElementById('boardSeason').value = latest;
+                document.getElementById('resSeason').value = latest;
+            }
+            if(divisions.length > 0) document.getElementById('boardDiv').value = divisions[Math.floor(Math.random() * divisions.length)];
+
+            document.getElementById('seasonSelect').addEventListener('change', (e) => { currentSeason = e.target.value; reloadStats(); });
+            document.getElementById('divisionSelect').addEventListener('change', (e) => { currentDivision = e.target.value; reloadStats(); });
+            document.getElementById('weekSelect').addEventListener('change', (e) => { currentWeek = e.target.value; reloadStats(); });
+            document.getElementById('startDate').addEventListener('change', () => reloadStats());
+            document.getElementById('endDate').addEventListener('change', () => reloadStats());
         };
+
+        function switchTab(tabId) {
+            currentActiveTab = tabId;
+            document.getElementById('statsContainer').classList.add('hidden'); 
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.getElementById(`nav-${tabId}`).classList.add('active');
+            ['home', 'week', 'sheets', 'live', 'rules', 'contact'].forEach(t => document.getElementById(`tab-${t}`).classList.add('hidden'));
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            document.getElementById(`tab-${tabId}`).classList.add('animate-fade-in');
+            if (tabId === 'sheets') loadDivisionLeaderboard();
+            if (tabId === 'week') loadResultsSheet();
+            if (tabId === 'live') loadGlobalStandings();
+        }
+
+        function closeProfile() {
+            document.getElementById('statsContainer').classList.add('hidden');
+            document.getElementById(`tab-${currentActiveTab}`).classList.remove('hidden');
+            document.getElementById('playerSearch').value = '';
+            document.getElementById('suggestions-list').style.display = 'none';
+        }
+
+        function highlightRow(inputId, containerId) {
+            const query = document.getElementById(inputId).value.toLowerCase();
+            if(!query) return;
+            removeHighlights();
+            const container = document.getElementById(containerId);
+            const rows = container.children;
+            let found = false;
+            for(let row of rows) {
+                const nameSpan = row.querySelector('.player-name-target');
+                if(nameSpan && nameSpan.innerText.toLowerCase().includes(query)) {
+                    row.scrollIntoView({behavior: "smooth", block: "center"});
+                    row.classList.add('highlight-pulse');
+                    found = true;
+                    break; 
+                }
+            }
+            if(!found) alert("Player not found in current list.");
+        }
+
+        function removeHighlights(e) {
+            const pulsed = document.querySelectorAll('.highlight-pulse');
+            pulsed.forEach(el => el.classList.remove('highlight-pulse'));
+        }
+
+        async function loadResultsSheet() {
+            const season = document.getElementById('resSeason').value;
+            const week = document.getElementById('resWeek').value;
+            const container = document.getElementById('resultsSheetContent');
+            container.innerHTML = '<div class="col-span-2 text-center text-gray-500 py-12">Loading matches...</div>';
+            const res = await fetch(`/api/week/${encodeURIComponent(season)}/${week}`);
+            const data = await res.json();
+            weekMatchesCache = data; 
+            filterResultsSheet();
+        }
+
+        function filterResultsSheet() {
+            const div = document.getElementById('resDiv').value;
+            const container = document.getElementById('resultsSheetContent');
+            let filtered = weekMatchesCache;
+            if(div !== "All") filtered = weekMatchesCache.filter(m => m.division === div);
+            container.innerHTML = "";
+            if(filtered.length === 0) { container.innerHTML = '<div class="col-span-2 text-center text-gray-500 py-12">No matches found for this week/division.</div>'; return; }
+            filtered.forEach(m => {
+                const row = document.createElement('div');
+                row.className = "flex justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm";
+                let dateText = m.date || "";
+                if (dateText.includes('-')) { const parts = dateText.split('-'); if(parts[0].length === 4) dateText = `${parts[2]}/${parts[1]}/${parts[0]}`; }
+                row.innerHTML = `<div class="flex flex-col"><div class="text-xs text-orange-400 font-bold uppercase mb-1">${m.division}</div><div class="flex items-center text-white font-bold gap-3 text-lg"><span class="hover:text-orange-400 cursor-pointer" onclick="loadStats('${m.p1}')">${m.p1}</span><span class="text-gray-600 text-sm">vs</span><span class="hover:text-orange-400 cursor-pointer" onclick="loadStats('${m.p2}')">${m.p2}</span></div></div><div class="text-right"><div class="font-mono text-2xl text-white font-bold tracking-widest">${m.score}</div><div class="text-xs text-gray-500 mt-1">${dateText}</div></div>`;
+                container.appendChild(row);
+            });
+        }
+
+        async function loadDivisionLeaderboard() {
+            const season = document.getElementById('boardSeason').value;
+            const div = document.getElementById('boardDiv').value;
+            const week = document.getElementById('boardWeek').value;
+            const sortMode = document.getElementById('boardSort').value;
+            
+            // Toggle Logic
+            const showFillIns = document.getElementById('toggleShowFillIns').checked;
+            const fillInMode = document.querySelector('input[name="fiMode"]:checked').value; // 'separate' or 'combine'
+            
+            // Show/Hide the radio buttons based on master toggle
+            document.getElementById('fillInModeContainer').classList.toggle('hidden', !showFillIns);
+
+            const container = document.getElementById('leaderboardContent');
+            container.innerHTML = '<div class="text-center text-gray-500 py-10">Updating standings...</div>';
+            
+            let url = `/api/rankings/${encodeURIComponent(season)}/${encodeURIComponent(div)}`;
+            if(week !== "Latest") url += `?week=${week}`;
+            
+            const res = await fetch(url);
+            const rawData = await res.json();
+            
+            // --- PROCESS DATA BASED ON TOGGLES ---
+            let processedRankings = [];
+
+            rawData.forEach(player => {
+                // 1. Regular Stats (Always included if they have them)
+                if (player.regular.matches > 0) {
+                    let finalStats = { ...player.regular };
+                    
+                    // IF Combine Mode is ON and Show Fill-ins is ON, add fill-in stats here
+                    if (showFillIns && fillInMode === 'combine' && player.fillin.matches > 0) {
+                        finalStats.wins += player.fillin.wins;
+                        finalStats.losses += player.fillin.losses;
+                        finalStats.matches += player.fillin.matches;
+                    }
+
+                    // Calculate %
+                    finalStats.win_rate = finalStats.matches > 0 ? ((finalStats.wins / finalStats.matches) * 100).toFixed(1) : 0;
+                    
+                    processedRankings.push({
+                        name: player.name,
+                        ...finalStats,
+                        isFillInRow: false
+                    });
+                }
+
+                // 2. Separate Fill-in Row Logic
+                // Only show if Show Fill-ins is ON AND (Mode is Separate OR Player has ONLY fill-in stats)
+                if (showFillIns && player.fillin.matches > 0) {
+                    
+                    // If mode is Combine, we only add a separate row if they had NO regular stats (pure fill-in player)
+                    // If mode is Separate, we always add a separate row for fill-in stats
+                    if (fillInMode === 'separate' || player.regular.matches === 0) {
+                        let fStats = player.fillin;
+                        fStats.win_rate = fStats.matches > 0 ? ((fStats.wins / fStats.matches) * 100).toFixed(1) : 0;
+                        
+                        processedRankings.push({
+                            name: `${player.name} (Fill In)`,
+                            wins: fStats.wins,
+                            losses: fStats.losses,
+                            matches: fStats.matches,
+                            win_rate: fStats.win_rate,
+                            isFillInRow: true // Marker for CSS
+                        });
+                    }
+                }
+            });
+
+            // Sorting
+            processedRankings.sort((a, b) => {
+                const nameSort = a.name.localeCompare(b.name);
+                if (sortMode === 'wins') return b.wins - a.wins || parseFloat(b.win_rate) - parseFloat(a.win_rate) || nameSort; 
+                if (sortMode === 'percent') return parseFloat(b.win_rate) - parseFloat(a.win_rate) || b.wins - a.wins || nameSort;
+                if (sortMode === 'losses') return a.losses - b.losses || b.wins - a.wins || nameSort;
+            });
+
+            renderLeaderboard(container, processedRankings);
+        }
+
+        function renderLeaderboard(container, rankings) {
+            container.innerHTML = "";
+            if(rankings.length === 0) { container.innerHTML = '<div class="text-center text-gray-500 py-4">No data.</div>'; return; }
+            
+            let displayRank = 1;
+            rankings.forEach((r, index) => {
+                const row = document.createElement('div');
+                // Check if it is a fill-in row for styling
+                const baseClass = "grid grid-cols-6 items-center p-3 rounded border text-sm mb-1 transition-colors";
+                const regularClass = "bg-slate-800 border-slate-700 hover:bg-slate-750";
+                const fillInClass = "highlight-pulse-yellow text-yellow-100"; // Yellow Pulse
+                
+                row.className = `${baseClass} ${r.isFillInRow ? fillInClass : regularClass}`;
+
+                // Logic for rank icon (skip number if it's a fill-in row usually, or keep it)
+                let rankIcon = `<span class="text-gray-500 w-6 inline-block text-center font-mono font-bold">${displayRank}</span>`;
+                if(displayRank === 1) rankIcon = "🥇"; 
+                if(displayRank === 2) rankIcon = "🥈"; 
+                if(displayRank === 3) rankIcon = "🥉";
+                
+                // Clean name for the onclick handler
+                const cleanName = r.name.replace(" (Fill In)", "");
+
+                row.innerHTML = `
+                    <div class="col-span-2 flex items-center gap-3 overflow-hidden">
+                        <span class="font-bold text-lg">${rankIcon}</span>
+                        <span class="truncate hover:text-orange-400 cursor-pointer font-bold player-name-target" onclick="loadStats('${cleanName}')">
+                            ${r.name}
+                        </span>
+                    </div>
+                    <div class="text-center text-blue-400 font-mono">${r.matches}</div>
+                    <div class="text-center text-green-400 font-bold font-mono">${r.wins}</div>
+                    <div class="text-center text-red-400 font-mono">${r.losses}</div>
+                    <div class="text-center text-gray-400 font-mono">${r.win_rate}%</div>
+                `;
+                container.appendChild(row);
+                displayRank++;
+            });
+        }
+
+        async function loadGlobalStandings() {
+            const season = document.getElementById('globalSeason').value;
+            const sortMode = document.getElementById('globalSort').value;
+            const minGames = parseInt(document.getElementById('filterMinGames').value) || 0;
+            const container = document.getElementById('globalContent');
+            container.innerHTML = '<div class="text-center text-gray-500 py-10">Updating global standings...</div>';
+            const res = await fetch(`/api/rankings/global/${encodeURIComponent(season)}`);
+            let rankings = await res.json();
+            rankings = rankings.filter(r => r.matches >= minGames);
+            rankings.sort((a, b) => {
+                const nameSort = a.name.localeCompare(b.name);
+                if (sortMode === 'wins_desc') return b.wins - a.wins || b.win_rate - a.win_rate || nameSort;
+                if (sortMode === 'percent_desc') return b.win_rate - a.win_rate || b.wins - a.wins || nameSort;
+                if (sortMode === 'losses_asc') return a.losses - b.losses || b.wins - a.wins || nameSort; 
+                if (sortMode === 'losses_desc') return b.losses - a.losses || b.wins - a.wins || nameSort; 
+                if (sortMode === 'percent_asc') return a.win_rate - b.win_rate || b.wins - a.wins || nameSort; 
+                if (sortMode === 'matches_desc') return b.matches - a.matches || b.wins - a.wins || nameSort;
+                return 0;
+            });
+            renderRankings(container, rankings, 'custom');
+        }
+
+        function renderRankings(containerElement, rankings, sortMode) {
+            containerElement.innerHTML = "";
+            if(rankings.length === 0) { containerElement.innerHTML = '<div class="text-center text-gray-500 py-4">No data.</div>'; return; }
+            let currentRank = 1; let displayRank = 1;
+            rankings.slice(0, 100).forEach((r, index) => {
+                const row = document.createElement('div');
+                row.className = "grid grid-cols-6 items-center bg-slate-800 p-3 rounded border border-slate-700 text-sm mb-1 hover:bg-slate-750 transition-colors";
+                if (index > 0) {
+                    displayRank++; 
+                }
+                let rankIcon = `<span class="text-gray-500 w-6 inline-block text-center font-mono font-bold">${displayRank}</span>`;
+                if(displayRank === 1) rankIcon = "🥇"; if(displayRank === 2) rankIcon = "🥈"; if(displayRank === 3) rankIcon = "🥉";
+                row.innerHTML = `<div class="col-span-2 flex items-center gap-3 overflow-hidden"><span class="font-bold text-lg">${rankIcon}</span><span class="truncate text-white hover:text-orange-400 cursor-pointer font-bold player-name-target" onclick="loadStats('${r.name}')">${r.name}</span></div><div class="text-center text-blue-400 font-mono">${r.matches}</div><div class="text-center text-green-400 font-bold font-mono">${r.wins}</div><div class="text-center text-red-400 font-mono">${r.losses}</div><div class="text-center text-gray-400 font-mono">${r.win_rate}%</div>`;
+                containerElement.appendChild(row);
+            });
+        }
 
         function reloadStats() { const name = document.getElementById('playerName').innerText; if(name) loadStats(name); }
         setupSearch('playerSearch', 'suggestions-list', (name) => loadStats(name));
         setupSearch('compareInput', 'compare-suggestions-list', (name) => loadComparison(name));
-
         function setupSearch(inputId, listId, callback) {
             const input = document.getElementById(inputId); const list = document.getElementById(listId);
             input.addEventListener('input', () => {
@@ -223,68 +517,45 @@
                 list.style.display = filtered.length ? 'block' : 'none';
             });
         }
-
         async function loadStats(player) {
+            ['home', 'week', 'sheets', 'live', 'rules', 'contact'].forEach(t => document.getElementById(`tab-${t}`).classList.add('hidden'));
             document.getElementById('statsContainer').classList.remove('hidden'); 
-            document.getElementById('playerName').innerText = player; 
-            document.getElementById('playerSearch').value = player;
+            document.getElementById('backTargetName').innerText = document.getElementById(`nav-${currentActiveTab}`).innerText;
+            document.getElementById('playerName').innerText = player; document.getElementById('playerSearch').value = player; document.getElementById('repName').value = player; 
             historyExpanded = false; 
             try {
-                // Pass Date filters
-                let url = `/api/stats/${encodeURIComponent(player)}?season=${encodeURIComponent(currentSeason)}&division=${encodeURIComponent(currentDivision)}`;
-                if(startDate) url += `&start=${startDate}`;
-                if(endDate) url += `&end=${endDate}`;
-                
-                const res = await fetch(url);
-                const data = await res.json();
+                let url = `/api/stats/${encodeURIComponent(player)}?season=${encodeURIComponent(currentSeason)}&division=${encodeURIComponent(currentDivision)}&week=${encodeURIComponent(currentWeek)}`;
+                const start = document.getElementById('startDate').value; const end = document.getElementById('endDate').value;
+                if(start) url += `&start=${start}`; if(end) url += `&end=${end}`;
+                const res = await fetch(url); const data = await res.json();
                 if (data.error) { alert("Player not found."); return; }
                 currentPlayerStats = data; renderStats();
             } catch (err) { console.error("Error:", err); }
         }
-
-        function switchMode(mode) {
-            currentMode = mode; document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(`btn-${mode}`).classList.add('active'); if (currentPlayerStats) renderStats();
-        }
-
-        function renderStats() {
-            const stats = currentPlayerStats[currentMode];
-            animateValue("matchesPlayed", stats.matches); animateValue("wins", stats.wins); animateValue("losses", stats.losses);
-            document.getElementById("winRate").innerText = stats.win_rate; animateValue("setsWon", stats.sets_won); animateValue("setsLost", stats.sets_lost);
-            renderHistory(stats.match_history);
-        }
-
+        function switchMode(mode) { currentMode = mode; document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); document.getElementById(`btn-${mode}`).classList.add('active'); if (currentPlayerStats) renderStats(); }
+        function renderStats() { const stats = currentPlayerStats[currentMode]; animateValue("matchesPlayed", stats.matches); animateValue("wins", stats.wins); animateValue("losses", stats.losses); document.getElementById("winRate").innerText = stats.win_rate; animateValue("setsWon", stats.sets_won); animateValue("setsLost", stats.sets_lost); renderHistory(stats.match_history); }
         function renderHistory(matches) {
             const historyDiv = document.getElementById('matchHistory'); const seeAllBtn = document.getElementById('seeAllBtn'); historyDiv.innerHTML = ""; 
             if (!matches || matches.length === 0) { historyDiv.innerHTML = '<div class="p-4 text-center text-gray-500">No matches found.</div>'; seeAllBtn.classList.add('hidden'); return; }
-            const limit = historyExpanded ? matches.length : 5; matches.slice(0, limit).forEach(match => {
+            const limit = historyExpanded ? matches.length : 5; 
+            matches.slice(0, limit).forEach(match => {
                 const row = document.createElement('div'); row.className = "match-row";
                 const resultClass = match.result === "Win" ? "win-text" : "loss-text"; const resultIcon = match.result === "Win" ? "W" : "L";
-                let tag = (currentMode === "combined" && match.type === "Fill-in") ? `<span class="text-xs bg-slate-600 px-2 py-0.5 rounded ml-2 text-gray-300">Fill-in</span>` : "";
-                let divTag = (currentDivision === "All" && match.division) ? `<span class="text-xs text-slate-500 ml-2 border border-slate-700 px-1 rounded">${match.division}</span>` : "";
-                let dateHtml = match.date ? `<span class="text-xs text-slate-500 mr-2">${match.date}</span>` : "";
+                let weekText = (match.week && match.week !== "Unknown") ? `Week ${match.week}` : "";
+                let dateText = match.date || "";
+                if (dateText.includes('-')) { const parts = dateText.split('-'); if(parts[0].length === 4) dateText = `${parts[2]}/${parts[1]}/${parts[0]}`; }
+                let weekDisplay = "";
+                if (weekText) weekDisplay = `<a href="#" onclick="switchTab('week'); document.getElementById('resWeek').value = '${match.week}'; loadResultsSheet(); return false;" class="text-blue-400 hover:text-blue-300 hover:underline font-bold">${weekText}</a>`;
                 const safeOpponent = match.opponent.replace(/'/g, "\\'");
-
-                row.innerHTML = `
-                    <div class="flex items-center gap-3">
-                        <span class="${resultClass} text-lg w-6">${resultIcon}</span>
-                        <div class="flex items-center">
-                            <span class="text-gray-300 mr-1">vs</span>
-                            <a href="#" onclick="loadStats('${safeOpponent}'); return false;" class="text-white hover:text-orange-400 hover:underline transition-colors">${match.opponent}</a>
-                            ${tag}
-                        </div>
-                    </div>
-                    <div class="flex items-center">${dateHtml}${divTag}<span class="font-mono text-gray-400 ml-2">${match.score}</span></div>`;
+                const matchReportString = `${match.season}: Vs ${safeOpponent} (${match.score})`;
+                row.innerHTML = `<div class="flex flex-col"><div class="flex items-center gap-3 mb-1"><span class="${resultClass} text-lg w-6">${resultIcon}</span><div class="flex items-center"><span class="text-gray-300 mr-1">vs</span><a href="#" onclick="loadStats('${safeOpponent}'); return false;" class="text-white hover:text-orange-400 hover:underline transition-colors">${match.opponent}</a></div><span class="font-mono text-gray-400 ml-2 bg-slate-700 px-2 rounded text-xs">${match.score}</span></div><div class="text-xs text-slate-500 font-bold tracking-wide flex items-center gap-2">${weekDisplay}${weekDisplay && dateText ? '<span class="text-slate-600">•</span>' : ''}<span>${dateText}</span></div></div><button onclick="reportMatch('${matchReportString}')" class="text-slate-600 hover:text-red-500 px-2" title="Report Incorrect Result"><i class="fa-solid fa-flag"></i></button>`;
                 historyDiv.appendChild(row);
             });
             seeAllBtn.classList.toggle('hidden', matches.length <= 5);
             seeAllBtn.innerHTML = historyExpanded ? 'Show Less <i class="fa-solid fa-chevron-up ml-1"></i>' : 'View All Matches <i class="fa-solid fa-chevron-down ml-1"></i>';
         }
-
         function toggleHistory() { historyExpanded = !historyExpanded; renderStats(); }
         function animateValue(id, end) { document.getElementById(id).innerHTML = end; }
-        
-        // --- MODALS ---
         function openCompareModal() { document.getElementById('compareModal').classList.remove('hidden'); document.getElementById('compareResults').classList.add('hidden'); document.getElementById('compareInput').value = ''; }
         function closeCompareModal() { document.getElementById('compareModal').classList.add('hidden'); }
         async function loadComparison(opponent) {
@@ -294,23 +565,19 @@
             const logDiv = document.getElementById('compareLog'); logDiv.innerHTML = '';
             data.matches.forEach(m => { const color = m.result === "Win" ? "text-green-400" : "text-red-400"; logDiv.innerHTML += `<div class="flex justify-between py-1 border-b border-slate-700"><span class="${color} font-bold">${m.result}</span> <span>${m.score}</span></div>`; });
         }
-
-        // --- REPORTING ---
-        function openReportModal() { document.getElementById('reportModal').classList.remove('hidden'); }
+        function reportMatch(matchString) { document.getElementById('reportModal').classList.remove('hidden'); document.getElementById('repMatch').value = matchString; }
+        function openReportModal() { document.getElementById('reportModal').classList.remove('hidden'); document.getElementById('repMatch').value = ""; document.getElementById('repMatch').readOnly = false; }
         function closeReportModal() { document.getElementById('reportModal').classList.add('hidden'); }
         async function submitReport() {
             const btn = document.querySelector('#reportModal button'); const originalText = btn.innerText; btn.innerText = "Sending..."; btn.disabled = true;
-            const payload = {
-                reporter: document.getElementById('repName').value,
-                season: currentSeason,
-                match_info: document.getElementById('repMatch').value,
-                description: document.getElementById('repDesc').value
+            const payload = { 
+                reporter: document.getElementById('repName').value, 
+                email: document.getElementById('repEmail').value,
+                season: currentSeason, 
+                match_info: document.getElementById('repMatch').value, 
+                description: document.getElementById('repDesc').value 
             };
-            try {
-                const res = await fetch('/api/report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-                if (res.ok) { alert("Report sent! We will review it shortly."); closeReportModal(); document.getElementById('repDesc').value = ""; }
-                else alert("Error submitting report.");
-            } catch (e) { alert("Network error."); }
+            try { const res = await fetch('/api/report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) }); if (res.ok) { alert("Report sent! We will review it shortly."); closeReportModal(); document.getElementById('repDesc').value = ""; } else alert("Error submitting report."); } catch (e) { alert("Network error."); }
             btn.innerText = originalText; btn.disabled = false;
         }
     </script>

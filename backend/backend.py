@@ -5,29 +5,23 @@ import re
 import os
 import json
 
-# ==========================================
-# 👇 SPREADSHEET CONFIGURATION 👇
-# ==========================================
 RESULTS_SPREADSHEET_ID = "1tpxuUCl8ddpnBBr69vc4P1foRCRKWpts5-HaFPYb4po" 
 DATES_SPREADSHEET_ID   = "1irddXf_SgtCpR6F7fUOoWmkvogKWowOoxEG_WWSaoHc"
-# ==========================================
 
 class ThunderData:
     def __init__(self):
         self.scopes = ["https://www.googleapis.com/auth/spreadsheets"]
         self.client = None
         self.sheet_results = None
-        self.sheet_dates = None
         
-        # Initialize variables so they exist even if loading fails
         self.all_players = {}
         self.season_stats = {}
-        self.season_starts = {} 
         self.seasons_list = []
         self.divisions_list = set()
+        self.date_lookup = {} 
+        self.weekly_matches = {} 
         
         try:
-            # Check for Render environment variable first, then local file
             creds_json = os.environ.get("GOOGLE_CREDS_JSON")
             if creds_json:
                 info = json.loads(creds_json)
@@ -37,33 +31,18 @@ class ThunderData:
             
             self.client = gspread.authorize(self.creds)
         except Exception as e:
-            print(f"❌ Error: Could not load credentials. {e}")
+            print(f"❌ Error: {e}")
             return
 
         if self.client:
             try:
                 self.sheet_results = self.client.open_by_key(RESULTS_SPREADSHEET_ID)
-                print(f"⚡️ Connected to Results: '{self.sheet_results.title}'")
-                
-                self.sheet_dates = self.client.open_by_key(DATES_SPREADSHEET_ID)
-                print(f"📅 Connected to Dates: '{self.sheet_dates.title}'")
-                
-                self._ensure_review_tab()
-            except Exception as e:
-                print(f"❌ Error connecting to sheets: {e}")
+                try: self.sheet_results.worksheet("Reports"); 
+                except: pass
+            except: pass
         
         if self.sheet_results:
             self.refresh_data()
-
-    def _ensure_review_tab(self):
-        try:
-            try:
-                self.sheet_results.worksheet("Review Requests")
-            except gspread.WorksheetNotFound:
-                ws = self.sheet_results.add_worksheet(title="Review Requests", rows=100, cols=6)
-                ws.append_row(["Timestamp", "Reporter Name", "Season", "Match/Issue", "Description", "Status"])
-        except Exception as e:
-            print(f"⚠️ Could not check/create Review tab: {e}")
 
     def _clean_name(self, name):
         if not name: return ""
@@ -76,30 +55,26 @@ class ThunderData:
 
     def _parse_date(self, date_str):
         if not date_str: return None
-        for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d"):
-            try:
-                return datetime.datetime.strptime(str(date_str).strip(), fmt).date()
-            except ValueError:
-                continue
+        formats = ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d")
+        for fmt in formats:
+            try: return datetime.datetime.strptime(str(date_str).strip(), fmt).date()
+            except ValueError: continue
         return None
 
-    def _load_season_dates(self):
-        print("   -> Loading Season Dates...")
-        self.season_starts = {}
-        if not self.sheet_dates: return
+    def _load_calculated_dates(self):
+        self.date_lookup = {}
         try:
-            ws = self.sheet_dates.get_worksheet(0)
+            ws = self.sheet_results.worksheet("Calculated_Dates")
             records = ws.get_all_records()
             for row in records:
-                season = self._get_val(row, ['Season', 'Season Name', 'Name'])
-                start_str = self._get_val(row, ['Start Date', 'Start', 'Date', 'First Round'])
-                if season and start_str:
-                    date_obj = self._parse_date(start_str)
-                    if date_obj:
-                        clean_season = season.replace("Season:", "").strip()
-                        self.season_starts[clean_season] = date_obj
-        except Exception as e:
-            print(f"❌ Error loading dates: {e}")
+                season = str(row.get('Season', '')).strip()
+                div = str(row.get('Division', '')).strip()
+                week = str(row.get('Week', '')).strip()
+                date_val = str(row.get('Date', '')).strip()
+                if season and div and week and date_val:
+                    parsed = self._parse_date(date_val)
+                    if parsed: self.date_lookup[f"{season}|{div}|{week}"] = parsed.strftime("%d/%m/%Y")
+        except: pass
 
     def refresh_data(self):
         print("⚡️ Refreshing data...")
@@ -107,7 +82,9 @@ class ThunderData:
         self.season_stats = {}
         self.seasons_list = ["Career"] 
         self.divisions_list = set()
-        self._load_season_dates()
+        self.weekly_matches = {} 
+        
+        self._load_calculated_dates()
         
         if not self.sheet_results: return
 
@@ -118,7 +95,7 @@ class ThunderData:
             season_name = title.replace("Season:", "").strip()
             self.seasons_list.append(season_name)
             self.season_stats[season_name] = {}
-            season_start_date = self.season_starts.get(season_name)
+            if season_name not in self.weekly_matches: self.weekly_matches[season_name] = {}
             
             try:
                 records = worksheet.get_all_records()
@@ -128,10 +105,9 @@ class ThunderData:
 
                     p1 = self._clean_name(self._get_val(row, ['Name 1', 'Player 1']))
                     p2 = self._clean_name(self._get_val(row, ['Name 2', 'Player 2']))
-                    
                     if not p1 and not p2: continue
-                    if not p1: p1 = "Unknown Player"
-                    if not p2: p2 = "Unknown Opponent"
+                    if not p1: p1 = "Unknown"
+                    if not p2: p2 = "Unknown"
 
                     div = str(self._get_val(row, ['Division', 'Div'], 'Unknown')).strip()
                     if div: self.divisions_list.add(div)
@@ -142,160 +118,177 @@ class ThunderData:
                     p2_fill = ("S" in status2)
 
                     match_date_str = ""
-                    raw_date = self._get_val(row, ['Date', 'Match Date'])
-                    if raw_date:
-                        match_date_str = str(raw_date)
-                    elif season_start_date:
-                        round_val = self._get_val(row, ['Round', 'Rd', 'Week'])
-                        try:
-                            r_num = int(re.search(r'\d+', str(round_val)).group())
-                            calculated_date = season_start_date + datetime.timedelta(weeks=r_num - 1)
-                            match_date_str = calculated_date.strftime("%d/%m/%Y")
+                    week_num = "Unknown"
+                    
+                    round_val = self._get_val(row, ['Round', 'Rd', 'Week'])
+                    if round_val:
+                        try: week_num = int(re.search(r'\d+', str(round_val)).group())
                         except: pass
+
+                    raw_date = self._get_val(row, ['Date', 'Match Date'])
+                    parsed_row_date = self._parse_date(raw_date)
+                    
+                    if parsed_row_date: match_date_str = parsed_row_date.strftime("%d/%m/%Y")
+                    elif week_num != "Unknown":
+                        lookup_key = f"{season_name}|{div}|{week_num}"
+                        if lookup_key in self.date_lookup: match_date_str = self.date_lookup[lookup_key]
 
                     s1_val = self._get_val(row, ['Sets 1', 'S1'])
                     s2_val = self._get_val(row, ['Sets 2', 'S2'])
 
                     try:
                         if str(s1_val).strip() == "" or str(s2_val).strip() == "": continue
-                        p1_sets = int(s1_val)
-                        p2_sets = int(s2_val)
+                        p1_sets = int(s1_val); p2_sets = int(s2_val)
                     except ValueError: continue 
 
-                    self._update_player_stats(self.season_stats[season_name], p1, p1_sets, p2_sets, True, p2, p1_fill, div, match_date_str)
-                    self._update_player_stats(self.all_players, p1, p1_sets, p2_sets, True, p2, p1_fill, div, match_date_str)
-                    self._update_player_stats(self.season_stats[season_name], p2, p1_sets, p2_sets, False, p1, p2_fill, div, match_date_str)
-                    self._update_player_stats(self.all_players, p2, p1_sets, p2_sets, False, p1, p2_fill, div, match_date_str)
+                    self._update_player_stats(self.season_stats[season_name], p1, p1_sets, p2_sets, True, p2, p1_fill, div, match_date_str, week_num, season_name)
+                    self._update_player_stats(self.all_players, p1, p1_sets, p2_sets, True, p2, p1_fill, div, match_date_str, week_num, season_name)
+                    self._update_player_stats(self.season_stats[season_name], p2, p1_sets, p2_sets, False, p1, p2_fill, div, match_date_str, week_num, season_name)
+                    self._update_player_stats(self.all_players, p2, p1_sets, p2_sets, False, p1, p2_fill, div, match_date_str, week_num, season_name)
+
+                    if week_num != "Unknown":
+                        w_key = str(week_num)
+                        if w_key not in self.weekly_matches[season_name]: self.weekly_matches[season_name][w_key] = []
+                        self.weekly_matches[season_name][w_key].append({
+                            'p1': p1, 'p2': p2,
+                            'score': f"{p1_sets}-{p2_sets}",
+                            'division': div,
+                            'date': match_date_str
+                        })
 
             except Exception as e: print(f"❌ Error loading {title}: {e}")
 
-    def _update_player_stats(self, stat_dict, player_name, p1_sets, p2_sets, is_p1, opponent, is_fillin, division, date_str):
+    def _update_player_stats(self, stat_dict, player_name, p1_sets, p2_sets, is_p1, opponent, is_fillin, division, date_str, week_num, season_name):
         if player_name not in stat_dict:
-            stat_dict[player_name] = {
-                'regular':  {'matches': 0, 'wins': 0, 'losses': 0, 'sets_won': 0, 'sets_lost': 0, 'history': []},
-                'fillin':   {'matches': 0, 'wins': 0, 'losses': 0, 'sets_won': 0, 'sets_lost': 0, 'history': []},
-                'combined': {'matches': 0, 'wins': 0, 'losses': 0, 'sets_won': 0, 'sets_lost': 0, 'history': []}
-            }
+            stat_dict[player_name] = {'regular': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'fillin': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'combined': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}}
         
         buckets = [stat_dict[player_name]['combined']]
         if is_fillin: buckets.append(stat_dict[player_name]['fillin'])
         else: buckets.append(stat_dict[player_name]['regular'])
-
-        if p1_sets == 0 and p2_sets == 0: return
 
         my_sets = p1_sets if is_p1 else p2_sets
         op_sets = p2_sets if is_p1 else p1_sets
         result = "Win" if my_sets > op_sets else "Loss"
 
         for stats in buckets:
-            stats['matches'] += 1
-            stats['sets_won'] += my_sets
-            stats['sets_lost'] += op_sets
+            stats['matches'] += 1; stats['sets_won'] += my_sets; stats['sets_lost'] += op_sets
             if result == "Win": stats['wins'] += 1
             else: stats['losses'] += 1
-            
-            stats['history'].append({
-                'date': date_str,
-                'opponent': opponent,
-                'result': result,
-                'score': f"{my_sets}-{op_sets}",
-                'type': 'Fill-in' if is_fillin else 'Regular',
-                'division': division
-            })
+            stats['history'].append({'season': season_name, 'week': week_num, 'date': date_str, 'opponent': opponent, 'result': result, 'score': f"{my_sets}-{op_sets}", 'type': 'Fill-in' if is_fillin else 'Regular', 'division': division})
 
-    # --- ADMIN FEATURES ---
+    def get_matches_by_week(self, season, week):
+        if season not in self.weekly_matches: return []
+        matches = self.weekly_matches[season].get(str(week), [])
+        unique_matches = []
+        seen = set()
+        for m in matches:
+            participants = sorted([m['p1'], m['p2']])
+            match_id = f"{participants[0]}|{participants[1]}|{m['division']}"
+            if match_id not in seen:
+                seen.add(match_id)
+                unique_matches.append(m)
+        return unique_matches
+
+    def get_division_rankings(self, season, division, max_week=None):
+        if season not in self.season_stats: return []
+        ranking_list = []
+        for player_name, stats in self.season_stats[season].items():
+            # 1. Calculate Regular Stats for this Division
+            reg_hist = [m for m in stats['regular']['history'] if m['division'] == division]
+            # 2. Calculate Fill-in Stats for this Division
+            fill_hist = [m for m in stats['fillin']['history'] if m['division'] == division]
+
+            # Filter by Week if needed
+            if max_week and str(max_week) != "All":
+                try:
+                    limit = int(max_week)
+                    reg_hist = [m for m in reg_hist if m['week'] != "Unknown" and int(m['week']) <= limit]
+                    fill_hist = [m for m in fill_hist if m['week'] != "Unknown" and int(m['week']) <= limit]
+                except: pass
+
+            # Skip if they never played in this division
+            if not reg_hist and not fill_hist: continue 
+
+            # Helper to calculate summary
+            def calc_summary(history):
+                wins = sum(1 for m in history if m['result'] == "Win")
+                matches = len(history)
+                return {'wins': wins, 'losses': matches - wins, 'matches': matches}
+
+            reg_summary = calc_summary(reg_hist)
+            fill_summary = calc_summary(fill_hist)
+
+            ranking_list.append({
+                'name': player_name,
+                'regular': reg_summary,
+                'fillin': fill_summary
+            })
+            
+        return ranking_list
+
+    def get_all_player_rankings(self, season="Career"):
+        if season == "Career":
+            source_data = self.all_players
+        else:
+            source_data = self.season_stats.get(season, {})
+
+        ranking_list = []
+        for player_name, stats in source_data.items():
+            s = stats['regular']
+            if s['matches'] > 0:
+                win_rate = (s['wins'] / s['matches']) * 100
+                ranking_list.append({
+                    'name': player_name,
+                    'wins': s['wins'],
+                    'losses': s['losses'],
+                    'matches': s['matches'],
+                    'win_rate': round(win_rate, 1)
+                })
+        ranking_list.sort(key=lambda x: (-x['wins'], -x['win_rate'], x['name']))
+        return ranking_list
+
     def get_review_requests(self):
-        if not self.sheet_results: return []
         try:
-            ws = self.sheet_results.worksheet("Review Requests")
-            return ws.get_all_records()
+            records = self.sheet_results.worksheet("Reports").get_all_records()
+            for i, r in enumerate(records): r['row_id'] = i + 2 
+            return records
         except: return []
 
-    def submit_request(self, reporter, season, match_info, description):
-        if not self.sheet_results: return False
+    def submit_request(self, reporter, email, season, match_info, description):
         try:
-            ws = self.sheet_results.worksheet("Review Requests")
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            ws.append_row([timestamp, reporter, season, match_info, description, "Pending"])
+            ws = self.sheet_results.worksheet("Reports")
+            timestamp = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            ws.append_row([timestamp, reporter, season, match_info, description, "Pending", email, ""])
+            return True
+        except Exception as e:
+            print(f"Error submitting: {e}")
+            return False
+
+    def update_report_status(self, row_id, new_status, reason=""):
+        try:
+            ws = self.sheet_results.worksheet("Reports")
+            ws.update_cell(row_id, 6, new_status)
+            ws.update_cell(row_id, 8, reason)
             return True
         except: return False
 
-    def run_full_audit(self):
-        issues = []
-        if not self.sheet_results: return []
-        for worksheet in self.sheet_results.worksheets():
-            if "Season:" not in worksheet.title: continue
-            season_name = worksheet.title
-            records = worksheet.get_all_records()
-            for i, row in enumerate(records, start=2):
-                fmt = str(self._get_val(row, ['Format', 'Match Format'])).lower().strip()
-                if "doubles" in fmt: continue 
-                p1 = str(self._get_val(row, ['Name 1', 'Player 1'])).strip()
-                p2 = str(self._get_val(row, ['Name 2', 'Player 2'])).strip()
-                if p1 and not p2: issues.append({'season': season_name, 'row': i, 'type': 'Missing Opponent', 'details': f"{p1} vs [BLANK]"})
-                if p2 and not p1: issues.append({'season': season_name, 'row': i, 'type': 'Missing Player', 'details': f"[BLANK] vs {p2}"})
-                s1_raw = self._get_val(row, ['Sets 1', 'S1'])
-                s2_raw = self._get_val(row, ['Sets 2', 'S2'])
-                if str(s1_raw).strip() == "" or str(s2_raw).strip() == "":
-                    if p1 or p2: issues.append({'season': season_name, 'row': i, 'type': 'Empty Score', 'details': f"{p1} vs {p2} has no score."})
-                    continue
-                try: int(s1_raw); int(s2_raw)
-                except ValueError: issues.append({'season': season_name, 'row': i, 'type': 'Invalid Score', 'details': f"Values: '{s1_raw}' - '{s2_raw}'"})
-        return issues
-
-    def run_player_debug(self, target_player):
-        logs = []
-        target = target_player.lower().strip()
-        if not self.sheet_results: return []
-        for worksheet in self.sheet_results.worksheets():
-            if "Season:" not in worksheet.title: continue
-            season_name = worksheet.title.replace("Season:", "").strip()
-            records = worksheet.get_all_records()
-            for i, row in enumerate(records, start=2):
-                p1 = str(self._get_val(row, ['Name 1', 'Player 1'])).strip()
-                p2 = str(self._get_val(row, ['Name 2', 'Player 2'])).strip()
-                if target not in p1.lower() and target not in p2.lower(): continue
-                fmt = str(self._get_val(row, ['Format', 'Match Format'])).lower().strip()
-                if "doubles" in fmt:
-                    logs.append({'row': i, 'season': season_name, 'status': 'SKIPPED', 'reason': 'Doubles Match'})
-                    continue
-                s1_raw = self._get_val(row, ['Sets 1', 'S1'])
-                s2_raw = self._get_val(row, ['Sets 2', 'S2'])
-                if str(s1_raw).strip() == "" or str(s2_raw).strip() == "":
-                    logs.append({'row': i, 'season': season_name, 'status': 'SKIPPED', 'reason': f"Empty Score (Sets: '{s1_raw}'-'{s2_raw}')"})
-                    continue
-                try:
-                    int(s1_raw); int(s2_raw)
-                    opponent = p2 if target in p1.lower() else p1
-                    logs.append({'row': i, 'season': season_name, 'status': 'ACCEPTED', 'reason': f"vs {opponent} ({s1_raw}-{s2_raw})"})
-                except ValueError:
-                    logs.append({'row': i, 'season': season_name, 'status': 'ERROR', 'reason': f"Invalid Score Format ('{s1_raw}')"})
-        return logs
-
-    # --- GETTERS ---
-    def get_all_players(self): 
-        return self.all_players if self.all_players else {}
-    
+    def run_full_audit(self): return []
+    def run_player_debug(self, target_player): return []
+    def get_all_players(self): return self.all_players
     def get_seasons(self): return self.seasons_list
     def get_divisions(self): return sorted(list(self.divisions_list))
     
-    # --- UPDATED STATS GETTER WITH DATE FILTER ---
-    def get_player_stats(self, player_name, season="Career", division="All", start_date=None, end_date=None):
+    def get_player_stats(self, player_name, season="Career", division="All", week="All", start_date=None, end_date=None):
         dataset = self.all_players if season == "Career" or season not in self.season_stats else self.season_stats[season]
         if player_name not in dataset: return None
         raw_data = dataset[player_name]
-        
-        # Convert filter strings to date objects
         start_obj = self._parse_date(start_date) if start_date else None
         end_obj = self._parse_date(end_date) if end_date else None
         
         def format_bucket(stats):
             hist = stats['history']
-            
-            # 1. Filter by Division
             if division != "All": hist = [m for m in hist if m.get('division') == division]
-            
-            # 2. Filter by Date
+            if week != "All": hist = [m for m in hist if str(m.get('week')) == str(week)]
             if start_obj or end_obj:
                 filtered = []
                 for m in hist:
@@ -305,8 +298,7 @@ class ThunderData:
                     if end_obj and match_date > end_obj: continue
                     filtered.append(m)
                 hist = filtered
-
-            # 3. Recalculate Totals based on filtered history
+            
             matches = len(hist)
             wins = sum(1 for m in hist if m['result'] == "Win")
             s_won = 0; s_lost = 0
@@ -314,17 +306,12 @@ class ThunderData:
                 try: parts = m['score'].split('-'); s_won += int(parts[0]); s_lost += int(parts[1])
                 except: pass
             win_rate = round((wins / matches) * 100, 1) if matches > 0 else 0
-            
-            try:
-                hist.sort(key=lambda x: datetime.datetime.strptime(x['date'], "%d/%m/%Y") if x['date'] else datetime.datetime.min)
+            try: hist.sort(key=lambda x: datetime.datetime.strptime(x['date'], "%d/%m/%Y") if x['date'] else datetime.datetime.min)
             except: pass
-            
-            disp_hist = list(hist)
-            disp_hist.reverse()
+            disp_hist = list(hist); disp_hist.reverse()
             return {'matches': matches, 'wins': wins, 'losses': matches - wins, 'win_rate': f"{win_rate}%", 'sets_won': s_won, 'sets_lost': s_lost, 'match_history': disp_hist}
-
         return {'name': player_name, 'regular': format_bucket(raw_data['regular']), 'fillin': format_bucket(raw_data['fillin']), 'combined': format_bucket(raw_data['combined'])}
-
+    
     def get_head_to_head(self, p1, p2):
         if p1 not in self.all_players: return None
         history = self.all_players[p1]['combined']['history']
