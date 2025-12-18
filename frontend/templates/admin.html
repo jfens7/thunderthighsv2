@@ -3,136 +3,222 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Thunder Admin</title>
+    <title>Admin - Gold Coast Stats</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { background-color: #0f172a; color: #e2e8f0; font-family: 'Inter', sans-serif; }
-        .glass { background-color: #1e293b; border: 1px solid #334155; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+        body { background-color: #020617; color: #e2e8f0; font-family: 'Inter', sans-serif; background-image: radial-gradient(circle at top, #1e293b 0%, #020617 100%); }
+        .glass { background-color: rgba(15, 23, 42, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.05); }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: white; padding: 10px; rounded: 8px; width: 100%; transition: border 0.2s; }
+        .input-dark:focus { border-color: #facc15; outline: none; }
+        .badge-l1 { background-color: #facc15; color: #020617; font-weight: 800; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; letter-spacing: 0.05em; }
+        .badge-l2 { background-color: #0ea5e9; color: white; font-weight: 800; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; letter-spacing: 0.05em; }
+        .badge-l3 { background-color: #10b981; color: white; font-weight: 800; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; letter-spacing: 0.05em; }
     </style>
 </head>
 <body class="flex flex-col items-center min-h-screen p-6">
 
-    <div id="loginScreen" class="flex flex-col items-center justify-center h-screen w-full absolute top-0 bg-slate-900 z-50">
-        <h1 class="text-3xl font-bold text-orange-500 mb-6">ADMIN ACCESS</h1>
-        <input type="password" id="passwordInput" class="p-3 rounded bg-slate-800 border border-slate-700 text-white w-64 text-center mb-4" placeholder="Enter Password">
-        <button onclick="login()" class="px-6 py-2 bg-orange-600 hover:bg-orange-700 rounded font-bold text-white">Unlock</button>
-        <p id="loginError" class="text-red-500 mt-4 hidden">Access Denied</p>
+    <div id="loginScreen" class="flex flex-col items-center justify-center h-screen w-full absolute top-0 bg-slate-950 z-50">
+        <div class="p-8 bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl text-center">
+            <div class="w-16 h-16 bg-slate-800 rounded-xl flex items-center justify-center mx-auto mb-6 border border-white/5">
+                <i class="fa-solid fa-table-tennis-paddle-ball text-3xl text-yellow-500"></i>
+            </div>
+            <h1 class="text-3xl font-black text-white mb-2">ADMIN ACCESS</h1>
+            <p class="text-slate-500 text-sm mb-6">Gold Coast Stats v2.2</p>
+            <input type="password" id="passwordInput" class="p-3 rounded bg-slate-950 border border-slate-700 text-white w-64 text-center mb-4 focus:border-yellow-500 focus:outline-none" placeholder="Enter Password">
+            <button onclick="login()" class="w-full py-3 bg-yellow-500 hover:bg-yellow-400 rounded-lg font-bold text-slate-900 transition-colors">Unlock Dashboard</button>
+            <p id="loginError" class="text-red-500 mt-4 hidden font-bold">Access Denied</p>
+        </div>
     </div>
 
     <div id="dashboard" class="w-full max-w-7xl hidden">
-        <div class="flex justify-between items-center mb-8">
-            <h1 class="text-2xl font-bold text-white">⚡️ Thunder Admin</h1>
-            <a href="/" class="text-gray-400 hover:text-white"><i class="fa-solid fa-house mr-2"></i>Back to App</a>
+        <div class="flex justify-between items-center mb-10">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-yellow-500 rounded-lg flex items-center justify-center text-slate-900 font-bold"><i class="fa-solid fa-bolt"></i></div>
+                <h1 class="text-2xl font-black text-white tracking-tight">THUNDER <span class="text-yellow-500">ADMIN</span></h1>
+            </div>
+            <a href="/" class="text-slate-400 hover:text-white transition-colors font-bold text-sm"><i class="fa-solid fa-arrow-right-from-bracket mr-2"></i>Exit</a>
         </div>
 
-        <div class="flex gap-4 mb-6">
-            <button onclick="showTab('requests')" id="tab-requests" class="px-4 py-2 bg-orange-600 text-white rounded font-bold">Review Requests</button>
-            <button onclick="showTab('audit')" id="tab-audit" class="px-4 py-2 bg-slate-700 text-gray-300 rounded font-bold">Tools & Audit</button>
+        <div class="flex gap-4 mb-8 border-b border-slate-800 pb-1 overflow-x-auto">
+            <button onclick="showTab('teams')" id="tab-teams" class="px-6 py-3 border-b-2 border-yellow-500 text-yellow-500 font-bold transition-colors">Team Builder</button>
+            <button onclick="showTab('requests')" id="tab-requests" class="px-6 py-3 border-b-2 border-transparent text-slate-400 hover:text-white font-bold transition-colors">Requests</button>
+            <button onclick="showTab('season')" id="tab-season" class="px-6 py-3 border-b-2 border-transparent text-slate-400 hover:text-white font-bold transition-colors">Season Setup</button>
         </div>
 
-        <div id="panel-requests" class="glass rounded-xl p-6">
-            <h2 class="text-xl font-bold mb-4 border-b border-gray-700 pb-2">User Reports</h2>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-sm text-gray-400">
-                    <thead class="text-xs uppercase bg-slate-800 text-gray-300">
-                        <tr>
-                            <th class="px-4 py-3">Time</th>
-                            <th class="px-4 py-3">Reporter</th>
-                            <th class="px-4 py-3">Email</th>
-                            <th class="px-4 py-3">Match Issue</th>
-                            <th class="px-4 py-3">Description</th>
-                            <th class="px-4 py-3">Status</th>
-                            <th class="px-4 py-3">Action</th>
-                        </tr>
+        <div id="panel-teams" class="glass rounded-2xl p-8 shadow-xl">
+            <div class="flex flex-wrap items-center gap-4 mb-8">
+                <h2 class="text-xl font-bold text-white">Manage Teams</h2>
+                <div class="h-8 w-px bg-slate-700 mx-2"></div>
+                <select id="teamSeason" class="input-dark w-40 font-bold text-sm" onchange="loadTeams()"></select>
+                <select id="teamDiv" class="input-dark w-48 font-bold text-sm" onchange="renderTeamsUI()">
+                    <option value="Division 1">Division 1</option>
+                    <option value="Division 2">Division 2</option>
+                    <option value="Division 3">Division 3</option>
+                    <option value="Division 4">Division 4</option>
+                    <option value="Division 5">Division 5</option>
+                </select>
+                <button onclick="openAddTeamModal()" class="ml-auto bg-green-600 hover:bg-green-500 text-white px-5 py-2.5 rounded-lg font-bold shadow-lg shadow-green-900/20 transition-all active:scale-95"><i class="fa-solid fa-plus mr-2"></i>New Team</button>
+            </div>
+            
+            <div id="teamsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </div>
+
+        <div id="panel-requests" class="glass rounded-2xl p-8 hidden">
+            <h2 class="text-xl font-bold mb-6">User Reports</h2>
+            <div class="overflow-x-auto rounded-xl border border-slate-700">
+                <table class="w-full text-left text-sm text-slate-400">
+                    <thead class="text-xs uppercase bg-slate-800 text-slate-300 font-bold">
+                        <tr><th class="px-6 py-4">Time</th><th class="px-6 py-4">Reporter</th><th class="px-6 py-4">Issue</th><th class="px-6 py-4">Desc</th><th class="px-6 py-4">Action</th></tr>
                     </thead>
-                    <tbody id="requestsTable"></tbody>
+                    <tbody id="requestsTable" class="divide-y divide-slate-700 bg-slate-900/50"></tbody>
                 </table>
             </div>
-            <button onclick="loadRequests()" class="mt-4 text-orange-500 hover:text-white text-sm"><i class="fa-solid fa-rotate mr-1"></i> Refresh</button>
+            <button onclick="loadRequests()" class="mt-6 text-yellow-500 hover:text-white text-sm font-bold"><i class="fa-solid fa-rotate mr-1"></i> Refresh List</button>
         </div>
 
-        <div id="panel-audit" class="glass rounded-xl p-6 hidden">
-             <div class="text-center text-gray-500">Audit tools active</div>
+        <div id="panel-season" class="glass rounded-2xl p-8 hidden">
+             <div class="grid md:grid-cols-2 gap-10">
+                 <div class="text-center py-10 border-r border-slate-700 pr-10">
+                    <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 text-green-500 text-3xl"><i class="fa-solid fa-calendar-plus"></i></div>
+                    <h2 class="text-xl font-bold text-white mb-2">Create New Season</h2>
+                    <p class="text-slate-400 mb-6 text-sm">Create a new database sheet. Use names like "Summer 2026".</p>
+                    <input type="text" id="newSeasonName" class="input-dark p-3 text-center text-lg font-bold mb-4 placeholder-slate-600" placeholder="e.g. Summer 2026">
+                    <button onclick="createNewSeason()" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl transition-colors">Create Season</button>
+                 </div>
+                 <div class="text-center py-10">
+                    <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500 text-3xl"><i class="fa-solid fa-trash-can"></i></div>
+                    <h2 class="text-xl font-bold text-white mb-2">Delete Season</h2>
+                    <p class="text-slate-400 mb-6 text-sm">Permanently remove a season from the database.</p>
+                    <select id="deleteSeasonSelect" class="input-dark p-3 text-center text-lg font-bold mb-4"></select>
+                    <button onclick="deleteSeason()" class="w-full bg-red-900/20 hover:bg-red-900/40 text-red-500 border border-red-900/50 font-bold py-3 rounded-xl transition-colors">Delete Selected Season</button>
+                 </div>
+             </div>
+        </div>
+    </div>
+
+    <div id="teamModal" class="fixed inset-0 flex items-center justify-center hidden z-50 backdrop-blur-sm bg-black/60">
+        <div class="bg-slate-900 rounded-2xl p-8 w-full max-w-lg border border-slate-700 shadow-2xl relative">
+            <button onclick="closeTeamModal()" class="absolute top-6 right-6 text-slate-500 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <h3 class="text-2xl font-bold text-white mb-6">Edit Team</h3>
+            <div class="space-y-4">
+                <div><label class="text-slate-500 text-xs font-bold uppercase mb-1 block">Team Name</label><input id="modalTeamName" type="text" class="input-dark"></div>
+                <div><label class="text-slate-500 text-xs font-bold uppercase mb-1 block flex justify-between"><span>Level 1 (Star)</span><span class="text-yellow-500">Home: B / Away: Z</span></label><input id="modalL1" list="playerList" class="input-dark" placeholder="Search..."></div>
+                <div><label class="text-slate-500 text-xs font-bold uppercase mb-1 block flex justify-between"><span>Level 2</span><span class="text-sky-500">Home: C / Away: X</span></label><input id="modalL2" list="playerList" class="input-dark" placeholder="Search..."></div>
+                <div id="modalL3Container"><label class="text-slate-500 text-xs font-bold uppercase mb-1 block flex justify-between"><span>Level 3</span><span class="text-emerald-500">Home: A / Away: Y</span></label><input id="modalL3" list="playerList" class="input-dark" placeholder="Search..."></div>
+            </div>
+            <p id="validationError" class="text-red-500 text-sm mt-4 font-bold hidden bg-red-900/20 p-2 rounded border border-red-900/50"></p>
+            <datalist id="playerList"></datalist>
+            <div class="grid grid-cols-2 gap-4 mt-8">
+                <button onclick="deleteTeam()" class="py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/50 rounded-lg font-bold">Delete</button>
+                <button onclick="saveTeam()" class="py-3 bg-yellow-500 hover:bg-yellow-400 text-slate-900 rounded-lg font-bold shadow-lg shadow-yellow-500/20">Save Changes</button>
+            </div>
         </div>
     </div>
 
     <script>
+        let allTeams = [], allPlayers = [];
         async function login() {
             const pwd = document.getElementById('passwordInput').value;
-            const res = await fetch('/api/admin/login', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ password: pwd })
-            });
-            if (res.ok) {
-                document.getElementById('loginScreen').classList.add('hidden');
-                document.getElementById('dashboard').classList.remove('hidden');
-                loadRequests();
-            } else {
-                document.getElementById('loginError').classList.remove('hidden');
-            }
+            const res = await fetch('/api/admin/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ password: pwd }) });
+            if (res.ok) { document.getElementById('loginScreen').classList.add('hidden'); document.getElementById('dashboard').classList.remove('hidden'); initData(); } 
+            else document.getElementById('loginError').classList.remove('hidden');
         }
-
+        async function initData() {
+            const sRes = await fetch('/api/seasons'); const seasons = await sRes.json();
+            const sSelect = document.getElementById('teamSeason');
+            const dSelect = document.getElementById('deleteSeasonSelect'); 
+            seasons.forEach(s => { 
+                let opt = document.createElement('option'); opt.value = s; opt.innerText = s; sSelect.appendChild(opt); 
+                let opt2 = document.createElement('option'); opt2.value = s; opt2.innerText = s; dSelect.appendChild(opt2);
+            });
+            if(seasons.length > 0) sSelect.value = seasons[seasons.length - 1];
+            const pRes = await fetch('/api/players'); allPlayers = await pRes.json();
+            const dl = document.getElementById('playerList');
+            allPlayers.forEach(p => { let opt = document.createElement('option'); opt.value = p; dl.appendChild(opt); });
+            loadTeams(); loadRequests();
+        }
         function showTab(tab) {
-            document.getElementById('panel-requests').classList.add('hidden');
-            document.getElementById('panel-audit').classList.add('hidden');
-            document.getElementById('tab-requests').className = "px-4 py-2 bg-slate-700 text-gray-300 rounded font-bold";
-            document.getElementById('tab-audit').className = "px-4 py-2 bg-slate-700 text-gray-300 rounded font-bold";
-            document.getElementById(`panel-${tab}`).classList.remove('hidden');
-            document.getElementById(`tab-${tab}`).className = "px-4 py-2 bg-orange-600 text-white rounded font-bold";
+            ['teams', 'requests', 'season'].forEach(t => { document.getElementById(`panel-${t}`).classList.add('hidden'); document.getElementById(`tab-${t}`).className = "px-6 py-3 border-b-2 border-transparent text-slate-400 hover:text-white font-bold transition-colors"; });
+            document.getElementById(`panel-${tab}`).classList.remove('hidden'); document.getElementById(`tab-${tab}`).className = "px-6 py-3 border-b-2 border-yellow-500 text-yellow-500 font-bold transition-colors";
         }
-
+        async function loadTeams() {
+            const season = document.getElementById('teamSeason').value; if(!season) return;
+            const res = await fetch(`/api/admin/teams/${encodeURIComponent(season)}`); allTeams = await res.json(); renderTeamsUI();
+        }
+        function renderTeamsUI() {
+            const currentDiv = document.getElementById('teamDiv').value; const container = document.getElementById('teamsGrid'); container.innerHTML = '';
+            const divTeams = allTeams.filter(t => t.Division === currentDiv);
+            divTeams.forEach(team => {
+                const card = document.createElement('div'); card.className = "bg-slate-800/50 border border-slate-700/50 p-6 rounded-xl relative hover:border-slate-600 transition-colors group";
+                const isDiv1 = currentDiv.includes('1');
+                let playersHtml = `<div class="flex justify-between items-center mb-3 text-sm"><span class="text-slate-400 font-medium">Level 1 <span class="badge-l1">STAR</span></span><span class="text-white font-bold">${team['L1_Player'] || '-'}</span></div><div class="flex justify-between items-center mb-3 text-sm"><span class="text-slate-400 font-medium">Level 2</span><span class="text-white font-bold">${team['L2_Player'] || '-'}</span></div>`;
+                if (!isDiv1) playersHtml += `<div class="flex justify-between items-center text-sm"><span class="text-slate-400 font-medium">Level 3</span><span class="text-white font-bold">${team['L3_Player'] || '-'}</span></div>`;
+                card.innerHTML = `<h3 class="text-lg font-black text-white mb-4 pb-2 border-b border-slate-700/50 flex items-center gap-2"><i class="fa-solid fa-people-group text-slate-600"></i> ${team['Team Name']}</h3><div class="space-y-1">${playersHtml}</div><button onclick='openEditTeam("${team['Team Name']}")' class="absolute top-5 right-5 text-slate-600 hover:text-yellow-500 transition-colors"><i class="fa-solid fa-pen-to-square text-lg"></i></button>`;
+                container.appendChild(card);
+            });
+            if (divTeams.length === 0) container.innerHTML = `<div class="col-span-3 text-center text-slate-500 py-10 border border-slate-800 border-dashed rounded-xl">No teams found for ${currentDiv}.</div>`;
+        }
+        function openAddTeamModal() {
+            document.getElementById('modalTeamName').value = ''; document.getElementById('modalTeamName').readOnly = false;
+            document.getElementById('modalL1').value = ''; document.getElementById('modalL2').value = ''; document.getElementById('modalL3').value = '';
+            document.getElementById('validationError').classList.add('hidden');
+            document.getElementById('modalL3Container').style.display = document.getElementById('teamDiv').value.includes('1') ? 'none' : 'block';
+            document.getElementById('teamModal').classList.remove('hidden');
+        }
+        function openEditTeam(teamName) {
+            const team = allTeams.find(t => t['Team Name'] === teamName && t.Division === document.getElementById('teamDiv').value); if (!team) return;
+            document.getElementById('modalTeamName').value = team['Team Name']; document.getElementById('modalTeamName').readOnly = true;
+            document.getElementById('modalL1').value = team['L1_Player']; document.getElementById('modalL2').value = team['L2_Player']; document.getElementById('modalL3').value = team['L3_Player'];
+            document.getElementById('validationError').classList.add('hidden');
+            document.getElementById('modalL3Container').style.display = document.getElementById('teamDiv').value.includes('1') ? 'none' : 'block';
+            document.getElementById('teamModal').classList.remove('hidden');
+        }
+        function closeTeamModal() { document.getElementById('teamModal').classList.add('hidden'); }
+        function validateTeamData(teamName, l1, l2, l3) {
+            const currentDiv = document.getElementById('teamDiv').value; const isDiv1 = currentDiv.includes('1');
+            const players = [l1, l2]; if (!isDiv1 && l3) players.push(l3);
+            if (!teamName) return "Team Name is required."; if (!l1 || !l2) return "Level 1 and Level 2 players are required."; if (!isDiv1 && !l3) return "Level 3 player is required.";
+            const filledPlayers = players.filter(p => p.trim() !== ""); const uniquePlayers = new Set(filledPlayers);
+            if (uniquePlayers.size !== filledPlayers.length) return "Duplicate players in team.";
+            const divTeams = allTeams.filter(t => t.Division === currentDiv && t['Team Name'] !== teamName);
+            for (let team of divTeams) {
+                const teamPlayers = [team['L1_Player'], team['L2_Player'], team['L3_Player']].map(p => String(p).toLowerCase().trim());
+                for (let newP of filledPlayers) { if (teamPlayers.includes(newP.toLowerCase().trim())) return `Player '${newP}' is already in team '${team['Team Name']}'.`; }
+            }
+            return null;
+        }
+        async function saveTeam() {
+            const teamName = document.getElementById('modalTeamName').value; const l1 = document.getElementById('modalL1').value; const l2 = document.getElementById('modalL2').value; const l3 = document.getElementById('modalL3').value;
+            const error = validateTeamData(teamName, l1, l2, l3);
+            if (error) { const errEl = document.getElementById('validationError'); errEl.innerText = error; errEl.classList.remove('hidden'); return; }
+            const payload = { season: document.getElementById('teamSeason').value, division: document.getElementById('teamDiv').value, team_name: teamName, l1: l1, l2: l2, l3: l3 };
+            const res = await fetch('/api/admin/save_team', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+            if (res.ok) { closeTeamModal(); loadTeams(); } else alert("Error saving team");
+        }
+        async function deleteTeam() { if(!confirm("Delete team?")) return; const payload = { season: document.getElementById('teamSeason').value, division: document.getElementById('teamDiv').value, team_name: document.getElementById('modalTeamName').value }; await fetch('/api/admin/delete_team', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) }); closeTeamModal(); loadTeams(); }
         async function loadRequests() {
-            const res = await fetch('/api/admin/requests');
-            const data = await res.json();
-            const tbody = document.getElementById('requestsTable');
-            tbody.innerHTML = '';
-
+            const res = await fetch('/api/admin/requests'); const data = await res.json(); const tbody = document.getElementById('requestsTable'); tbody.innerHTML = '';
             const activeReports = data.filter(r => r.Status !== 'Fixed' && r.Status !== 'Ignored');
-
-            if (activeReports.length === 0) { 
-                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-4 text-center">No pending reports.</td></tr>';
-                return;
-            }
-
-            activeReports.forEach(row => { 
-                const tr = document.createElement('tr');
-                tr.className = "border-b border-slate-700 hover:bg-slate-800";
-                const statusColor = row.Status === 'Pending' ? 'text-yellow-300 bg-yellow-900' : 'text-gray-300 bg-gray-700';
-
-                tr.innerHTML = `
-                    <td class="px-4 py-3 text-xs text-gray-500">${row.Timestamp}</td>
-                    <td class="px-4 py-3 font-bold text-white">${row['Reporter Name']}</td>
-                    <td class="px-4 py-3 text-xs text-blue-400">${row.email || '-'}</td>
-                    <td class="px-4 py-3 text-orange-400 text-xs">${row['Match/Issue']}</td>
-                    <td class="px-4 py-3 italic">"${row.Description}"</td>
-                    <td class="px-4 py-3"><span class="${statusColor} px-2 py-0.5 rounded text-xs">${row.Status}</span></td>
-                    <td class="px-4 py-3">
-                        <div class="flex flex-col gap-2">
-                            <input type="text" id="reason-${row.row_id}" placeholder="Reply/Reason..." class="bg-slate-900 border border-slate-600 p-1 text-xs text-white rounded w-full">
-                            <div class="flex gap-2">
-                                <button onclick="updateStatus(${row.row_id}, 'Fixed')" class="text-green-400 hover:text-green-300 border border-green-800 px-2 py-1 rounded text-xs">Mark Fixed</button>
-                                <button onclick="updateStatus(${row.row_id}, 'Ignored')" class="text-red-400 hover:text-red-300 border border-red-800 px-2 py-1 rounded text-xs">Ignore</button>
-                            </div>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
+            if (activeReports.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-6 text-center italic text-slate-500">No pending reports.</td></tr>'; return; }
+            activeReports.forEach(row => { const tr = document.createElement('tr'); tr.innerHTML = `<td class="px-6 py-4 text-xs text-slate-500">${row.Timestamp}</td><td class="px-6 py-4 font-bold text-white">${row['Reporter Name']}</td><td class="px-6 py-4 text-yellow-500 text-xs font-bold uppercase">${row['Match/Issue']}</td><td class="px-6 py-4 text-slate-300 italic">"${row.Description}"</td><td class="px-6 py-4"><button onclick="updateStatus(${row.row_id}, 'Fixed')" class="text-green-400 border border-green-800/50 hover:bg-green-900/20 px-3 py-1 rounded text-xs font-bold transition-colors">Mark Fixed</button></td>`; tbody.appendChild(tr); });
         }
-
-        async function updateStatus(rowId, newStatus) {
-            const reason = document.getElementById(`reason-${rowId}`).value;
-            const res = await fetch('/api/admin/update_report', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ row_id: rowId, status: newStatus, reason: reason })
-            });
-            if(res.ok) {
-                loadRequests(); 
-            } else {
-                alert("Failed to update status");
-            }
+        async function updateStatus(rowId, newStatus) { await fetch('/api/admin/update_report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ row_id: rowId, status: newStatus }) }); loadRequests(); }
+        async function createNewSeason() {
+            const name = document.getElementById('newSeasonName').value; if(!name) return alert("Enter a name!"); if(!confirm(`Create season: ${name}?`)) return;
+            const btn = document.querySelector('#panel-season button'); btn.innerText = "Creating..."; btn.disabled = true;
+            const res = await fetch('/api/admin/create_season', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: name }) });
+            if(res.ok) { alert("Created! Reloading..."); location.reload(); } else { alert("Error."); } btn.disabled = false;
+        }
+        
+        async function deleteSeason() {
+            const name = document.getElementById('deleteSeasonSelect').value;
+            if(!name) return;
+            const userConf = prompt(`Type "DELETE" to permanently delete: ${name}`);
+            if(userConf !== "DELETE") return alert("Action cancelled.");
+            const res = await fetch('/api/admin/delete_season', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: name }) });
+            if(res.ok) { alert("Season deleted."); location.reload(); } else { alert("Error deleting season."); }
         }
     </script>
 </body>

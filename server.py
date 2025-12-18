@@ -6,13 +6,29 @@ except ImportError:
 
 app = Flask(__name__, template_folder='frontend/templates')
 db = ThunderData()
+
 ADMIN_PASSWORD = "thunderadmin"
+SCORER_PASSWORD = "tabletennis" 
 
 @app.route('/')
 def home(): return render_template('index.html')
 
 @app.route('/admin')
 def admin_panel(): return render_template('admin.html')
+
+@app.route('/scorer')
+def scorer_page(): return render_template('scorer.html')
+
+# --- NEW ENVIRONMENT ENDPOINT ---
+@app.route('/api/environment')
+def get_environment():
+    # Returns: {is_day, temp, condition, moon_phase, moon_icon_code, star_visibility}
+    return jsonify(db.get_sky_data())
+
+@app.route('/api/scorer/login', methods=['POST'])
+def scorer_login():
+    if request.json.get('password') == SCORER_PASSWORD: return jsonify({"success": True})
+    return jsonify({"success": False}), 401
 
 @app.route('/api/admin/login', methods=['POST'])
 def admin_login():
@@ -25,10 +41,39 @@ def get_requests(): return jsonify(db.get_review_requests())
 @app.route('/api/admin/update_report', methods=['POST'])
 def update_report():
     data = request.json
-    # Pass reason to backend
     if db.update_report_status(data.get('row_id'), data.get('status'), data.get('reason', '')): 
         return jsonify({"success": True})
     return jsonify({"success": False}), 500
+
+@app.route('/api/admin/create_season', methods=['POST'])
+def create_season_route():
+    data = request.json
+    success = db.create_new_season(data.get('name'))
+    if success: return jsonify({"success": True})
+    else: return jsonify({"success": False, "error": "Season already exists or failed"}), 400
+
+@app.route('/api/admin/delete_season', methods=['POST'])
+def delete_season_route():
+    data = request.json
+    success = db.delete_season(data.get('name'))
+    if success: return jsonify({"success": True})
+    else: return jsonify({"success": False}), 400
+
+@app.route('/api/admin/teams/<season>')
+def get_teams_route(season):
+    return jsonify(db.get_teams(season))
+
+@app.route('/api/admin/save_team', methods=['POST'])
+def save_team_route():
+    d = request.json
+    success = db.save_team(d.get('season'), d.get('division'), d.get('team_name'), d.get('l1'), d.get('l2'), d.get('l3', ''))
+    return jsonify({"success": success})
+
+@app.route('/api/admin/delete_team', methods=['POST'])
+def delete_team_route():
+    d = request.json
+    success = db.delete_team(d.get('season'), d.get('division'), d.get('team_name'))
+    return jsonify({"success": success})
 
 @app.route('/api/admin/audit')
 def get_audit(): return jsonify(db.run_full_audit())

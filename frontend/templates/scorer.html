@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scorer - Gold Coast Stats</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap');
+        body { background-color: #020617; color: white; font-family: 'Inter', sans-serif; background-image: radial-gradient(circle at center, #1e293b 0%, #020617 100%); }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div id="loginScreen" class="bg-slate-900/80 backdrop-blur-xl p-10 rounded-3xl shadow-2xl border border-slate-800 text-center max-w-sm w-full">
+        <div class="mb-8 relative inline-block">
+            <div class="absolute inset-0 bg-yellow-500 blur-xl opacity-20 rounded-full"></div>
+            <i class="fa-solid fa-table-tennis-paddle-ball text-6xl text-yellow-500 relative z-10"></i>
+        </div>
+        <h2 class="text-3xl font-black mb-2 tracking-tight">Live Scorer</h2>
+        <p class="text-slate-400 text-sm mb-8 font-medium">Authorized Officials Only</p>
+        
+        <input type="password" id="scorerPwd" class="w-full p-4 rounded-xl bg-slate-950 border border-slate-800 text-center text-white text-lg mb-4 focus:border-yellow-500 focus:outline-none transition-colors" placeholder="Enter PIN">
+        
+        <button onclick="login()" class="w-full bg-yellow-500 hover:bg-yellow-400 text-slate-900 font-bold py-4 rounded-xl transition-all active:scale-95 shadow-lg shadow-yellow-500/20">
+            Start Session
+        </button>
+        <p id="errorMsg" class="text-red-500 text-sm mt-4 hidden font-bold animate-pulse">Incorrect PIN</p>
+    </div>
+
+    <div id="scorerApp" class="hidden w-full max-w-4xl">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-2xl font-black text-white italic">GOLD COAST <span class="text-yellow-500">LIVE</span></h1>
+            <button onclick="logout()" class="text-slate-500 hover:text-white text-sm font-bold bg-slate-900 px-4 py-2 rounded-lg border border-slate-800 transition-colors">Logout</button>
+        </div>
+        
+        <div class="bg-slate-900/60 backdrop-blur-md rounded-3xl p-12 text-center border border-slate-800 shadow-2xl">
+            <div class="w-24 h-24 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-600 text-4xl">
+                <i class="fa-solid fa-gamepad"></i>
+            </div>
+            <h2 class="text-3xl font-bold text-white mb-4">Ready to Score</h2>
+            <p class="text-slate-400 mb-8 text-lg">Select a match to begin live point tracking.</p>
+            
+            <div class="inline-flex items-center gap-3 px-6 py-3 bg-yellow-500/10 text-yellow-500 rounded-full border border-yellow-500/20 font-bold text-sm">
+                <i class="fa-solid fa-lock"></i> Match Selection Locked (Stage 4 Update)
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function login() {
+            const pwd = document.getElementById('scorerPwd').value;
+            const res = await fetch('/api/scorer/login', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ password: pwd })
+            });
+
+            if (res.ok) { document.getElementById('loginScreen').classList.add('hidden'); document.getElementById('scorerApp').classList.remove('hidden'); } 
+            else { document.getElementById('errorMsg').classList.remove('hidden'); }
+        }
+        function logout() { location.reload(); }
+    </script>
+</body>
+</html>

@@ -4,6 +4,19 @@ import datetime
 import re
 import os
 import json
+import sys
+
+# --- FIX: FORCE PYTHON TO FIND SKY_ENGINE ---
+# This adds the current folder (backend/) to the system path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
+try:
+    from sky_engine import SkyEngine
+except ImportError:
+    # Backup for different folder structures
+    from backend.sky_engine import SkyEngine
 
 RESULTS_SPREADSHEET_ID = "1tpxuUCl8ddpnBBr69vc4P1foRCRKWpts5-HaFPYb4po" 
 DATES_SPREADSHEET_ID   = "1irddXf_SgtCpR6F7fUOoWmkvogKWowOoxEG_WWSaoHc"
@@ -13,6 +26,13 @@ class ThunderData:
         self.scopes = ["https://www.googleapis.com/auth/spreadsheets"]
         self.client = None
         self.sheet_results = None
+        
+        # Initialize the Sky Engine safely
+        try:
+            self.sky_engine = SkyEngine()
+        except Exception as e:
+            print(f"⚠️ SkyEngine Warning: {e}")
+            self.sky_engine = None
         
         self.all_players = {}
         self.season_stats = {}
@@ -27,9 +47,19 @@ class ThunderData:
                 info = json.loads(creds_json)
                 self.creds = Credentials.from_service_account_info(info, scopes=self.scopes)
             else:
-                self.creds = Credentials.from_service_account_file("credentials.json", scopes=self.scopes)
+                # Robust credential finding
+                if os.path.exists("credentials.json"):
+                    self.creds = Credentials.from_service_account_file("credentials.json", scopes=self.scopes)
+                elif os.path.exists(os.path.join(current_dir, "credentials.json")):
+                    self.creds = Credentials.from_service_account_file(os.path.join(current_dir, "credentials.json"), scopes=self.scopes)
+                else:
+                    self.creds = None
             
-            self.client = gspread.authorize(self.creds)
+            if self.creds:
+                self.client = gspread.authorize(self.creds)
+            else:
+                print("⚠️ Warning: credentials.json not found.")
+
         except Exception as e:
             print(f"❌ Error: {e}")
             return
@@ -37,12 +67,15 @@ class ThunderData:
         if self.client:
             try:
                 self.sheet_results = self.client.open_by_key(RESULTS_SPREADSHEET_ID)
-                try: self.sheet_results.worksheet("Reports"); 
-                except: pass
             except: pass
         
         if self.sheet_results:
             self.refresh_data()
+
+    def get_sky_data(self):
+        if self.sky_engine:
+            return self.sky_engine.get_environment_data()
+        return {"is_day": False, "temp": 20, "condition": "Clear", "holiday": "normal"}
 
     def _clean_name(self, name):
         if not name: return ""
@@ -193,12 +226,9 @@ class ThunderData:
         if season not in self.season_stats: return []
         ranking_list = []
         for player_name, stats in self.season_stats[season].items():
-            # 1. Calculate Regular Stats for this Division
             reg_hist = [m for m in stats['regular']['history'] if m['division'] == division]
-            # 2. Calculate Fill-in Stats for this Division
             fill_hist = [m for m in stats['fillin']['history'] if m['division'] == division]
 
-            # Filter by Week if needed
             if max_week and str(max_week) != "All":
                 try:
                     limit = int(max_week)
@@ -206,24 +236,18 @@ class ThunderData:
                     fill_hist = [m for m in fill_hist if m['week'] != "Unknown" and int(m['week']) <= limit]
                 except: pass
 
-            # Skip if they never played in this division
             if not reg_hist and not fill_hist: continue 
 
-            # Helper to calculate summary
             def calc_summary(history):
                 wins = sum(1 for m in history if m['result'] == "Win")
                 matches = len(history)
                 return {'wins': wins, 'losses': matches - wins, 'matches': matches}
 
-            reg_summary = calc_summary(reg_hist)
-            fill_summary = calc_summary(fill_hist)
-
             ranking_list.append({
                 'name': player_name,
-                'regular': reg_summary,
-                'fillin': fill_summary
+                'regular': calc_summary(reg_hist),
+                'fillin': calc_summary(fill_hist)
             })
-            
         return ranking_list
 
     def get_all_player_rankings(self, season="Career"):
@@ -246,6 +270,76 @@ class ThunderData:
                 })
         ranking_list.sort(key=lambda x: (-x['wins'], -x['win_rate'], x['name']))
         return ranking_list
+
+    def get_teams(self, season):
+        try:
+            ws = self.sheet_results.worksheet("Teams")
+            records = ws.get_all_records()
+            return [r for r in records if str(r['Season']) == str(season)]
+        except: return []
+
+    def save_team(self, season, division, team_name, l1, l2, l3=""):
+        try:
+            ws = self.sheet_results.worksheet("Teams")
+            records = ws.get_all_records()
+            row_to_update = None
+            for i, r in enumerate(records):
+                if str(r['Season']) == str(season) and str(r['Division']) == str(division) and str(r['Team Name']) == str(team_name):
+                    row_to_update = i + 2 
+                    break
+            
+            if row_to_update:
+                ws.update_cell(row_to_update, 4, l1)
+                ws.update_cell(row_to_update, 5, l2)
+                ws.update_cell(row_to_update, 6, l3)
+            else:
+                ws.append_row([season, division, team_name, l1, l2, l3])
+            return True
+        except Exception as e:
+            print(f"Error saving team: {e}")
+            return False
+            
+    def delete_team(self, season, division, team_name):
+        try:
+            ws = self.sheet_results.worksheet("Teams")
+            records = ws.get_all_records()
+            for i, r in enumerate(records):
+                if str(r['Season']) == str(season) and str(r['Division']) == str(division) and str(r['Team Name']) == str(team_name):
+                    ws.delete_rows(i + 2)
+                    return True
+            return False
+        except: return False
+
+    def create_new_season(self, season_name):
+        try:
+            sheet_title = f"Season: {season_name}"
+            try:
+                self.sheet_results.worksheet(sheet_title)
+                return False 
+            except: pass
+
+            ws = self.sheet_results.add_worksheet(title=sheet_title, rows=1000, cols=20)
+            headers = ["Round", "Date", "Table", "Division", "Team 1", "Team 2", "Pos 1", "Pos 2", "Player 1", "Player 2", "Score", "S1", "S2", "S3", "S4", "S5"]
+            ws.update('A1', [headers])
+            self.refresh_data()
+            return True
+        except Exception as e:
+            print(f"Error creating season: {e}")
+            return False
+
+    def delete_season(self, season_name):
+        try:
+            sheet_title = f"Season: {season_name}"
+            try:
+                ws = self.sheet_results.worksheet(sheet_title)
+                self.sheet_results.del_worksheet(ws)
+                self.refresh_data()
+                return True
+            except:
+                return False 
+        except Exception as e:
+            print(f"Error deleting season: {e}")
+            return False
 
     def get_review_requests(self):
         try:
