@@ -20,105 +20,84 @@ class SkyEngine:
         day = now.day
         year = now.year
 
-        # --- FIXED DATE HOLIDAYS ---
+        # --- HOLIDAY CALENDAR ---
         
-        # 1. New Year's Eve / Day (Dec 31 - Jan 1)
-        if (month == 12 and day == 31) or (month == 1 and day == 1):
-            return "nye"
+        # 1. New Year's Eve / Day
+        if (month == 12 and day == 31) or (month == 1 and day == 1): return "nye"
 
-        # 2. Australia Day (Jan 26)
-        if month == 1 and day == 26:
-            return "australia_day"
+        # 2. Australia Day
+        if month == 1 and day == 26: return "australia_day"
 
-        # 3. Valentine's Day (Feb 14)
-        if month == 2 and day == 14:
-            return "valentines"
+        # 3. Valentine's Day
+        if month == 2 and day == 14: return "valentines"
 
-        # 4. St Patrick's Day (Mar 17)
-        if month == 3 and day == 17:
-            return "st_patricks"
+        # 4. St Patrick's Day
+        if month == 3 and day == 17: return "st_patricks"
 
-        # 5. Halloween (Oct 31)
-        if month == 10 and day == 31:
-            return "halloween"
+        # 5. Halloween
+        if month == 10 and day == 31: return "halloween"
 
-        # 6. Christmas Season (Dec 18 - Dec 26)
-        if month == 12 and 18 <= day <= 26:
-            return "christmas"
+        # 6. Christmas Season (Dec 1 - Dec 26) - Extended for maximum festive vibes
+        if month == 12 and 1 <= day <= 26: return "christmas"
 
-        # --- DYNAMIC DATE HOLIDAYS (Calculated) ---
-
-        # 7. Gold Coast Show Day (Last Friday in August)
-        # Logic: Find the last Friday of August for the current year
+        # 7. Gold Coast Show (Last Friday in August)
         if month == 8:
-            # Get last day of August
             last_day_aug = datetime.date(year, 8, 31)
-            # Backtrack to find Friday (weekday 4)
-            # weekday(): Mon=0, Sun=6. Friday=4.
             offset = (last_day_aug.weekday() - 4) % 7
-            show_day = 31 - offset
-            if day == show_day:
-                return "gc_show"
+            if day == (31 - offset): return "gc_show"
 
-        # 8. Thanksgiving (4th Thursday in November)
-        # (Included as requested, though not an AU holiday, good for completeness)
+        # 8. Thanksgiving (4th Thurs Nov)
         if month == 11:
-            # Find the 1st Thursday of Nov
             first_nov = datetime.date(year, 11, 1)
-            # Target weekday = 3 (Thursday)
             offset = (3 - first_nov.weekday()) % 7 
-            first_thurs = 1 + offset
-            fourth_thurs = first_thurs + 21
-            if day == fourth_thurs:
-                return "thanksgiving"
+            if day == (1 + offset + 21): return "thanksgiving"
 
         return "normal"
 
-    def get_environment_data(self):
-        # Update Observer to current UTC time
-        now_utc = datetime.datetime.now(datetime.timezone.utc)
-        self.observer.date = now_utc
+    def get_environment_data(self, lat=None, lon=None):
+        # Use User Location if provided, else default to Gold Coast
+        target_lat = lat if lat else self.lat
+        target_lon = lon if lon else self.lon
 
-        # Astronomy Calculations
+        # Update Observer
+        self.observer.lat = str(target_lat)
+        self.observer.lon = str(target_lon)
+        self.observer.date = datetime.datetime.now(datetime.timezone.utc)
+
+        # Astronomy
         sun = ephem.Sun(self.observer)
         moon = ephem.Moon(self.observer)
-        
-        # Day/Night Calculation (Civil Twilight is -6 degrees)
         is_day = sun.alt > (-6 * ephem.degree)
         
-        # Moon Phase Icon Logic
-        moon_phase = moon.phase # 0-100
+        # Moon Phase Icon
+        moon_phase = moon.phase
         if moon_phase < 5: moon_icon = 0
         elif moon_phase < 45: moon_icon = 1
         elif moon_phase < 55: moon_icon = 2
         elif moon_phase < 95: moon_icon = 3
         else: moon_icon = 4
 
-        # Weather API (Open-Meteo) - Fail gracefully if API is down
+        # Weather API
         weather_desc = "Clear"
         temp = 25
         cloud_cover = 0
         
         try:
-            url = f"https://api.open-meteo.com/v1/forecast?latitude={self.lat}&longitude={self.lon}&current=temperature_2m,weather_code,cloud_cover&timezone=auto"
+            url = f"https://api.open-meteo.com/v1/forecast?latitude={target_lat}&longitude={target_lon}&current=temperature_2m,weather_code,cloud_cover&timezone=auto"
             r = requests.get(url, timeout=1)
             if r.status_code == 200:
                 d = r.json().get('current', {})
                 temp = d.get('temperature_2m', 25)
                 cloud_cover = d.get('cloud_cover', 0)
                 w_code = d.get('weather_code', 0)
-                
                 w_map = {0:"Clear", 1:"Mainly Clear", 2:"Partly Cloudy", 3:"Overcast", 45:"Fog", 51:"Drizzle", 61:"Rain", 80:"Showers", 95:"Storms"}
                 weather_desc = w_map.get(w_code, "Clear")
         except: pass
 
-        # Star Visibility Math
-        moon_factor = 1.0 - (moon_phase / 200.0) # Full moon reduces stars by 50%
-        cloud_factor = 1.0 - (cloud_cover / 100.0) # Clouds block stars
+        # Star Visibility
+        moon_factor = 1.0 - (moon_phase / 200.0)
+        cloud_factor = 1.0 - (cloud_cover / 100.0)
         star_visibility = max(0, moon_factor * cloud_factor)
-
-        # Get Holiday Mode
-        holiday = self._get_holiday_mode()
 
         return {
             "is_day": bool(is_day),
@@ -127,5 +106,5 @@ class SkyEngine:
             "moon_phase": round(moon_phase),
             "moon_icon_code": moon_icon,
             "star_visibility": round(star_visibility, 2),
-            "holiday": holiday 
+            "holiday": self._get_holiday_mode()
         }

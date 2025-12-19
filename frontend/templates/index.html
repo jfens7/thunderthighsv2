@@ -6,101 +6,72 @@
     <title>Gold Coast Stats v2.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-YOUR_ADSENSE_ID_HERE" crossorigin="anonymous"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YOUR_TAG_HERE"></script>
+    <script>window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-YOUR_TAG_HERE');</script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap');
         
-        /* --- CORE LAYERING --- */
         html { background-color: #020617; height: 100%; }
         body { margin: 0; padding: 0; min-height: 100vh; font-family: 'Inter', sans-serif; color: #e2e8f0; overflow-x: hidden; position: relative; background: radial-gradient(ellipse at bottom, #1e293b 0%, #020617 80%); transition: background 1s ease; }
         body.day-mode { background: linear-gradient(180deg, #0ea5e9 0%, #38bdf8 50%, #bae6fd 100%); }
 
-        /* --- EFFECTS CONTAINERS (Z-Index 0) --- */
+        /* --- LAYERS --- */
         #starContainer, #shootingStarContainer, #holidayParticles, #holidayDecor {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden;
         }
         #starContainer { z-index: 0; }
         #shootingStarContainer { z-index: 1; }
         #holidayParticles { z-index: 2; }
-        #holidayDecor { z-index: 50; } /* On top of header for lights */
+        #holidayDecor { z-index: 50; } /* On top of header */
         
         body.day-mode #starContainer { display: none; }
 
         /* --- STARS --- */
-        .star {
-            position: absolute; background: white; clip-path: polygon(50% 0%, 65% 35%, 100% 50%, 65% 65%, 50% 100%, 35% 65%, 0% 50%, 35% 35%);
-            opacity: 0.8; animation: twinkle var(--duration) ease-in-out infinite; animation-delay: var(--delay);
-        }
-        .star.s-small { width: 3px; height: 3px; opacity: 0.7; }
-        .star.s-medium { width: 5px; height: 5px; }
-        .star.s-large { width: 8px; height: 8px; background: linear-gradient(45deg, white, #fef3c7); }
+        .star { position: absolute; background: white; clip-path: polygon(50% 0%, 65% 35%, 100% 50%, 65% 65%, 50% 100%, 35% 65%, 0% 50%, 35% 35%); opacity: 0.8; animation: twinkle var(--duration) ease-in-out infinite; animation-delay: var(--delay); }
+        .star.s-small { width: 3px; height: 3px; opacity: 0.7; } .star.s-medium { width: 5px; height: 5px; } .star.s-large { width: 8px; height: 8px; background: linear-gradient(45deg, white, #fef3c7); }
         @keyframes twinkle { 0%, 100% { opacity: 0.3; transform: scale(0.7) rotate(0deg); } 50% { opacity: 1; transform: scale(1) rotate(45deg); } }
 
-        /* --- FLYING OBJECTS (Santa, Comets) --- */
+        /* --- FLYING OBJECTS --- */
         .shooting-star-wrapper { position: absolute; animation: linearMove 12s linear forwards; opacity: 0; white-space: nowrap; }
-        
-        /* Standard Comet */
         .shooting-star-head { width: 4px; height: 4px; background: white; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255,255,255,0.4), 0 0 10px white; position: relative; animation: curveMove 10s cubic-bezier(0.25, 0.1, 0.25, 1) forwards; }
         .shooting-star-head::before { content: ''; position: absolute; top: 50%; right: 0; transform: translateY(-50%); width: 200px; height: 2px; background: linear-gradient(to left, rgba(255,255,255,1), transparent); }
         
         /* Santa & Characters */
         .flying-character { 
-            font-size: 36px; 
-            position: relative; 
+            font-size: 36px; position: relative; 
             animation: curveMove 12s cubic-bezier(0.25, 0.1, 0.25, 1) forwards; 
             filter: drop-shadow(0 0 15px rgba(255,255,255,0.4));
-            /* No flip by default, we handle direction manually in JS */
+            transform: scaleX(-1); /* Face left by default */
         }
-
+        .wrapper-right-to-left .flying-character { transform: scaleX(1); }
         .has-character .shooting-star-head, .has-character .shooting-star-head::before { display: none; }
-
         @keyframes linearMove { to { transform: translateX(var(--endX)) rotate(var(--angle)); opacity: 1; } }
         @keyframes curveMove { to { transform: translateY(var(--endY)); } }
 
-        /* --- HOLIDAY PARTICLES --- */
+        /* --- PARTICLES --- */
         .holiday-particle { position: absolute; opacity: 0.9; animation: floatUp linear infinite; pointer-events: none; }
-        .snowflake { 
-            position: absolute; top: -20px; background: white; border-radius: 50%; 
-            animation: fall linear infinite; filter: blur(1px); 
-            box-shadow: 0 0 5px white;
-        }
+        .snowflake { position: absolute; top: -20px; background: white; border-radius: 50%; animation: fall linear infinite; filter: blur(1px); box-shadow: 0 0 5px white; }
         @keyframes fall { to { transform: translateY(110vh); } }
         @keyframes floatUp { to { transform: translateY(-120vh) rotate(360deg); opacity: 0; } }
         .firework { position: absolute; width: 6px; height: 6px; border-radius: 50%; animation: explode 1s ease-out forwards; }
         @keyframes explode { 0% { transform: scale(1); opacity: 1; } 100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; } }
 
-        /* --- STATIC DECORATIONS (Lights, Hats) --- */
-        /* Lights String */
-        .decor-lights {
-            position: fixed; top: 0; left: 0; width: 100%; height: 30px;
-            display: flex; justify-content: space-evenly; overflow: hidden; pointer-events: none; z-index: 100;
-        }
-        .light-bulb {
-            width: 12px; height: 12px; border-radius: 50%; background: #ccc;
-            margin-top: -6px; position: relative;
-            animation: glow 1.5s infinite alternate;
-        }
-        .light-bulb::before { /* The wire */
-            content: ''; position: absolute; top: 0; left: -100%; width: 300%; height: 20px;
-            border-top: 2px solid #555; border-radius: 50%; z-index: -1;
-        }
+        /* --- DECORATIONS --- */
+        .decor-lights { position: fixed; top: 0; left: 0; width: 100%; height: 30px; display: flex; justify-content: space-evenly; overflow: hidden; pointer-events: none; z-index: 100; }
+        .light-bulb { width: 12px; height: 12px; border-radius: 50%; background: #ccc; margin-top: -6px; position: relative; animation: glow 1.5s infinite alternate; }
+        .light-bulb::before { content: ''; position: absolute; top: 0; left: -100%; width: 300%; height: 20px; border-top: 2px solid #555; border-radius: 50%; z-index: -1; }
         .light-red { background: #ef4444; box-shadow: 0 5px 15px #ef4444; animation-delay: 0s; }
         .light-green { background: #22c55e; box-shadow: 0 5px 15px #22c55e; animation-delay: 0.5s; }
         .light-gold { background: #eab308; box-shadow: 0 5px 15px #eab308; animation-delay: 1s; }
         .light-blue { background: #3b82f6; box-shadow: 0 5px 15px #3b82f6; animation-delay: 1.5s; }
-        
         @keyframes glow { from { opacity: 0.4; transform: scale(0.8); } to { opacity: 1; transform: scale(1.1); } }
-
-        /* Santa Hat on Logo */
-        .santa-hat {
-            position: absolute; top: -14px; right: -8px; font-size: 24px; 
-            transform: rotate(15deg); filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.5)); 
-            z-index: 60; pointer-events: none;
-        }
-
-        /* Corner Decor */
+        
+        .santa-hat { position: absolute; top: -14px; right: -8px; font-size: 24px; transform: rotate(15deg); filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.5)); z-index: 60; pointer-events: none; }
         .corner-decor { position: fixed; bottom: 10px; font-size: 40px; opacity: 0.9; filter: drop-shadow(0 0 10px rgba(0,0,0,0.5)); z-index: 5; }
-        .decor-left { left: 20px; transform: rotate(-10deg); }
-        .decor-right { right: 20px; transform: rotate(10deg); }
+        .decor-left { left: 20px; transform: rotate(-10deg); } .decor-right { right: 20px; transform: rotate(10deg); }
 
         /* --- UI --- */
         .glass-panel, .card, .nav-item, #statsContainer, .w-full, .modal-bg { position: relative; z-index: 10; }
@@ -121,6 +92,14 @@
         .animate-fade-in { animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         @keyframes pulse-gold { 0% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.6); border-color: #facc15; } 70% { box-shadow: 0 0 0 10px rgba(250, 204, 21, 0); } 100% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0); border-color: #facc15; } }
         .highlight-pulse, .highlight-pulse-yellow { animation: pulse-gold 2s infinite; border: 1px solid #facc15 !important; background-color: rgba(250, 204, 21, 0.1) !important; z-index: 10; position: relative; }
+        
+        #cookieBanner {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            width: 90%; max-width: 600px;
+            background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 20px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+            z-index: 9999; display: none; animation: slideUp 0.5s ease-out;
+        }
+        @keyframes slideUp { from { transform: translate(-50%, 100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
     </style>
 </head>
 <body class="flex flex-col items-center min-h-screen relative" onclick="removeHighlights(event)">
@@ -171,6 +150,7 @@
     </div>
 
     <div id="tab-home" class="w-full max-w-4xl px-4 animate-fade-in block relative z-10"><div class="text-center mb-16 mt-12"><div class="inline-block relative"><div class="absolute inset-0 bg-yellow-500 blur-3xl opacity-20 rounded-full"></div><img src="https://img.icons8.com/color/144/table-tennis.png" alt="Icon" class="w-32 h-32 relative z-10 drop-shadow-2xl opacity-90 hover:scale-110 transition-transform duration-500"></div><h2 class="text-5xl font-black text-white mb-4 tracking-tight drop-shadow-lg mt-6">GCTTA <span class="text-sky-400">Tracker</span></h2><p class="text-slate-200 max-w-xl mx-auto text-lg leading-relaxed font-light drop-shadow-md">Track your performance, view division standings, and analyze match history.</p></div><div class="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto"><a href="https://www.goldcoasttabletennis.org.au/" target="_blank" class="glass-panel p-6 rounded-2xl hover:border-yellow-500/50 transition-all group flex items-center gap-5 cursor-pointer hover:bg-slate-900/80"><div class="w-14 h-14 bg-sky-500/20 rounded-xl flex items-center justify-center text-sky-400 group-hover:bg-sky-500 group-hover:text-white transition-colors border border-sky-500/30"><i class="fa-solid fa-globe text-2xl"></i></div><div class="text-left"><div class="font-bold text-white text-lg">Official Website</div><div class="text-sm text-slate-300 group-hover:text-sky-300">goldcoasttabletennis.org.au</div></div></a><a href="https://www.facebook.com/GoldCoastTableTennis" target="_blank" class="glass-panel p-6 rounded-2xl hover:border-blue-500/50 transition-all group flex items-center gap-5 cursor-pointer hover:bg-slate-900/80"><div class="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-colors border border-blue-500/30"><i class="fa-brands fa-facebook text-2xl"></i></div><div class="text-left"><div class="font-bold text-white text-lg">Facebook Community</div><div class="text-sm text-slate-300 group-hover:text-blue-300">Latest news & updates</div></div></a></div></div>
+    
     <div id="tab-week" class="w-full max-w-6xl px-4 hidden relative z-10"><div class="glass-panel rounded-2xl p-8 shadow-2xl"><div class="flex flex-col md:flex-row justify-between items-end mb-8 border-b border-white/10 pb-6 gap-4"><div><h2 class="text-3xl font-bold text-white">Weekly Results</h2><p class="text-sm text-slate-400 mt-1">Select a week to view match breakdown.</p></div><div class="flex gap-2"><select id="resSeason" class="input-premium p-2 rounded-lg text-sm font-bold" onchange="loadResultsSheet()"></select><select id="resWeek" class="input-premium p-2 rounded-lg text-sm font-bold" onchange="loadResultsSheet()"><script>for(let i=1; i<=25; i++) document.write(`<option value="${i}">Week ${i}</option>`);</script></select><select id="resDiv" class="input-premium p-2 rounded-lg text-sm font-bold" onchange="filterResultsSheet()"><option value="All">All Divisions</option></select></div></div><div id="resultsSheetContent" class="grid md:grid-cols-2 gap-4"><div class="text-slate-500 col-span-2 text-center py-20 bg-black/20 rounded-2xl border border-white/5 border-dashed">Select a week to load matches.</div></div></div></div>
     <div id="tab-sheets" class="w-full max-w-6xl px-4 hidden relative z-10"><div class="glass-panel rounded-2xl p-6 shadow-2xl relative overflow-hidden"><div class="absolute top-0 right-0 w-64 h-64 bg-yellow-500/10 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div><div class="flex flex-col xl:flex-row justify-between items-center mb-8 gap-6 relative z-10"><div class="text-center xl:text-left"><h2 class="text-3xl font-bold text-white">Division Standings</h2><p class="text-sm text-slate-400 mt-1">Current season performance</p></div><div class="flex flex-col items-end gap-3"><div class="flex items-center gap-4 bg-black/40 p-2 rounded-xl border border-white/10"><label class="flex items-center gap-2 cursor-pointer px-2"><input type="checkbox" id="toggleShowFillIns" onchange="loadDivisionLeaderboard()" class="w-4 h-4 rounded bg-slate-800 border-slate-600 text-yellow-500 focus:ring-yellow-500"><span class="text-xs font-bold text-slate-300">Show Fill-ins</span></label><div id="fillInModeContainer" class="hidden flex items-center gap-3 border-l border-white/10 pl-4"><span class="text-[10px] text-slate-500 uppercase font-black tracking-wider">Mode</span><label class="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="fiMode" value="separate" checked onchange="loadDivisionLeaderboard()" class="text-yellow-500 focus:ring-yellow-500 bg-slate-800 border-slate-600"><span class="text-xs text-slate-300">Separate</span></label><label class="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="fiMode" value="combine" onchange="loadDivisionLeaderboard()" class="text-yellow-500 focus:ring-yellow-500 bg-slate-800 border-slate-600"><span class="text-xs text-slate-300">Combine</span></label></div></div><div class="flex flex-wrap gap-2 justify-end items-center"><div class="relative group"><input type="text" id="divSearch" onkeyup="if(event.key === 'Enter') highlightRow('divSearch', 'leaderboardContent')" placeholder="Search..." class="bg-black/40 border border-white/10 p-2 pl-9 rounded-lg text-white text-sm w-32 focus:w-48 transition-all focus:border-yellow-500 focus:outline-none"><i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-500 group-focus-within:text-yellow-500"></i></div><select id="boardSort" class="input-premium p-2 rounded-lg text-sm font-bold" onchange="loadDivisionLeaderboard()"><option value="wins">Sort: Wins</option><option value="percent">Sort: Win %</option><option value="losses">Sort: Least Losses</option></select><select id="boardSeason" class="input-premium p-2 rounded-lg text-sm" onchange="loadDivisionLeaderboard()"></select><select id="boardDiv" class="input-premium p-2 rounded-lg text-sm" onchange="loadDivisionLeaderboard()"></select><select id="boardWeek" class="input-premium p-2 rounded-lg text-sm" onchange="loadDivisionLeaderboard()"><option value="Latest">Through Latest</option><script>for(let i=1; i<=25; i++) document.write(`<option value="${i}">Through Week ${i}</option>`);</script></select></div></div></div><div class="grid grid-cols-6 text-xs text-slate-500 mb-3 px-4 uppercase font-bold tracking-widest"><div class="col-span-2">Player</div><div class="text-center">Matches</div><div class="text-center">Wins</div><div class="text-center">Losses</div><div class="text-center">%</div></div><div id="leaderboardContent" class="space-y-2 min-h-[200px]"><div class="text-center text-slate-600 py-10">Loading standings...</div></div></div></div>
     <div id="tab-live" class="w-full max-w-6xl px-4 hidden relative z-10"><div class="glass-panel rounded-2xl p-6 shadow-2xl"><div class="flex flex-col xl:flex-row justify-between items-center mb-8 gap-4"><div class="text-center xl:text-left"><h2 class="text-3xl font-bold text-white flex items-center justify-center xl:justify-start gap-3"><i class="fa-solid fa-earth-oceania text-sky-500"></i> Global Rankings</h2><p class="text-xs text-yellow-500 font-bold uppercase tracking-wide mt-2 bg-yellow-500/10 inline-block px-2 py-1 rounded border border-yellow-500/20"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Based on Total Wins (Not Skill Rating)</p></div><div class="flex flex-wrap gap-2 items-center justify-end"><div class="relative group"><input type="text" id="liveSearch" onkeyup="if(event.key === 'Enter') highlightRow('liveSearch', 'globalContent')" placeholder="Search..." class="bg-black/40 border border-white/10 p-2 pl-9 rounded-lg text-white text-sm w-32 focus:w-48 transition-all focus:border-sky-500 focus:outline-none"><i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-500 group-focus-within:text-sky-500"></i></div><div class="h-8 w-px bg-slate-700 mx-2"></div><input type="number" id="filterMinGames" placeholder="Min Games" class="input-premium p-2 rounded-lg text-sm w-28" onchange="loadGlobalStandings()"><select id="globalSort" class="input-premium p-2 rounded-lg text-sm font-bold text-sky-400 border-sky-900/50" onchange="loadGlobalStandings()"><option value="wins_desc">Most Wins</option><option value="percent_desc">Highest %</option><option value="losses_asc">Least Losses</option></select><select id="globalSeason" class="input-premium p-2 rounded-lg text-sm" onchange="loadGlobalStandings()"><option value="Career">Career (All Time)</option></select></div></div><div class="grid grid-cols-6 text-xs text-slate-500 mb-3 px-4 uppercase font-bold tracking-widest"><div class="col-span-2">Player</div><div class="text-center">Matches</div><div class="text-center">Wins</div><div class="text-center">Losses</div><div class="text-center">%</div></div><div id="globalContent" class="space-y-2 min-h-[200px]"><div class="text-center text-slate-600 py-10">Loading global rankings...</div></div></div></div>
@@ -179,47 +159,22 @@
     
     <div id="statsContainer" class="w-full max-w-5xl hidden mb-20 relative px-4 mt-6 animate-fade-in relative z-10"> 
         <button onclick="closeProfile()" class="mb-6 text-slate-400 hover:text-white flex items-center gap-2 transition-colors bg-black/40 px-4 py-2 rounded-lg border border-white/10 hover:border-white/30"><i class="fa-solid fa-arrow-left"></i> Back</button>
-        <div class="flex flex-col items-center relative">
-            <h2 id="playerName" class="text-5xl font-black text-center mb-2 text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400"></h2>
-            <div class="flex justify-center gap-2 mb-8 bg-black/40 p-1.5 rounded-full border border-white/10"><button onclick="switchMode('regular')" id="btn-regular" class="filter-btn active">Regular</button><button onclick="switchMode('combined')" id="btn-combined" class="filter-btn">Combined</button><button onclick="switchMode('fillin')" id="btn-fillin" class="filter-btn">Fill-in</button></div>
-        </div>
-        <div class="flex flex-wrap justify-center items-center gap-3 mb-10 bg-black/40 p-5 rounded-2xl border border-white/10 shadow-xl backdrop-blur-sm">
-            <select id="seasonSelect" class="input-premium p-2 rounded text-sm min-w-[140px]"></select>
-            <select id="divisionSelect" class="input-premium p-2 rounded text-sm min-w-[140px]"><option value="All">All Divisions</option></select>
-            <select id="weekSelect" class="input-premium p-2 rounded text-sm min-w-[120px]"><option value="All">All Weeks</option><script>for(let i=1; i<=25; i++) document.write(`<option value="${i}">Week ${i}</option>`);</script></select>
-            <div class="flex items-center gap-2 bg-black/60 p-1 rounded border border-white/10"><input type="date" id="startDate" class="bg-transparent text-white text-xs p-1 outline-none"><span class="text-slate-600">-</span><input type="date" id="endDate" class="bg-transparent text-white text-xs p-1 outline-none"></div>
-            <button onclick="openCompareModal()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded border border-slate-600 text-sm font-bold shadow-lg transition-transform hover:scale-105 active:scale-95"><i class="fa-solid fa-scale-balanced mr-2"></i> Compare</button>
-        </div>
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
-            <div class="card"><div id="matchesPlayed" class="text-5xl font-black text-white">0</div><div class="text-xs font-bold text-slate-500 mt-2 tracking-widest">MATCHES</div></div>
-            <div class="card bg-gradient-to-br from-green-900/20 to-black/20 border-green-900/30"><div id="wins" class="text-5xl font-black text-green-400">0</div><div class="text-xs font-bold text-green-700 mt-2 tracking-widest">WINS</div></div>
-            <div class="card bg-gradient-to-br from-red-900/20 to-black/20 border-red-900/30"><div id="losses" class="text-5xl font-black text-red-400">0</div><div class="text-xs font-bold text-red-700 mt-2 tracking-widest">LOSSES</div></div>
-        </div>
-        <div class="grid grid-cols-3 gap-4 mb-10">
-            <div class="card col-span-1 border-yellow-500/20 bg-yellow-500/5"><div id="winRate" class="text-3xl md:text-5xl font-black text-yellow-400">0%</div><div class="text-xs font-bold text-yellow-700 mt-2 tracking-widest">WIN RATE</div></div>
-            <div class="card bg-black/30 border-white/5"><div id="setsWon" class="text-4xl font-bold text-slate-300">0</div><div class="text-xs font-bold text-slate-600 mt-2 tracking-widest">SETS WON</div></div>
-            <div class="card bg-black/30 border-white/5"><div id="setsLost" class="text-4xl font-bold text-slate-300">0</div><div class="text-xs font-bold text-slate-600 mt-2 tracking-widest">SETS LOST</div></div>
-        </div>
-        <div class="w-full">
-            <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left text-slate-500"></i> Match History</h3>
-            <div id="matchHistory" class="bg-black/40 rounded-2xl shadow-inner border border-white/5 overflow-hidden mb-6"></div>
-            <button id="seeAllBtn" onclick="toggleHistory()" class="w-full py-4 text-center text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-colors hidden font-bold">View All Matches</button>
-        </div>
+        <div class="flex flex-col items-center relative"><h2 id="playerName" class="text-5xl font-black text-center mb-2 text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400"></h2><div class="flex justify-center gap-2 mb-8 bg-black/40 p-1.5 rounded-full border border-white/10"><button onclick="switchMode('regular')" id="btn-regular" class="filter-btn active">Regular</button><button onclick="switchMode('combined')" id="btn-combined" class="filter-btn">Combined</button><button onclick="switchMode('fillin')" id="btn-fillin" class="filter-btn">Fill-in</button></div></div>
+        <div class="flex flex-wrap justify-center items-center gap-3 mb-10 bg-black/40 p-5 rounded-2xl border border-white/10 shadow-xl backdrop-blur-sm"><select id="seasonSelect" class="input-premium p-2 rounded text-sm min-w-[140px]"></select><select id="divisionSelect" class="input-premium p-2 rounded text-sm min-w-[140px]"><option value="All">All Divisions</option></select><select id="weekSelect" class="input-premium p-2 rounded text-sm min-w-[120px]"><option value="All">All Weeks</option><script>for(let i=1; i<=25; i++) document.write(`<option value="${i}">Week ${i}</option>`);</script></select><div class="flex items-center gap-2 bg-black/60 p-1 rounded border border-white/10"><input type="date" id="startDate" class="bg-transparent text-white text-xs p-1 outline-none"><span class="text-slate-600">-</span><input type="date" id="endDate" class="bg-transparent text-white text-xs p-1 outline-none"></div><button onclick="openCompareModal()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded border border-slate-600 text-sm font-bold shadow-lg transition-transform hover:scale-105 active:scale-95"><i class="fa-solid fa-scale-balanced mr-2"></i> Compare</button></div><div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4"><div class="card"><div id="matchesPlayed" class="text-5xl font-black text-white">0</div><div class="text-xs font-bold text-slate-500 mt-2 tracking-widest">MATCHES</div></div><div class="card bg-gradient-to-br from-green-900/20 to-black/20 border-green-900/30"><div id="wins" class="text-5xl font-black text-green-400">0</div><div class="text-xs font-bold text-green-700 mt-2 tracking-widest">WINS</div></div><div class="card bg-gradient-to-br from-red-900/20 to-black/20 border-red-900/30"><div id="losses" class="text-5xl font-black text-red-400">0</div><div class="text-xs font-bold text-red-700 mt-2 tracking-widest">LOSSES</div></div></div><div class="grid grid-cols-3 gap-4 mb-10"><div class="card col-span-1 border-yellow-500/20 bg-yellow-500/5"><div id="winRate" class="text-3xl md:text-5xl font-black text-yellow-400">0%</div><div class="text-xs font-bold text-yellow-700 mt-2 tracking-widest">WIN RATE</div></div><div class="card bg-black/30 border-white/5"><div id="setsWon" class="text-4xl font-bold text-slate-300">0</div><div class="text-xs font-bold text-slate-600 mt-2 tracking-widest">SETS WON</div></div><div class="card bg-black/30 border-white/5"><div id="setsLost" class="text-4xl font-bold text-slate-300">0</div><div class="text-xs font-bold text-slate-600 mt-2 tracking-widest">SETS LOST</div></div></div><div class="w-full"><h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left text-slate-500"></i> Match History</h3><div id="matchHistory" class="bg-black/40 rounded-2xl shadow-inner border border-white/5 overflow-hidden mb-6"></div><button id="seeAllBtn" onclick="toggleHistory()" class="w-full py-4 text-center text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-colors hidden font-bold">View All Matches</button></div>
     </div>
 
-    <div class="mt-auto py-8 text-center border-t border-white/5 w-full bg-black/60 backdrop-blur text-slate-500 relative z-30">
-        <button onclick="openReportModal()" class="text-sm hover:text-yellow-500 underline flex items-center justify-center gap-2 mx-auto transition-colors"><i class="fa-solid fa-flag"></i> Report Incorrect Result</button>
-        <div class="text-xs mt-3 font-mono opacity-50 mb-4">Gold Coast Stats v2.3 • Built for GCTTA</div>
-        <a href="/admin" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white px-4 py-2 rounded-full text-xs font-bold border border-white/10 transition-all"><i class="fa-solid fa-lock"></i> Admin Login</a>
-    </div>
-
+    <div class="mt-auto py-8 text-center border-t border-white/5 w-full bg-black/60 backdrop-blur text-slate-500 relative z-30"><button onclick="openReportModal()" class="text-sm hover:text-yellow-500 underline flex items-center justify-center gap-2 mx-auto transition-colors"><i class="fa-solid fa-flag"></i> Report Incorrect Result</button><div class="text-xs mt-3 font-mono opacity-50 mb-4">Gold Coast Stats v2.3 • Built for GCTTA</div><a href="/admin" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white px-4 py-2 rounded-full text-xs font-bold border border-white/10 transition-all"><i class="fa-solid fa-lock"></i> Admin Login</a></div>
+    <div id="cookieBanner" class="flex flex-col md:flex-row items-center justify-between gap-4"><div class="text-left"><h4 class="text-white font-bold text-lg mb-1"><i class="fa-solid fa-cookie-bite text-yellow-500 mr-2"></i> Cookies & Privacy</h4><p class="text-slate-400 text-sm">We use cookies to personalize content and ads to provide you with a great experience.</p></div><div class="flex gap-3"><button onclick="acceptCookies()" class="px-6 py-2 bg-yellow-500 hover:bg-yellow-400 text-slate-900 font-bold rounded-lg transition-colors">Accept</button><button onclick="declineCookies()" class="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg transition-colors">Decline</button></div></div>
     <button id="backToTopBtn" onclick="scrollToTop()" class="fixed bottom-8 right-8 bg-yellow-500 text-slate-900 p-4 rounded-full shadow-2xl shadow-yellow-500/30 hidden hover:scale-110 transition-all z-50 font-bold"><i class="fa-solid fa-arrow-up text-xl"></i></button>
-
     <div id="reportModal" class="fixed inset-0 flex items-center justify-center hidden z-50 modal-bg"><div class="glass-panel rounded-2xl p-8 w-full max-w-lg relative"><button onclick="closeReportModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button><h3 class="text-2xl font-bold text-white mb-6">Report Issue</h3><label class="block text-slate-400 text-xs uppercase font-bold mb-2">Your Name</label><input id="repName" type="text" class="input-premium w-full p-3 rounded-lg mb-4"><label class="block text-slate-400 text-xs uppercase font-bold mb-2">Match Details</label><input id="repMatch" type="text" class="input-premium w-full p-3 rounded-lg mb-4 font-mono text-sm opacity-50 cursor-not-allowed" readonly><label class="block text-slate-400 text-xs uppercase font-bold mb-2">Description</label><textarea id="repDesc" class="input-premium w-full p-3 rounded-lg mb-6 h-24" placeholder="What is incorrect?"></textarea><button onclick="submitReport()" class="w-full py-3 bg-yellow-500 hover:bg-yellow-400 text-slate-900 font-bold rounded-xl transition-colors">Submit Report</button></div></div>
     <div id="compareModal" class="fixed inset-0 flex items-center justify-center hidden z-50 modal-bg"><div class="glass-panel rounded-2xl p-8 w-full max-w-md relative"><button onclick="closeCompareModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button><h3 class="text-2xl font-bold text-white mb-6">Head-to-Head</h3><div class="relative mb-8"><input type="text" id="compareInput" class="input-premium w-full p-4 rounded-xl text-lg" placeholder="VS Opponent Name..." autocomplete="off"><div id="compare-suggestions-list" class="absolute w-full mt-2 bg-slate-800 rounded-xl shadow-2xl z-50"></div></div><div id="compareResults" class="hidden"><div class="flex justify-between items-center mb-8"><div class="text-center w-1/3"><div class="text-yellow-500 font-bold text-lg truncate" id="comp-p1-name"></div><div class="text-5xl font-black text-white my-2" id="comp-p1-wins">0</div><div class="text-[10px] font-bold text-slate-500 tracking-widest">WINS</div></div><div class="text-slate-600 font-black text-2xl">VS</div><div class="text-center w-1/3"><div class="text-sky-500 font-bold text-lg truncate" id="comp-p2-name"></div><div class="text-5xl font-black text-white my-2" id="comp-p2-wins">0</div><div class="text-[10px] font-bold text-slate-500 tracking-widest">WINS</div></div></div><div id="compareLog" class="max-h-48 overflow-y-auto text-sm space-y-1"></div></div></div></div>
 
     <script>
         let activeHoliday = 'normal';
+
+        if (!localStorage.getItem('cookieConsent')) { document.getElementById('cookieBanner').style.display = 'flex'; }
+        function acceptCookies() { localStorage.setItem('cookieConsent', 'true'); document.getElementById('cookieBanner').style.display = 'none'; }
+        function declineCookies() { document.getElementById('cookieBanner').style.display = 'none'; }
 
         function generateStars(visibilityScore) {
             const container = document.getElementById('starContainer');
@@ -236,32 +191,26 @@
             }
         }
 
-        // --- SHOOTING OBJECTS ---
         function createShootingStar() {
             const container = document.getElementById('shootingStarContainer');
             const side = Math.random();
             let startX, startY, angle, endX, endY;
             const w = window.innerWidth; const h = window.innerHeight;
-            
             if (side < 0.33) { startX = Math.random() * w; startY = -50; angle = Math.random() * 45 + 45; }
             else if (side < 0.66) { startX = -50; startY = Math.random() * h * 0.5; angle = Math.random() * 45 - 20; }
             else { startX = w + 50; startY = Math.random() * h * 0.5; angle = Math.random() * 45 + 160; }
-            
             const distance = Math.max(w, h) * 1.5; const rad = angle * (Math.PI / 180);
             endX = Math.cos(rad) * distance;
             const curveAmount = (Math.random() * 300 - 150) * (distance / w);
             endY = Math.sin(rad) * distance + curveAmount;
-            
             const wrapper = document.createElement('div'); wrapper.className = 'shooting-star-wrapper';
             if (angle < 90 || angle > 270) { wrapper.classList.add('wrapper-right-to-left'); }
-
             wrapper.style.left = `${startX}px`; wrapper.style.top = `${startY}px`;
             wrapper.style.setProperty('--endX', `${endX}px`); wrapper.style.setProperty('--angle', `${angle}deg`);
-            
             const head = document.createElement('div');
-            let char = null;
             
-            if (activeHoliday === 'christmas') { char = '🦌🦌🛷🎅'; } // FULL TEAM
+            let char = null;
+            if (activeHoliday === 'christmas') { char = '🦌🦌🛷🎅'; }
             else if (activeHoliday === 'halloween') { char = '🧙‍♀️'; }
             else if (activeHoliday === 'st_patricks') { char = '🌈'; }
             else if (activeHoliday === 'valentines') { char = '💘'; }
@@ -269,40 +218,23 @@
             else if (activeHoliday === 'thanksgiving') { char = '🦃'; }
             else if (activeHoliday === 'gc_show') { char = '🎪'; }
 
-            if (char) {
-                wrapper.classList.add('has-character');
-                head.className = 'flying-character';
-                head.innerText = char;
-            } else {
-                head.className = 'shooting-star-head';
-            }
+            if (char) { wrapper.classList.add('has-character'); head.className = 'flying-character'; head.innerText = char; } 
+            else { head.className = 'shooting-star-head'; }
             
-            head.style.setProperty('--endY', `${endY}px`);
-            wrapper.appendChild(head); container.appendChild(wrapper);
-            setTimeout(() => { container.removeChild(wrapper); }, 4000);
+            head.style.setProperty('--endY', `${endY}px`); wrapper.appendChild(head); container.appendChild(wrapper);
+            setTimeout(() => { container.removeChild(wrapper); }, 12000);
         }
 
-        // --- STATIC DECOR (Lights, Hats) ---
         function applyStaticDecor(type) {
             const container = document.getElementById('holidayDecor');
             container.innerHTML = '';
             
             if (type === 'christmas') {
-                // 1. Lights String
                 const lights = document.createElement('div'); lights.className = 'decor-lights';
                 const colors = ['light-red', 'light-green', 'light-gold', 'light-blue'];
-                for(let i=0; i<30; i++) {
-                    const bulb = document.createElement('div'); 
-                    bulb.className = `light-bulb ${colors[i % 4]}`;
-                    lights.appendChild(bulb);
-                }
+                for(let i=0; i<30; i++) { const bulb = document.createElement('div'); bulb.className = `light-bulb ${colors[i % 4]}`; lights.appendChild(bulb); }
                 container.appendChild(lights);
-
-                // 2. Hat on Logo
-                const hat = document.createElement('div'); hat.className = 'santa-hat'; hat.innerText = '🎅';
-                document.getElementById('logoContainer').appendChild(hat);
-
-                // 3. Corner Decor
+                const hat = document.createElement('div'); hat.className = 'santa-hat'; hat.innerText = '🎅'; document.getElementById('logoContainer').appendChild(hat);
                 const treeLeft = document.createElement('div'); treeLeft.className = 'corner-decor decor-left'; treeLeft.innerText = '🎄';
                 const caneRight = document.createElement('div'); caneRight.className = 'corner-decor decor-right'; caneRight.innerText = '🍬';
                 container.appendChild(treeLeft); container.appendChild(caneRight);
@@ -314,7 +246,6 @@
             }
         }
 
-        // --- HOLIDAY PARTICLES (Background) ---
         function startHolidayEffect(type) {
             const container = document.getElementById('holidayParticles');
             container.innerHTML = '';
@@ -322,24 +253,16 @@
             if (type === 'christmas') {
                 setInterval(() => {
                     const snow = document.createElement('div'); snow.className = 'snowflake';
-                    // FIX: Ensure full width coverage
-                    snow.style.left = Math.random() * 100 + '%'; 
+                    snow.style.left = Math.random() * 100 + 'vw'; /* Viewport Width for Full Screen */
                     snow.style.width = Math.random() * 5 + 3 + 'px'; snow.style.height = snow.style.width;
                     snow.style.animationDuration = Math.random() * 3 + 4 + 's';
                     container.appendChild(snow);
                     setTimeout(() => snow.remove(), 7000);
                 }, 100);
             }
-            else if (type === 'st_patricks') {
-                setInterval(() => createFloatingEmoji(container, '☘️', 'fall'), 400); 
-                setInterval(() => createFloatingEmoji(container, '🪙', 'fall'), 800); 
-            }
-            else if (type === 'halloween') {
-                setInterval(() => createFloatingEmoji(container, '🦇', 'float'), 800);
-            }
-            else if (type === 'valentines') {
-                setInterval(() => createFloatingEmoji(container, '❤️', 'float'), 300);
-            }
+            else if (type === 'st_patricks') { setInterval(() => createFloatingEmoji(container, '☘️', 'fall'), 400); setInterval(() => createFloatingEmoji(container, '🪙', 'fall'), 800); }
+            else if (type === 'halloween') { setInterval(() => createFloatingEmoji(container, '🦇', 'float'), 800); }
+            else if (type === 'valentines') { setInterval(() => createFloatingEmoji(container, '❤️', 'float'), 300); }
             else if (type === 'nye' || type === 'australia_day') {
                 const fColors = type === 'australia_day' ? ['#22c55e', '#eab308'] : ['#f43f5e', '#3b82f6', '#eab308', '#a855f7'];
                 setInterval(() => {
@@ -370,8 +293,13 @@
         }
 
         async function initEnvironment() {
+            if (navigator.geolocation) { navigator.geolocation.getCurrentPosition((pos) => fetchEnv(pos.coords.latitude, pos.coords.longitude), () => fetchEnv(null, null)); } else { fetchEnv(null, null); }
+        }
+
+        async function fetchEnv(lat, lon) {
             try {
-                const res = await fetch('/api/environment'); const data = await res.json();
+                let url = '/api/environment'; if(lat && lon) url += `?lat=${lat}&lon=${lon}`;
+                const res = await fetch(url); const data = await res.json();
                 activeHoliday = data.holiday;
                 const body = document.body; body.classList.remove('day-mode', 'night-mode');
                 
@@ -392,11 +320,7 @@
                     startHolidayEffect(data.holiday);
                     applyStaticDecor(data.holiday);
                 }
-
-            } catch (e) {
-                console.error("Env error", e);
-                document.body.classList.add('night-mode'); generateStars(1.0);
-            }
+            } catch (e) { console.error("Env error", e); document.body.classList.add('night-mode'); generateStars(1.0); }
         }
 
         // --- EXISTING LOGIC ---
@@ -534,8 +458,8 @@
                 const resultColor = match.result === "Win" ? "text-green-400" : "text-red-400"; const resultIcon = match.result === "Win" ? "W" : "L"; let dateText = match.date || ""; if (dateText.includes('-')) { const parts = dateText.split('-'); if(parts[0].length === 4) dateText = `${parts[2]}/${parts[1]}/${parts[0]}`; }
                 row.innerHTML = `<div class="flex flex-col"><div class="flex items-center gap-3 mb-1"><span class="${resultColor} font-black text-xl w-6">${resultIcon}</span><div class="flex items-center"><span class="text-slate-500 mr-2 text-xs">VS</span><a href="#" onclick="loadStats('${match.opponent}'); return false;" class="text-white hover:text-yellow-400 font-bold transition-colors">${match.opponent}</a></div></div></div><div class="text-right"><div class="font-mono text-slate-300 font-bold bg-slate-800 px-2 py-1 rounded inline-block text-sm mb-1">${match.score}</div><div class="text-[10px] text-slate-600 font-bold uppercase tracking-wider">${dateText}</div></div>`; historyDiv.appendChild(row);
             });
-            // FIX: BUTTON LOGIC TO ALLOW EXPANSION EVEN IF ONLY 5 MATCHES
-            seeAllBtn.classList.toggle('hidden', matches.length <= 3); 
+            // FIX: Allow button to show if more than 5 matches are available (user had 5 and didn't see button)
+            seeAllBtn.classList.toggle('hidden', matches.length <= 5); 
             seeAllBtn.innerHTML = historyExpanded ? 'Show Less' : 'View All Matches';
         }
         function toggleHistory() { historyExpanded = !historyExpanded; renderStats(); }
