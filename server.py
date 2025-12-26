@@ -1,15 +1,40 @@
 from flask import Flask, render_template, jsonify, request
+import json
+import os
+
 try: from backend import ThunderData
 except ImportError: from backend.backend import ThunderData
 
-app = Flask(__name__, template_folder='frontend/templates')
+# UPDATED LINE: Added static_folder location
+app = Flask(__name__, template_folder='frontend/templates', static_folder='frontend/static')
 db = ThunderData()
 
 ADMIN_PASSWORD = "thunderadmin"
 SCORER_PASSWORD = "tabletennis" 
+SETTINGS_FILE = "settings.json"
+
+def load_settings():
+    if not os.path.exists(SETTINGS_FILE):
+        return {"holiday_mode": "auto", "show_weather": True, "theme_enabled": True}
+    try:
+        with open(SETTINGS_FILE, 'r') as f: return json.load(f)
+    except: return {"holiday_mode": "auto", "show_weather": True, "theme_enabled": True}
+
+def save_settings(new_settings):
+    with open(SETTINGS_FILE, 'w') as f: json.dump(new_settings, f)
 
 @app.route('/')
-def home(): return render_template('index.html')
+def home():
+    # Detect if user is on mobile
+    user_agent = request.headers.get('User-Agent').lower()
+    is_mobile = "iphone" in user_agent or "android" in user_agent or "mobile" in user_agent
+    
+    # If mobile, load the special app version
+    if is_mobile:
+        return render_template('mobile.html')
+        
+    # If computer/iPad, load the big dashboard version
+    return render_template('index.html')
 
 @app.route('/admin')
 def admin_panel(): return render_template('admin.html')
@@ -19,9 +44,33 @@ def scorer_page(): return render_template('scorer.html')
 
 @app.route('/api/environment')
 def get_environment():
+    settings = load_settings()
     lat = request.args.get('lat')
     lon = request.args.get('lon')
-    return jsonify(db.get_sky_data(lat, lon))
+    
+    # Get real data first
+    data = db.get_sky_data(lat, lon)
+    
+    # Override based on Admin Settings
+    if not settings.get('show_weather', True):
+        data['condition'] = "Hidden" # Logic to hide in frontend
+        
+    if settings.get('holiday_mode') != 'auto':
+        # If admin picked a specific holiday (or 'none'), force it
+        data['holiday'] = settings.get('holiday_mode')
+        if not settings.get('theme_enabled', True):
+             data['holiday'] = 'normal' # Kill theme if disabled
+
+    # Pass the settings back so frontend knows what to do
+    data['settings'] = settings
+    return jsonify(data)
+
+@app.route('/api/admin/settings', methods=['GET', 'POST'])
+def handle_settings():
+    if request.method == 'POST':
+        save_settings(request.json)
+        return jsonify({"success": True})
+    return jsonify(load_settings())
 
 @app.route('/api/scorer/login', methods=['POST'])
 def scorer_login():

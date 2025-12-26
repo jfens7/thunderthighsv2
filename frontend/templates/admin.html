@@ -13,8 +13,6 @@
         .input-dark { background-color: #0f172a; border: 1px solid #334155; color: white; padding: 10px; rounded: 8px; width: 100%; transition: border 0.2s; }
         .input-dark:focus { border-color: #facc15; outline: none; }
         .badge-l1 { background-color: #facc15; color: #020617; font-weight: 800; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; letter-spacing: 0.05em; }
-        .badge-l2 { background-color: #0ea5e9; color: white; font-weight: 800; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; letter-spacing: 0.05em; }
-        .badge-l3 { background-color: #10b981; color: white; font-weight: 800; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; letter-spacing: 0.05em; }
     </style>
 </head>
 <body class="flex flex-col items-center min-h-screen p-6">
@@ -43,6 +41,7 @@
 
         <div class="flex gap-4 mb-8 border-b border-slate-800 pb-1 overflow-x-auto">
             <button onclick="showTab('teams')" id="tab-teams" class="px-6 py-3 border-b-2 border-yellow-500 text-yellow-500 font-bold transition-colors">Team Builder</button>
+            <button onclick="showTab('settings')" id="tab-settings" class="px-6 py-3 border-b-2 border-transparent text-slate-400 hover:text-white font-bold transition-colors">System Settings</button>
             <button onclick="showTab('requests')" id="tab-requests" class="px-6 py-3 border-b-2 border-transparent text-slate-400 hover:text-white font-bold transition-colors">Requests</button>
             <button onclick="showTab('season')" id="tab-season" class="px-6 py-3 border-b-2 border-transparent text-slate-400 hover:text-white font-bold transition-colors">Season Setup</button>
         </div>
@@ -61,8 +60,52 @@
                 </select>
                 <button onclick="openAddTeamModal()" class="ml-auto bg-green-600 hover:bg-green-500 text-white px-5 py-2.5 rounded-lg font-bold shadow-lg shadow-green-900/20 transition-all active:scale-95"><i class="fa-solid fa-plus mr-2"></i>New Team</button>
             </div>
-            
             <div id="teamsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </div>
+
+        <div id="panel-settings" class="glass rounded-2xl p-8 hidden">
+            <h2 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fa-solid fa-sliders"></i> Global App Configuration</h2>
+            
+            <div class="grid md:grid-cols-2 gap-8">
+                <div class="bg-slate-900/50 p-6 rounded-xl border border-slate-800">
+                    <h3 class="text-white font-bold mb-4"><i class="fa-solid fa-calendar-days text-yellow-500 mr-2"></i>Theme & Holiday</h3>
+                    <label class="block text-slate-400 text-xs uppercase font-bold mb-2">Active Holiday Mode</label>
+                    <select id="setHoliday" class="input-dark mb-4">
+                        <option value="auto">Auto (Detect Date)</option>
+                        <option value="normal">None (Standard Theme)</option>
+                        <option value="christmas">Christmas</option>
+                        <option value="halloween">Halloween</option>
+                        <option value="st_patricks">St Patrick's Day</option>
+                        <option value="valentines">Valentine's Day</option>
+                        <option value="australia_day">Australia Day</option>
+                    </select>
+                    
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="text-slate-300 text-sm font-bold">Apply Theme Decorations</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="setTheme" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                        </label>
+                    </div>
+                    <p class="text-xs text-slate-500">Enable falling snow, lights, etc.</p>
+                </div>
+
+                <div class="bg-slate-900/50 p-6 rounded-xl border border-slate-800">
+                    <h3 class="text-white font-bold mb-4"><i class="fa-solid fa-cloud text-sky-500 mr-2"></i>Weather Widget</h3>
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="text-slate-300 text-sm font-bold">Show Weather in Header</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="setWeather" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-600"></div>
+                        </label>
+                    </div>
+                    <p class="text-xs text-slate-500 mb-6">Display Gold Coast temp and moon phase.</p>
+                </div>
+            </div>
+            
+            <div class="mt-8 pt-6 border-t border-slate-800 flex justify-end">
+                <button onclick="saveSettings()" class="bg-yellow-500 hover:bg-yellow-400 text-slate-900 font-bold px-6 py-3 rounded-lg shadow-lg transition-transform active:scale-95">Save Global Settings</button>
+            </div>
         </div>
 
         <div id="panel-requests" class="glass rounded-2xl p-8 hidden">
@@ -122,7 +165,7 @@
         async function login() {
             const pwd = document.getElementById('passwordInput').value;
             const res = await fetch('/api/admin/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ password: pwd }) });
-            if (res.ok) { document.getElementById('loginScreen').classList.add('hidden'); document.getElementById('dashboard').classList.remove('hidden'); initData(); } 
+            if (res.ok) { document.getElementById('loginScreen').classList.add('hidden'); document.getElementById('dashboard').classList.remove('hidden'); initData(); loadSettings(); } 
             else document.getElementById('loginError').classList.remove('hidden');
         }
         async function initData() {
@@ -140,7 +183,7 @@
             loadTeams(); loadRequests();
         }
         function showTab(tab) {
-            ['teams', 'requests', 'season'].forEach(t => { document.getElementById(`panel-${t}`).classList.add('hidden'); document.getElementById(`tab-${t}`).className = "px-6 py-3 border-b-2 border-transparent text-slate-400 hover:text-white font-bold transition-colors"; });
+            ['teams', 'requests', 'season', 'settings'].forEach(t => { document.getElementById(`panel-${t}`).classList.add('hidden'); document.getElementById(`tab-${t}`).className = "px-6 py-3 border-b-2 border-transparent text-slate-400 hover:text-white font-bold transition-colors"; });
             document.getElementById(`panel-${tab}`).classList.remove('hidden'); document.getElementById(`tab-${tab}`).className = "px-6 py-3 border-b-2 border-yellow-500 text-yellow-500 font-bold transition-colors";
         }
         async function loadTeams() {
@@ -160,6 +203,27 @@
             });
             if (divTeams.length === 0) container.innerHTML = `<div class="col-span-3 text-center text-slate-500 py-10 border border-slate-800 border-dashed rounded-xl">No teams found for ${currentDiv}.</div>`;
         }
+        
+        // --- SETTINGS LOGIC ---
+        async function loadSettings() {
+            const res = await fetch('/api/admin/settings');
+            const s = await res.json();
+            document.getElementById('setHoliday').value = s.holiday_mode || 'auto';
+            document.getElementById('setWeather').checked = s.show_weather;
+            document.getElementById('setTheme').checked = s.theme_enabled;
+        }
+
+        async function saveSettings() {
+            const payload = {
+                holiday_mode: document.getElementById('setHoliday').value,
+                show_weather: document.getElementById('setWeather').checked,
+                theme_enabled: document.getElementById('setTheme').checked
+            };
+            await fetch('/api/admin/settings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+            alert("Settings Saved! (Reload Home page to see changes)");
+        }
+        // ----------------------
+
         function openAddTeamModal() {
             document.getElementById('modalTeamName').value = ''; document.getElementById('modalTeamName').readOnly = false;
             document.getElementById('modalL1').value = ''; document.getElementById('modalL2').value = ''; document.getElementById('modalL3').value = '';
@@ -211,7 +275,6 @@
             const res = await fetch('/api/admin/create_season', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: name }) });
             if(res.ok) { alert("Created! Reloading..."); location.reload(); } else { alert("Error."); } btn.disabled = false;
         }
-        
         async function deleteSeason() {
             const name = document.getElementById('deleteSeasonSelect').value;
             if(!name) return;

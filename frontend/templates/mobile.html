@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GCTTA Mobile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+        
+        /* Mobile Reset */
+        html { -webkit-tap-highlight-color: transparent; }
+        body { background-color: #0f172a; color: #e2e8f0; font-family: 'Inter', sans-serif; padding-bottom: 90px; overflow-x: hidden; }
+        
+        /* App Bar */
+        .app-bar { position: sticky; top: 0; z-index: 50; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,0.05); padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; height: 64px; }
+        
+        /* Bottom Tab Bar (iOS Style) */
+        .tab-bar { position: fixed; bottom: 0; left: 0; width: 100%; height: 80px; background: #020617; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-around; align-items: flex-start; padding-top: 12px; z-index: 100; padding-bottom: env(safe-area-inset-bottom); }
+        .tab-item { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 20%; color: #64748b; font-size: 10px; font-weight: 600; transition: all 0.2s; }
+        .tab-item i { font-size: 22px; margin-bottom: 4px; }
+        .tab-item.active { color: #facc15; }
+        
+        /* Cards */
+        .m-card { background: #1e293b; border-radius: 16px; padding: 20px; margin-bottom: 16px; border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3); }
+        
+        /* Inputs */
+        .m-input { width: 100%; background: #020617; border: 1px solid #334155; padding: 12px; border-radius: 12px; color: white; font-size: 16px; font-weight: 600; outline: none; transition: border 0.2s; }
+        .m-input:focus { border-color: #facc15; }
+        
+        /* Typography */
+        .text-gold { color: #facc15; }
+        .text-stats { font-family: monospace; font-weight: 700; letter-spacing: -0.05em; }
+        
+        /* Loaders/Utils */
+        .hidden { display: none !important; }
+        .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        #suggestions { position: absolute; top: 64px; left: 0; width: 100%; background: #1e293b; border-bottom: 1px solid #334155; z-index: 40; }
+        .s-item { padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); font-weight: 600; font-size: 16px; color: white; }
+    </style>
+</head>
+<body>
+
+    <div class="app-bar">
+        <div class="flex items-center gap-3">
+            <i class="fa-solid fa-table-tennis-paddle-ball text-2xl text-gold"></i>
+            <span class="text-xl font-black italic tracking-tighter text-white">GCTTA<span class="text-gold">STATS</span></span>
+        </div>
+        <div id="weather-badge" class="bg-white/5 px-3 py-1 rounded-full text-xs font-bold text-slate-300 border border-white/5">--°C</div>
+    </div>
+
+    <div class="px-4 py-3 bg-slate-900 border-b border-white/5 sticky top-[64px] z-30">
+        <div class="relative">
+            <input type="text" id="mobSearch" class="m-input pl-10" placeholder="Search Player...">
+            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-4 text-slate-500"></i>
+        </div>
+    </div>
+    <div id="suggestions" class="hidden"></div>
+
+    <div id="content-area" class="p-4 min-h-screen">
+        
+        <div id="view-home" class="fade-in">
+            <div class="m-card text-center py-10">
+                <h1 class="text-3xl font-black text-white mb-2">Welcome Back</h1>
+                <p class="text-slate-400 mb-6">Gold Coast Table Tennis Association</p>
+                <div class="grid grid-cols-2 gap-4">
+                    <a href="https://www.goldcoasttabletennis.org.au/" class="bg-sky-600/20 text-sky-400 p-4 rounded-xl font-bold border border-sky-600/30">Website</a>
+                    <a href="https://www.facebook.com/GoldCoastTableTennis" class="bg-blue-600/20 text-blue-400 p-4 rounded-xl font-bold border border-blue-600/30">Facebook</a>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-stats" class="hidden fade-in">
+            <div class="flex items-center justify-between mb-6">
+                <button onclick="nav('home')" class="text-slate-400 text-sm font-bold"><i class="fa-solid fa-chevron-left mr-1"></i> Back</button>
+                <h2 id="p-name" class="text-2xl font-black text-white truncate max-w-[200px]">Player</h2>
+                <div class="w-10"></div> </div>
+
+            <div class="bg-slate-900 p-1 rounded-lg flex mb-6">
+                <button onclick="setMode('regular')" id="btn-regular" class="flex-1 py-2 text-xs font-bold rounded-md bg-gold text-slate-900 transition-all">Regular</button>
+                <button onclick="setMode('combined')" id="btn-combined" class="flex-1 py-2 text-xs font-bold rounded-md text-slate-400 transition-all">Combined</button>
+                <button onclick="setMode('fillin')" id="btn-fillin" class="flex-1 py-2 text-xs font-bold rounded-md text-slate-400 transition-all">Fill-in</button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <div class="m-card p-4 !mb-0 bg-slate-800">
+                    <div id="p-matches" class="text-4xl font-black text-white text-stats">0</div>
+                    <div class="text-[10px] uppercase font-bold text-slate-500 mt-1">Matches</div>
+                </div>
+                <div class="m-card p-4 !mb-0 bg-slate-800">
+                    <div id="p-rate" class="text-4xl font-black text-gold text-stats">0%</div>
+                    <div class="text-[10px] uppercase font-bold text-yellow-700 mt-1">Win Rate</div>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-6">
+                <div class="m-card p-4 !mb-0 bg-green-900/20 border-green-900/50">
+                    <div id="p-wins" class="text-3xl font-black text-green-400 text-stats">0</div>
+                    <div class="text-[10px] uppercase font-bold text-green-700 mt-1">Wins</div>
+                </div>
+                <div class="m-card p-4 !mb-0 bg-red-900/20 border-red-900/50">
+                    <div id="p-losses" class="text-3xl font-black text-red-400 text-stats">0</div>
+                    <div class="text-[10px] uppercase font-bold text-red-700 mt-1">Losses</div>
+                </div>
+            </div>
+
+            <h3 class="font-bold text-slate-400 mb-3 uppercase text-xs tracking-widest">Recent Matches</h3>
+            <div id="history-list" class="space-y-3 pb-20"></div>
+        </div>
+
+        <div id="view-standings" class="hidden fade-in">
+            <h2 class="text-2xl font-black text-white mb-4">Standings</h2>
+            
+            <div class="flex gap-2 mb-4 overflow-x-auto pb-2">
+                <select id="st-season" class="bg-slate-800 text-white font-bold text-sm p-2 rounded-lg border border-slate-700" onchange="loadStandings()"></select>
+                <select id="st-div" class="bg-slate-800 text-white font-bold text-sm p-2 rounded-lg border border-slate-700" onchange="loadStandings()"></select>
+            </div>
+
+            <div class="grid grid-cols-6 text-[10px] font-bold text-slate-500 uppercase px-2 mb-2">
+                <div class="col-span-3">Player</div>
+                <div class="text-center">W</div>
+                <div class="text-center">L</div>
+                <div class="text-center">%</div>
+            </div>
+
+            <div id="standings-list" class="space-y-2 pb-20">
+                <div class="text-center text-slate-600 py-10">Loading...</div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="tab-bar">
+        <div onclick="nav('home')" id="tab-home" class="tab-item active">
+            <i class="fa-solid fa-house"></i>
+            <span>Home</span>
+        </div>
+        <div onclick="nav('standings')" id="tab-standings" class="tab-item">
+            <i class="fa-solid fa-list-ol"></i>
+            <span>Rankings</span>
+        </div>
+        <div onclick="nav('stats')" id="tab-stats" class="tab-item">
+            <i class="fa-solid fa-user"></i>
+            <span>Profile</span>
+        </div>
+    </div>
+
+    <script>
+        // --- GLOBAL STATE ---
+        let allPlayers = [];
+        let currentPlayer = null;
+        let currentMode = 'regular';
+        let statsData = null;
+
+        // --- INIT ---
+        window.onload = async () => {
+            // Load Env
+            try {
+                const envRes = await fetch('/api/environment');
+                const env = await envRes.json();
+                document.getElementById('weather-badge').innerText = `${env.temp}°C`;
+            } catch(e) {}
+
+            // Load Data
+            const pRes = await fetch('/api/players');
+            allPlayers = await pRes.json();
+            
+            const sRes = await fetch('/api/seasons');
+            const seasons = await sRes.json();
+            const sSelect = document.getElementById('st-season');
+            seasons.forEach(s => { 
+                let opt = document.createElement('option'); opt.value = s; opt.innerText = s; sSelect.appendChild(opt); 
+            });
+            if(seasons.length) sSelect.value = seasons[seasons.length-1];
+
+            const dRes = await fetch('/api/divisions');
+            const divisions = await dRes.json();
+            const dSelect = document.getElementById('st-div');
+            divisions.forEach(d => { 
+                let opt = document.createElement('option'); opt.value = d; opt.innerText = d; dSelect.appendChild(opt); 
+            });
+            if(divisions.length) dSelect.value = divisions[0];
+
+            // Search Logic
+            const searchIn = document.getElementById('mobSearch');
+            const suggestBox = document.getElementById('suggestions');
+            searchIn.addEventListener('input', (e) => {
+                const val = e.target.value.toLowerCase();
+                suggestBox.innerHTML = '';
+                if(!val) { suggestBox.classList.add('hidden'); return; }
+                
+                const matches = allPlayers.filter(p => p.toLowerCase().includes(val)).slice(0, 5);
+                matches.forEach(p => {
+                    const div = document.createElement('div');
+                    div.className = 's-item';
+                    div.innerText = p;
+                    div.onclick = () => {
+                        searchIn.value = '';
+                        suggestBox.classList.add('hidden');
+                        loadPlayer(p);
+                    };
+                    suggestBox.appendChild(div);
+                });
+                suggestBox.classList.remove('hidden');
+            });
+        };
+
+        // --- NAVIGATION ---
+        function nav(viewId) {
+            ['home', 'stats', 'standings'].forEach(v => {
+                document.getElementById(`view-${v}`).classList.add('hidden');
+                document.getElementById(`tab-${v}`).classList.remove('active');
+            });
+            
+            document.getElementById(`view-${viewId}`).classList.remove('hidden');
+            // document.getElementById(`view-${viewId}`).classList.add('fade-in'); // Re-trigger anim
+            
+            // Handle Profile Tab Logic
+            if(viewId === 'stats') {
+                document.getElementById('tab-stats').classList.add('active');
+                if(!currentPlayer) {
+                    // If no player loaded, maybe show a "Search first" msg or just blank
+                    document.getElementById('p-name').innerText = "Search a Player";
+                }
+            } else {
+                document.getElementById(`tab-${viewId}`).classList.add('active');
+            }
+
+            if(viewId === 'standings') loadStandings();
+        }
+
+        // --- PLAYER STATS ---
+        async function loadPlayer(name) {
+            currentPlayer = name;
+            nav('stats');
+            document.getElementById('p-name').innerText = name;
+            
+            // Defaults
+            const season = "Career";
+            const div = "All";
+            
+            try {
+                const res = await fetch(`/api/stats/${encodeURIComponent(name)}?season=${season}&division=${div}`);
+                statsData = await res.json();
+                renderStats();
+            } catch(e) { alert("Error loading player"); }
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            // Update Buttons
+            ['regular', 'combined', 'fillin'].forEach(m => {
+                const btn = document.getElementById(`btn-${m}`);
+                if(m === mode) {
+                    btn.className = "flex-1 py-2 text-xs font-bold rounded-md bg-gold text-slate-900 transition-all";
+                    btn.style.backgroundColor = "#facc15";
+                    btn.style.color = "#0f172a";
+                } else {
+                    btn.className = "flex-1 py-2 text-xs font-bold rounded-md text-slate-400 transition-all";
+                    btn.style.backgroundColor = "transparent";
+                    btn.style.color = "#94a3b8";
+                }
+            });
+            renderStats();
+        }
+
+        function renderStats() {
+            if(!statsData) return;
+            const d = statsData[currentMode];
+            document.getElementById('p-matches').innerText = d.matches;
+            document.getElementById('p-wins').innerText = d.wins;
+            document.getElementById('p-losses').innerText = d.losses;
+            document.getElementById('p-rate').innerText = d.win_rate;
+
+            const list = document.getElementById('history-list');
+            list.innerHTML = '';
+            
+            // Show last 10 matches
+            d.match_history.slice(0, 10).forEach(m => {
+                const isWin = m.result === "Win";
+                const row = document.createElement('div');
+                row.className = "m-card p-4 flex items-center justify-between !mb-0";
+                
+                row.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center font-black text-xs ${isWin ? 'bg-green-500 text-slate-900' : 'bg-red-500 text-white'}">
+                            ${isWin ? 'W' : 'L'}
+                        </div>
+                        <div>
+                            <div class="font-bold text-white text-sm">${m.opponent}</div>
+                            <div class="text-[10px] text-slate-500 uppercase">${m.date || '-'}</div>
+                        </div>
+                    </div>
+                    <div class="font-mono font-bold text-lg text-slate-300">${m.score}</div>
+                `;
+                list.appendChild(row);
+            });
+        }
+
+        // --- STANDINGS ---
+        async function loadStandings() {
+            const season = document.getElementById('st-season').value;
+            const div = document.getElementById('st-div').value;
+            if(!season || !div) return;
+            
+            const cont = document.getElementById('standings-list');
+            cont.innerHTML = '<div class="text-center text-slate-600 py-10">Loading...</div>';
+
+            const res = await fetch(`/api/rankings/${encodeURIComponent(season)}/${encodeURIComponent(div)}`);
+            const data = await res.json();
+            
+            // Quick process
+            let list = [];
+            data.forEach(p => {
+                if(p.regular.matches > 0) {
+                    const r = p.regular;
+                    const wr = r.matches > 0 ? ((r.wins/r.matches)*100).toFixed(1) : 0;
+                    list.push({ name: p.name, ...r, wr: wr });
+                }
+            });
+            
+            // Sort (Wins then %)
+            list.sort((a,b) => b.wins - a.wins || b.wr - a.wr);
+
+            cont.innerHTML = '';
+            if(list.length === 0) { cont.innerHTML = '<div class="text-center text-slate-600">No data found.</div>'; return; }
+
+            list.forEach((p, i) => {
+                const row = document.createElement('div');
+                row.className = "grid grid-cols-6 items-center p-3 bg-slate-800 rounded-xl border border-slate-700 mb-2";
+                
+                let rankColor = "text-slate-500";
+                if(i===0) rankColor="text-yellow-400";
+                if(i===1) rankColor="text-slate-300";
+                if(i===2) rankColor="text-orange-400";
+
+                row.innerHTML = `
+                    <div class="col-span-3 flex items-center gap-3">
+                        <span class="font-mono font-bold text-sm ${rankColor} w-4 text-center">${i+1}</span>
+                        <span class="font-bold text-white text-sm truncate" onclick="loadPlayer('${p.name}')">${p.name}</span>
+                    </div>
+                    <div class="text-center font-bold text-green-400 text-sm">${p.wins}</div>
+                    <div class="text-center font-bold text-red-400 text-sm">${p.losses}</div>
+                    <div class="text-center font-bold text-slate-400 text-xs">${p.wr}%</div>
+                `;
+                cont.appendChild(row);
+            });
+        }
+    </script>
+</body>
+</html>
