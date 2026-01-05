@@ -59,3 +59,4 @@ Werkzeug==3.1.4
 wheel==0.45.1
 ephem
 requests
+glicko2 

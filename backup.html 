@@ -1,0 +1,81 @@
+<div id="ai-widget-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; font-family: 'Inter', sans-serif;">
+    
+    <div id="ai-chat-window" style="display: none; width: 340px; height: 500px; background: white; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); flex-direction: column; overflow: hidden; margin-bottom: 20px; border: 1px solid rgba(0,0,0,0.1);">
+        
+        <div style="background: linear-gradient(135deg, #4E81EE, #8E54E9); color: white; padding: 16px; font-weight: 700; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" /></svg>
+                <span>Club Assistant</span>
+            </div>
+            <button onclick="toggleAiChat()" style="background:none; border:none; color:white; font-size:24px; cursor:pointer; line-height: 1; opacity: 0.8;">&times;</button>
+        </div>
+        
+        <div id="ai-messages" style="flex: 1; padding: 20px; overflow-y: auto; background: #f8fafc; display: flex; flex-direction: column; gap: 12px; font-size: 14px;">
+            <div style="align-self: flex-start; background: white; border: 1px solid #e2e8f0; color: #1e293b; padding: 12px 16px; border-radius: 12px 12px 12px 0; max-width: 85%; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                Hi! I can check the scores spreadsheet. <br>Try: <strong>"Did Jakob play Week 1?"</strong>
+            </div>
+        </div>
+        
+        <div style="padding: 12px; border-top: 1px solid #e2e8f0; display: flex; background: white; align-items: center; gap: 8px;">
+            <input type="text" id="ai-input" placeholder="Ask a question..." style="flex: 1; padding: 12px; border: 1px solid #cbd5e1; border-radius: 24px; outline: none; font-size: 14px; background: #f1f5f9; color: black;" onkeypress="handleAiEnter(event)">
+            <button onclick="sendAiMessage()" style="background: linear-gradient(135deg, #4E81EE, #8E54E9); color: white; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(78, 129, 238, 0.4);"><i class="fa-solid fa-arrow-up"></i></button>
+        </div>
+    </div>
+
+    <button onclick="toggleAiChat()" style="width: 64px; height: 64px; border-radius: 50%; background: white; border: none; cursor: pointer; box-shadow: 0 4px 20px rgba(0,0,0,0.2); transition: transform 0.2s; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;">
+        <div style="position: absolute; inset: 0; background: linear-gradient(135deg, #E2E8F0, #FFFFFF); z-index: 1;"></div>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="z-index: 2;">
+            <defs><linearGradient id="geminiGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#4E81EE;stop-opacity:1" /><stop offset="100%" style="stop-color:#8E54E9;stop-opacity:1" /></linearGradient></defs>
+            <path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" fill="url(#geminiGrad)" stroke="none" />
+        </svg>
+    </button>
+</div>
+
+<script>
+    function toggleAiChat() {
+        var win = document.getElementById('ai-chat-window');
+        if (win.style.display === 'none' || win.style.display === '') {
+            win.style.display = 'flex';
+            document.getElementById('ai-input').focus();
+        } else {
+            win.style.display = 'none';
+        }
+    }
+
+    function handleAiEnter(e) {
+        if (e.key === 'Enter') sendAiMessage();
+    }
+
+    async function sendAiMessage() {
+        var input = document.getElementById('ai-input');
+        var messages = document.getElementById('ai-messages');
+        var text = input.value.trim();
+        if (!text) return;
+
+        messages.innerHTML += `<div style="align-self: flex-end; background: #E2E8F0; color: #1e293b; padding: 12px 16px; border-radius: 12px 12px 0 12px; max-width: 85%; margin-bottom: 2px;">${text}</div>`;
+        input.value = '';
+        messages.scrollTop = messages.scrollHeight;
+
+        var loadingId = 'loading-' + Date.now();
+        messages.innerHTML += `<div id="${loadingId}" style="align-self: flex-start; color: #64748b; font-size: 12px; margin-left: 5px; font-style: italic;">Thinking...</div>`;
+        messages.scrollTop = messages.scrollHeight;
+
+        try {
+            const response = await fetch('/api/ask_ai', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text })
+            });
+            const data = await response.json();
+            document.getElementById(loadingId).remove();
+            var formattedAnswer = data.answer.replace(/\n/g, '<br>');
+            messages.innerHTML += `<div style="align-self: flex-start; background: white; border: 1px solid #e2e8f0; color: #1e293b; padding: 12px 16px; border-radius: 12px 12px 12px 0; max-width: 85%; box-shadow: 0 2px 4px rgba(0,0,0,0.05); line-height: 1.5;">${formattedAnswer}</div>`;
+        } catch (error) {
+            document.getElementById(loadingId).remove();
+            messages.innerHTML += `<div style="align-self: center; color: #ef4444; font-size: 12px; margin-top: 5px;">Connection Error</div>`;
+        }
+        messages.scrollTop = messages.scrollHeight;
+    }
+</script>  
+</body>
+</html>

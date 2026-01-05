@@ -36,17 +36,34 @@
                 <div class="w-10 h-10 bg-yellow-500 rounded-lg flex items-center justify-center text-slate-900 font-bold"><i class="fa-solid fa-bolt"></i></div>
                 <h1 class="text-2xl font-black text-white tracking-tight">THUNDER <span class="text-yellow-500">ADMIN</span></h1>
             </div>
-            <a href="/" class="text-slate-400 hover:text-white transition-colors font-bold text-sm"><i class="fa-solid fa-arrow-right-from-bracket mr-2"></i>Exit</a>
+            <div class="flex gap-3">
+                <button onclick="triggerSync()" id="syncBtn" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2"><i class="fa-solid fa-cloud-arrow-up"></i> Sync Firebase</button>
+                <a href="/" class="text-slate-400 hover:text-white transition-colors font-bold text-sm flex items-center pt-2"><i class="fa-solid fa-arrow-right-from-bracket mr-2"></i>Exit</a>
+            </div>
         </div>
 
         <div class="flex gap-4 mb-8 border-b border-slate-800 pb-1 overflow-x-auto">
-            <button onclick="showTab('teams')" id="tab-teams" class="px-6 py-3 border-b-2 border-yellow-500 text-yellow-500 font-bold transition-colors">Team Builder</button>
-            <button onclick="showTab('settings')" id="tab-settings" class="px-6 py-3 border-b-2 border-transparent text-slate-400 hover:text-white font-bold transition-colors">System Settings</button>
+            <button onclick="showTab('approvals')" id="tab-approvals" class="px-6 py-3 border-b-2 border-yellow-500 text-yellow-500 font-bold transition-colors">Live Approvals</button>
+            <button onclick="showTab('duplicates')" id="tab-duplicates" class="px-6 py-3 border-b-2 border-transparent text-slate-400 hover:text-white font-bold transition-colors">Duplicates</button>
+            <button onclick="showTab('teams')" id="tab-teams" class="px-6 py-3 border-b-2 border-transparent text-slate-400 hover:text-white font-bold transition-colors">Team Builder</button>
             <button onclick="showTab('requests')" id="tab-requests" class="px-6 py-3 border-b-2 border-transparent text-slate-400 hover:text-white font-bold transition-colors">Requests</button>
-            <button onclick="showTab('season')" id="tab-season" class="px-6 py-3 border-b-2 border-transparent text-slate-400 hover:text-white font-bold transition-colors">Season Setup</button>
+            <button onclick="showTab('settings')" id="tab-settings" class="px-6 py-3 border-b-2 border-transparent text-slate-400 hover:text-white font-bold transition-colors">Settings</button>
+            <button onclick="showTab('season')" id="tab-season" class="px-6 py-3 border-b-2 border-transparent text-slate-400 hover:text-white font-bold transition-colors">Season</button>
         </div>
 
-        <div id="panel-teams" class="glass rounded-2xl p-8 shadow-xl">
+        <div id="panel-approvals" class="glass rounded-2xl p-8 shadow-xl">
+            <h2 class="text-xl font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-check-double text-green-500"></i> Unverified Live Matches</h2>
+            <div id="approvalsList" class="space-y-4"></div>
+        </div>
+
+        <div id="panel-duplicates" class="glass rounded-2xl p-8 shadow-xl hidden">
+            <h2 class="text-xl font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-users-viewfinder text-orange-500"></i> Player Reconciliation</h2>
+            <p class="text-slate-400 text-sm mb-6">Find players with similar names (e.g., "Jae yi" vs "Jae Yi") and merge them.</p>
+            <button onclick="findDuplicates()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded mb-6 text-sm font-bold"><i class="fa-solid fa-magnifying-glass mr-2"></i> Scan for Duplicates</button>
+            <div id="dupeList" class="space-y-4"></div>
+        </div>
+
+        <div id="panel-teams" class="glass rounded-2xl p-8 shadow-xl hidden">
             <div class="flex flex-wrap items-center gap-4 mb-8">
                 <h2 class="text-xl font-bold text-white">Manage Teams</h2>
                 <div class="h-8 w-px bg-slate-700 mx-2"></div>
@@ -65,7 +82,6 @@
 
         <div id="panel-settings" class="glass rounded-2xl p-8 hidden">
             <h2 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fa-solid fa-sliders"></i> Global App Configuration</h2>
-            
             <div class="grid md:grid-cols-2 gap-8">
                 <div class="bg-slate-900/50 p-6 rounded-xl border border-slate-800">
                     <h3 class="text-white font-bold mb-4"><i class="fa-solid fa-calendar-days text-yellow-500 mr-2"></i>Theme & Holiday</h3>
@@ -79,7 +95,6 @@
                         <option value="valentines">Valentine's Day</option>
                         <option value="australia_day">Australia Day</option>
                     </select>
-                    
                     <div class="flex items-center justify-between mb-4">
                         <span class="text-slate-300 text-sm font-bold">Apply Theme Decorations</span>
                         <label class="relative inline-flex items-center cursor-pointer">
@@ -87,9 +102,7 @@
                             <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
                         </label>
                     </div>
-                    <p class="text-xs text-slate-500">Enable falling snow, lights, etc.</p>
                 </div>
-
                 <div class="bg-slate-900/50 p-6 rounded-xl border border-slate-800">
                     <h3 class="text-white font-bold mb-4"><i class="fa-solid fa-cloud text-sky-500 mr-2"></i>Weather Widget</h3>
                     <div class="flex items-center justify-between mb-4">
@@ -99,10 +112,8 @@
                             <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-600"></div>
                         </label>
                     </div>
-                    <p class="text-xs text-slate-500 mb-6">Display Gold Coast temp and moon phase.</p>
                 </div>
             </div>
-            
             <div class="mt-8 pt-6 border-t border-slate-800 flex justify-end">
                 <button onclick="saveSettings()" class="bg-yellow-500 hover:bg-yellow-400 text-slate-900 font-bold px-6 py-3 rounded-lg shadow-lg transition-transform active:scale-95">Save Global Settings</button>
             </div>
@@ -112,9 +123,7 @@
             <h2 class="text-xl font-bold mb-6">User Reports</h2>
             <div class="overflow-x-auto rounded-xl border border-slate-700">
                 <table class="w-full text-left text-sm text-slate-400">
-                    <thead class="text-xs uppercase bg-slate-800 text-slate-300 font-bold">
-                        <tr><th class="px-6 py-4">Time</th><th class="px-6 py-4">Reporter</th><th class="px-6 py-4">Issue</th><th class="px-6 py-4">Desc</th><th class="px-6 py-4">Action</th></tr>
-                    </thead>
+                    <thead class="text-xs uppercase bg-slate-800 text-slate-300 font-bold"><tr><th class="px-6 py-4">Time</th><th class="px-6 py-4">Reporter</th><th class="px-6 py-4">Issue</th><th class="px-6 py-4">Desc</th><th class="px-6 py-4">Action</th></tr></thead>
                     <tbody id="requestsTable" class="divide-y divide-slate-700 bg-slate-900/50"></tbody>
                 </table>
             </div>
@@ -124,16 +133,12 @@
         <div id="panel-season" class="glass rounded-2xl p-8 hidden">
              <div class="grid md:grid-cols-2 gap-10">
                  <div class="text-center py-10 border-r border-slate-700 pr-10">
-                    <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 text-green-500 text-3xl"><i class="fa-solid fa-calendar-plus"></i></div>
                     <h2 class="text-xl font-bold text-white mb-2">Create New Season</h2>
-                    <p class="text-slate-400 mb-6 text-sm">Create a new database sheet. Use names like "Summer 2026".</p>
                     <input type="text" id="newSeasonName" class="input-dark p-3 text-center text-lg font-bold mb-4 placeholder-slate-600" placeholder="e.g. Summer 2026">
                     <button onclick="createNewSeason()" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl transition-colors">Create Season</button>
                  </div>
                  <div class="text-center py-10">
-                    <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500 text-3xl"><i class="fa-solid fa-trash-can"></i></div>
                     <h2 class="text-xl font-bold text-white mb-2">Delete Season</h2>
-                    <p class="text-slate-400 mb-6 text-sm">Permanently remove a season from the database.</p>
                     <select id="deleteSeasonSelect" class="input-dark p-3 text-center text-lg font-bold mb-4"></select>
                     <button onclick="deleteSeason()" class="w-full bg-red-900/20 hover:bg-red-900/40 text-red-500 border border-red-900/50 font-bold py-3 rounded-xl transition-colors">Delete Selected Season</button>
                  </div>
@@ -162,12 +167,21 @@
 
     <script>
         let allTeams = [], allPlayers = [];
+        
         async function login() {
             const pwd = document.getElementById('passwordInput').value;
             const res = await fetch('/api/admin/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ password: pwd }) });
-            if (res.ok) { document.getElementById('loginScreen').classList.add('hidden'); document.getElementById('dashboard').classList.remove('hidden'); initData(); loadSettings(); } 
-            else document.getElementById('loginError').classList.remove('hidden');
+            if (res.ok) { 
+                document.getElementById('loginScreen').classList.add('hidden'); 
+                document.getElementById('dashboard').classList.remove('hidden'); 
+                initData(); 
+                loadSettings(); 
+                loadApprovals();
+            } else { 
+                document.getElementById('loginError').classList.remove('hidden'); 
+            }
         }
+
         async function initData() {
             const sRes = await fetch('/api/seasons'); const seasons = await sRes.json();
             const sSelect = document.getElementById('teamSeason');
@@ -182,10 +196,109 @@
             allPlayers.forEach(p => { let opt = document.createElement('option'); opt.value = p; dl.appendChild(opt); });
             loadTeams(); loadRequests();
         }
+
         function showTab(tab) {
-            ['teams', 'requests', 'season', 'settings'].forEach(t => { document.getElementById(`panel-${t}`).classList.add('hidden'); document.getElementById(`tab-${t}`).className = "px-6 py-3 border-b-2 border-transparent text-slate-400 hover:text-white font-bold transition-colors"; });
-            document.getElementById(`panel-${tab}`).classList.remove('hidden'); document.getElementById(`tab-${tab}`).className = "px-6 py-3 border-b-2 border-yellow-500 text-yellow-500 font-bold transition-colors";
+            ['teams', 'requests', 'season', 'settings', 'approvals', 'duplicates'].forEach(t => { 
+                document.getElementById(`panel-${t}`).classList.add('hidden'); 
+                document.getElementById(`tab-${t}`).className = "px-6 py-3 border-b-2 border-transparent text-slate-400 hover:text-white font-bold transition-colors"; 
+            });
+            document.getElementById(`panel-${tab}`).classList.remove('hidden'); 
+            document.getElementById(`tab-${tab}`).className = "px-6 py-3 border-b-2 border-yellow-500 text-yellow-500 font-bold transition-colors";
         }
+
+        // --- DUPLICATE LOGIC ---
+        async function findDuplicates() {
+            const list = document.getElementById('dupeList');
+            list.innerHTML = '<div class="text-slate-500 italic text-center py-4">Scanning roster...</div>';
+            const res = await fetch('/api/admin/find_duplicates');
+            const dupes = await res.json();
+            
+            list.innerHTML = '';
+            if(dupes.length === 0) { list.innerHTML = '<div class="text-green-500 font-bold text-center py-4">No duplicates found.</div>'; return; }
+            
+            dupes.forEach(d => {
+                const div = document.createElement('div');
+                div.className = "bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center";
+                div.innerHTML = `
+                    <div>
+                        <div class="text-yellow-500 font-bold text-sm">Potential Duplicate</div>
+                        <div class="text-white text-sm mt-1">A: <span class="font-mono bg-slate-900 px-2 py-0.5 rounded text-sky-300 border border-sky-900">${d.name1}</span></div>
+                        <div class="text-white text-sm mt-1">B: <span class="font-mono bg-slate-900 px-2 py-0.5 rounded text-sky-300 border border-sky-900">${d.name2}</span></div>
+                    </div>
+                    <div class="flex gap-2 flex-col">
+                        <button onclick="resolve('${d.name1}', '${d.name2}', 'merge')" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-xs font-bold">Merge (A is B)</button>
+                        <button onclick="resolve('${d.name2}', '${d.name1}', 'merge')" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-xs font-bold">Merge (B is A)</button>
+                        <button onclick="promptRename('${d.name2}')" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs font-bold">Rename B</button>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        async function resolve(p1, p2, action) {
+            if(!confirm("Are you sure? This will update the database.")) return;
+            const res = await fetch('/api/admin/resolve_duplicate', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ p1: p1, p2: p2, action: action })
+            });
+            if(res.ok) { alert("Resolved!"); findDuplicates(); }
+            else alert("Error resolving.");
+        }
+
+        function promptRename(oldName) {
+            const newName = prompt(`Rename '${oldName}' to:`);
+            if(newName) resolve(oldName, newName, 'rename');
+        }
+
+        // --- LIVE APPROVALS ---
+        async function loadApprovals() {
+            const container = document.getElementById('approvalsList');
+            container.innerHTML = '<div class="text-slate-500 text-center py-4">Checking for live matches...</div>';
+            try {
+                const res = await fetch('/api/admin/unverified');
+                const matches = await res.json();
+                
+                if(matches.length === 0) {
+                    container.innerHTML = '<div class="text-slate-500 text-center py-10 border border-slate-700 border-dashed rounded-xl">No unverified matches found.</div>';
+                    return;
+                }
+                container.innerHTML = '';
+                matches.forEach(m => {
+                    const div = document.createElement('div');
+                    div.className = "bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center";
+                    let sheetInfo = m.sheet_score ? `<span class="text-xs text-slate-400 ml-2">(Sheet says: ${m.sheet_score})</span>` : `<span class="text-xs text-red-400 ml-2">(Not in Sheets yet)</span>`;
+                    div.innerHTML = `
+                        <div>
+                            <div class="text-xs text-yellow-500 font-bold uppercase mb-1">${m.season} | ${m.division} | Week ${m.week}</div>
+                            <div class="text-white font-bold text-lg">${m.player1} vs ${m.player2}</div>
+                            <div class="text-sm text-slate-300">Live Score: <span class="text-green-400 font-mono font-bold">${m.score_string || "N/A"}</span> ${sheetInfo}</div>
+                        </div>
+                        <button onclick="approveMatch('${m.match_id}')" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg font-bold shadow-lg">Approve</button>
+                    `;
+                    container.appendChild(div);
+                });
+            } catch(e) { container.innerHTML = '<div class="text-red-500 text-center">Error loading approvals.</div>'; }
+        }
+
+        async function approveMatch(mid) {
+            if(!confirm("Confirm final result?")) return;
+            await fetch('/api/admin/verify_match', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ match_id: mid }) });
+            loadApprovals();
+        }
+
+        async function triggerSync() {
+            const btn = document.getElementById('syncBtn');
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Syncing...'; btn.disabled = true;
+            try {
+                const res = await fetch('/api/admin/sync_firebase', { method: 'POST' });
+                const data = await res.json();
+                if(data.success) alert(`Sync Complete! Synced: ${data.stats.synced}, Skipped Live: ${data.stats.skipped_live}`);
+                else alert("Sync Failed: " + data.error);
+            } catch(e) { alert("Sync Error"); }
+            btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Sync Firebase'; btn.disabled = false;
+        }
+
+        // --- TEAMS / SETTINGS LOGIC (Standard) ---
         async function loadTeams() {
             const season = document.getElementById('teamSeason').value; if(!season) return;
             const res = await fetch(`/api/admin/teams/${encodeURIComponent(season)}`); allTeams = await res.json(); renderTeamsUI();
@@ -203,86 +316,25 @@
             });
             if (divTeams.length === 0) container.innerHTML = `<div class="col-span-3 text-center text-slate-500 py-10 border border-slate-800 border-dashed rounded-xl">No teams found for ${currentDiv}.</div>`;
         }
-        
-        // --- SETTINGS LOGIC ---
         async function loadSettings() {
-            const res = await fetch('/api/admin/settings');
-            const s = await res.json();
+            const res = await fetch('/api/admin/settings'); const s = await res.json();
             document.getElementById('setHoliday').value = s.holiday_mode || 'auto';
             document.getElementById('setWeather').checked = s.show_weather;
             document.getElementById('setTheme').checked = s.theme_enabled;
         }
-
         async function saveSettings() {
-            const payload = {
-                holiday_mode: document.getElementById('setHoliday').value,
-                show_weather: document.getElementById('setWeather').checked,
-                theme_enabled: document.getElementById('setTheme').checked
-            };
-            await fetch('/api/admin/settings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-            alert("Settings Saved! (Reload Home page to see changes)");
+            const payload = { holiday_mode: document.getElementById('setHoliday').value, show_weather: document.getElementById('setWeather').checked, theme_enabled: document.getElementById('setTheme').checked };
+            await fetch('/api/admin/settings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) }); alert("Settings Saved!");
         }
-        // ----------------------
-
-        function openAddTeamModal() {
-            document.getElementById('modalTeamName').value = ''; document.getElementById('modalTeamName').readOnly = false;
-            document.getElementById('modalL1').value = ''; document.getElementById('modalL2').value = ''; document.getElementById('modalL3').value = '';
-            document.getElementById('validationError').classList.add('hidden');
-            document.getElementById('modalL3Container').style.display = document.getElementById('teamDiv').value.includes('1') ? 'none' : 'block';
-            document.getElementById('teamModal').classList.remove('hidden');
-        }
-        function openEditTeam(teamName) {
-            const team = allTeams.find(t => t['Team Name'] === teamName && t.Division === document.getElementById('teamDiv').value); if (!team) return;
-            document.getElementById('modalTeamName').value = team['Team Name']; document.getElementById('modalTeamName').readOnly = true;
-            document.getElementById('modalL1').value = team['L1_Player']; document.getElementById('modalL2').value = team['L2_Player']; document.getElementById('modalL3').value = team['L3_Player'];
-            document.getElementById('validationError').classList.add('hidden');
-            document.getElementById('modalL3Container').style.display = document.getElementById('teamDiv').value.includes('1') ? 'none' : 'block';
-            document.getElementById('teamModal').classList.remove('hidden');
-        }
+        function openAddTeamModal() { document.getElementById('modalTeamName').value = ''; document.getElementById('modalTeamName').readOnly = false; document.getElementById('modalL1').value = ''; document.getElementById('modalL2').value = ''; document.getElementById('modalL3').value = ''; document.getElementById('validationError').classList.add('hidden'); document.getElementById('modalL3Container').style.display = document.getElementById('teamDiv').value.includes('1') ? 'none' : 'block'; document.getElementById('teamModal').classList.remove('hidden'); }
+        function openEditTeam(teamName) { const team = allTeams.find(t => t['Team Name'] === teamName && t.Division === document.getElementById('teamDiv').value); if (!team) return; document.getElementById('modalTeamName').value = team['Team Name']; document.getElementById('modalTeamName').readOnly = true; document.getElementById('modalL1').value = team['L1_Player']; document.getElementById('modalL2').value = team['L2_Player']; document.getElementById('modalL3').value = team['L3_Player']; document.getElementById('validationError').classList.add('hidden'); document.getElementById('modalL3Container').style.display = document.getElementById('teamDiv').value.includes('1') ? 'none' : 'block'; document.getElementById('teamModal').classList.remove('hidden'); }
         function closeTeamModal() { document.getElementById('teamModal').classList.add('hidden'); }
-        function validateTeamData(teamName, l1, l2, l3) {
-            const currentDiv = document.getElementById('teamDiv').value; const isDiv1 = currentDiv.includes('1');
-            const players = [l1, l2]; if (!isDiv1 && l3) players.push(l3);
-            if (!teamName) return "Team Name is required."; if (!l1 || !l2) return "Level 1 and Level 2 players are required."; if (!isDiv1 && !l3) return "Level 3 player is required.";
-            const filledPlayers = players.filter(p => p.trim() !== ""); const uniquePlayers = new Set(filledPlayers);
-            if (uniquePlayers.size !== filledPlayers.length) return "Duplicate players in team.";
-            const divTeams = allTeams.filter(t => t.Division === currentDiv && t['Team Name'] !== teamName);
-            for (let team of divTeams) {
-                const teamPlayers = [team['L1_Player'], team['L2_Player'], team['L3_Player']].map(p => String(p).toLowerCase().trim());
-                for (let newP of filledPlayers) { if (teamPlayers.includes(newP.toLowerCase().trim())) return `Player '${newP}' is already in team '${team['Team Name']}'.`; }
-            }
-            return null;
-        }
-        async function saveTeam() {
-            const teamName = document.getElementById('modalTeamName').value; const l1 = document.getElementById('modalL1').value; const l2 = document.getElementById('modalL2').value; const l3 = document.getElementById('modalL3').value;
-            const error = validateTeamData(teamName, l1, l2, l3);
-            if (error) { const errEl = document.getElementById('validationError'); errEl.innerText = error; errEl.classList.remove('hidden'); return; }
-            const payload = { season: document.getElementById('teamSeason').value, division: document.getElementById('teamDiv').value, team_name: teamName, l1: l1, l2: l2, l3: l3 };
-            const res = await fetch('/api/admin/save_team', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-            if (res.ok) { closeTeamModal(); loadTeams(); } else alert("Error saving team");
-        }
+        async function saveTeam() { const teamName = document.getElementById('modalTeamName').value; const l1 = document.getElementById('modalL1').value; const l2 = document.getElementById('modalL2').value; const l3 = document.getElementById('modalL3').value; const payload = { season: document.getElementById('teamSeason').value, division: document.getElementById('teamDiv').value, team_name: teamName, l1: l1, l2: l2, l3: l3 }; const res = await fetch('/api/admin/save_team', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) }); if (res.ok) { closeTeamModal(); loadTeams(); } else alert("Error saving team"); }
         async function deleteTeam() { if(!confirm("Delete team?")) return; const payload = { season: document.getElementById('teamSeason').value, division: document.getElementById('teamDiv').value, team_name: document.getElementById('modalTeamName').value }; await fetch('/api/admin/delete_team', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) }); closeTeamModal(); loadTeams(); }
-        async function loadRequests() {
-            const res = await fetch('/api/admin/requests'); const data = await res.json(); const tbody = document.getElementById('requestsTable'); tbody.innerHTML = '';
-            const activeReports = data.filter(r => r.Status !== 'Fixed' && r.Status !== 'Ignored');
-            if (activeReports.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-6 text-center italic text-slate-500">No pending reports.</td></tr>'; return; }
-            activeReports.forEach(row => { const tr = document.createElement('tr'); tr.innerHTML = `<td class="px-6 py-4 text-xs text-slate-500">${row.Timestamp}</td><td class="px-6 py-4 font-bold text-white">${row['Reporter Name']}</td><td class="px-6 py-4 text-yellow-500 text-xs font-bold uppercase">${row['Match/Issue']}</td><td class="px-6 py-4 text-slate-300 italic">"${row.Description}"</td><td class="px-6 py-4"><button onclick="updateStatus(${row.row_id}, 'Fixed')" class="text-green-400 border border-green-800/50 hover:bg-green-900/20 px-3 py-1 rounded text-xs font-bold transition-colors">Mark Fixed</button></td>`; tbody.appendChild(tr); });
-        }
+        async function loadRequests() { const res = await fetch('/api/admin/requests'); const data = await res.json(); const tbody = document.getElementById('requestsTable'); tbody.innerHTML = ''; const activeReports = data.filter(r => r.Status !== 'Fixed' && r.Status !== 'Ignored'); if (activeReports.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-6 text-center italic text-slate-500">No pending reports.</td></tr>'; return; } activeReports.forEach(row => { const tr = document.createElement('tr'); tr.innerHTML = `<td class="px-6 py-4 text-xs text-slate-500">${row.Timestamp}</td><td class="px-6 py-4 font-bold text-white">${row['Reporter Name']}</td><td class="px-6 py-4 text-yellow-500 text-xs font-bold uppercase">${row['Match/Issue']}</td><td class="px-6 py-4 text-slate-300 italic">"${row.Description}"</td><td class="px-6 py-4"><button onclick="updateStatus(${row.row_id}, 'Fixed')" class="text-green-400 border border-green-800/50 hover:bg-green-900/20 px-3 py-1 rounded text-xs font-bold transition-colors">Mark Fixed</button></td>`; tbody.appendChild(tr); }); }
         async function updateStatus(rowId, newStatus) { await fetch('/api/admin/update_report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ row_id: rowId, status: newStatus }) }); loadRequests(); }
-        async function createNewSeason() {
-            const name = document.getElementById('newSeasonName').value; if(!name) return alert("Enter a name!"); if(!confirm(`Create season: ${name}?`)) return;
-            const btn = document.querySelector('#panel-season button'); btn.innerText = "Creating..."; btn.disabled = true;
-            const res = await fetch('/api/admin/create_season', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: name }) });
-            if(res.ok) { alert("Created! Reloading..."); location.reload(); } else { alert("Error."); } btn.disabled = false;
-        }
-        async function deleteSeason() {
-            const name = document.getElementById('deleteSeasonSelect').value;
-            if(!name) return;
-            const userConf = prompt(`Type "DELETE" to permanently delete: ${name}`);
-            if(userConf !== "DELETE") return alert("Action cancelled.");
-            const res = await fetch('/api/admin/delete_season', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: name }) });
-            if(res.ok) { alert("Season deleted."); location.reload(); } else { alert("Error deleting season."); }
-        }
+        async function createNewSeason() { const name = document.getElementById('newSeasonName').value; if(!name) return alert("Enter a name!"); if(!confirm(`Create season: ${name}?`)) return; const btn = document.querySelector('#panel-season button'); btn.innerText = "Creating..."; btn.disabled = true; const res = await fetch('/api/admin/create_season', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: name }) }); if(res.ok) { alert("Created! Reloading..."); location.reload(); } else { alert("Error."); } btn.disabled = false; }
+        async function deleteSeason() { const name = document.getElementById('deleteSeasonSelect').value; if(!name) return; const userConf = prompt(`Type "DELETE" to permanently delete: ${name}`); if(userConf !== "DELETE") return alert("Action cancelled."); const res = await fetch('/api/admin/delete_season', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: name }) }); if(res.ok) { alert("Season deleted."); location.reload(); } else { alert("Error deleting season."); } }
     </script>
 </body>
 </html>
