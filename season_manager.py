@@ -2,19 +2,45 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
+import os
+import sys
 
 # --- CONFIGURATION ---
 SCOPE = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-# Ensure credentials.json is in the same folder
-CREDS = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', SCOPE)
+
+# ==========================================
+# 1. ROBUST CREDENTIALS FINDER
+# ==========================================
+# This checks all the places your app usually hides the key file
+possible_paths = [
+    "credentials.json", 
+    "backend/credentials.json", 
+    "gold-coast-table-tennis-firebase-adminsdk.json",
+    "backend/gold-coast-table-tennis-firebase-adminsdk.json"
+]
+
+creds_file = None
+for path in possible_paths:
+    if os.path.exists(path):
+        creds_file = path
+        break
+
+if not creds_file:
+    print("\n!!! CRITICAL ERROR: Could not find your Google Credentials file.")
+    print(f"I looked in these locations: {possible_paths}")
+    print(">> ACTION REQUIRED: Please find your .json key file and drag it into this folder.\n")
+    sys.exit(1)
+
+print(f"... Using credentials found at: {creds_file}")
+CREDS = ServiceAccountCredentials.from_json_keyfile_name(creds_file, SCOPE)
 CLIENT = gspread.authorize(CREDS)
 
-# 1. YOUR SPREADSHEET LINK (The main Results/History sheet)
+# ==========================================
+# 2. SPREADSHEET SETUP
+# ==========================================
 MAIN_SHEET_URL = "https://docs.google.com/spreadsheets/d/1tpxuUCl8ddpnBBr69vc4P1foRCRKWpts5-HaFPYb4po/edit?usp=sharing"
-
-# 2. TAB NAMES (Case Sensitive!)
-CONFIG_TAB_NAME = "Dates and Crap"      # Where you type the start dates
-OUTPUT_TAB_NAME = "Calculated_Dates"    # Where this script saves the clean list
+CONFIG_TAB_NAME = "Dates and Crap"
+OUTPUT_TAB_NAME = "Calculated_Dates"
 
 def get_season_config(wb):
     print(f"... Reading config from '{CONFIG_TAB_NAME}'")
@@ -24,44 +50,52 @@ def get_season_config(wb):
         print(f"!!! CRITICAL ERROR: Could not find tab named '{CONFIG_TAB_NAME}'")
         return []
 
-    # Get all data
     raw_data = worksheet.get_all_values()
-    
     if not raw_data:
         print("!!! Error: The config tab is empty!")
         return []
 
-    headers = raw_data[0]      # Row 1: Division Names
-    start_dates = raw_data[1]  # Row 2: Start Dates
-    week_counts = raw_data[2]  # Row 3: Total Weeks
-    
-    # Get Season Name (Column H / Index 7)
-    season_name = start_dates[7] if len(start_dates) > 7 and start_dates[7] else "Current Season"
-    print(f"... Found Season: {season_name}")
-    
+    headers = raw_data[0] # Row 1: Division Names
     configs = []
-    
-    # Loop through columns B to G (Index 1 to 6)
-    # Covers: Div 1, Div 2, Div 3, Div 4, Div 5, All Stars
-    for i in range(1, 7): 
-        if i >= len(headers) or i >= len(start_dates) or i >= len(week_counts):
-            continue
+
+    # --- THE FIX: Loop through ALL rows (Spring, Winter, etc.) ---
+    # We step by 2 because each season takes 2 rows (Dates + Weeks)
+    for row_idx in range(1, len(raw_data), 2):
+        if row_idx + 1 >= len(raw_data):
+            break 
+
+        start_dates = raw_data[row_idx]
+        week_counts = raw_data[row_idx + 1]
+
+        # Get Season Name from Column H (Index 7)
+        # If blank, we make up a name like "Season_Row_5"
+        season_name = start_dates[7] if len(start_dates) > 7 and start_dates[7] else f"Season_Row_{row_idx}"
+        print(f"... Found Config for: {season_name}")
+
+        for i in range(1, 7): # Columns B to G
+            if i >= len(headers) or i >= len(start_dates) or i >= len(week_counts):
+                continue
+                
+            div_name = headers[i]
+            start_date_str = start_dates[i]
+            total_weeks_str = week_counts[i]
             
-        div_name = headers[i]
-        start_date_str = start_dates[i]
-        total_weeks_str = week_counts[i]
-        
-        # Skip if header or date is missing
-        if not div_name or not start_date_str: 
-            continue
+            # Skip empty cells
+            if not div_name or not start_date_str or not total_weeks_str: 
+                continue
             
-        configs.append({
-            "season": season_name,
-            "division": div_name,
-            "start_date": start_date_str,
-            "total_weeks": int(total_weeks_str)
-        })
-        
+            try:
+                weeks_int = int(total_weeks_str)
+            except ValueError:
+                continue
+
+            configs.append({
+                "season": season_name,
+                "division": div_name,
+                "start_date": start_date_str,
+                "total_weeks": weeks_int
+            })
+            
     return configs
 
 def calculate_schedule(configs):
@@ -72,7 +106,7 @@ def calculate_schedule(configs):
         try:
             start_date_obj = datetime.strptime(config['start_date'], "%d/%m/%Y")
         except ValueError:
-            print(f"!!! Error: Date format for {config['division']} is wrong. Use dd/mm/yyyy")
+            print(f"!!! Error: Date format for {config['division']} ({config['season']}) is wrong. Use dd/mm/yyyy")
             continue
 
         for week_num in range(1, config['total_weeks'] + 1):
@@ -92,7 +126,6 @@ def calculate_schedule(configs):
 
 def upload_to_sheet(wb, df):
     print(f"... Uploading {len(df)} rows to '{OUTPUT_TAB_NAME}'")
-    
     try:
         try:
             worksheet = wb.worksheet(OUTPUT_TAB_NAME)
@@ -103,7 +136,6 @@ def upload_to_sheet(wb, df):
             
         worksheet.update([df.columns.values.tolist()] + df.values.tolist())
         print("SUCCESS: Dates updated!")
-        
     except Exception as e:
         print(f"!!! Error uploading: {e}")
 

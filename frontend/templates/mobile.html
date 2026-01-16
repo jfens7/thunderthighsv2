@@ -60,16 +60,11 @@
         /* --- UI COMPONENTS --- */
         .glass-panel, .card, .nav-item, #statsContainer, .w-full, .modal-bg { position: relative; z-index: 10; }
         .glass-panel { background-color: rgba(15, 23, 42, 0.65); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4); }
-        
-        .nav-item { cursor: pointer; padding: 12px 24px; border-bottom: 2px solid transparent; transition: all 0.3s ease; color: #94a3b8; font-weight: 600; }
-        .nav-item:hover { color: #facc15; } .nav-item.active { border-bottom-color: #facc15; color: #facc15; text-shadow: 0 0 20px rgba(250, 204, 21, 0.4); }
-        
         .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(2, 6, 23, 0.95); backdrop-filter: blur(12px); border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-around; padding: 10px 0 20px 0; z-index: 100; box-shadow: 0 -5px 20px rgba(0,0,0,0.5); }
         .b-nav-item { display: flex; flex-direction: column; align-items: center; color: #64748b; font-size: 10px; font-weight: 600; transition: all 0.2s; width: 20%; cursor: pointer; }
         .b-nav-item i { font-size: 20px; margin-bottom: 4px; transition: transform 0.2s; }
         .b-nav-item.active { color: #facc15; }
         .b-nav-item.active i { transform: translateY(-2px); filter: drop-shadow(0 0 8px rgba(250, 204, 21, 0.6)); }
-
         .text-gradient-gold { background: linear-gradient(to right, #facc15, #fbbf24); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .card { background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9)); border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; padding: 24px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2); backdrop-filter: blur(10px); }
         .filter-btn { padding: 8px 20px; border-radius: 99px; font-weight: 600; font-size: 0.85rem; transition: all 0.3s; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; background: rgba(15, 23, 42, 0.4); }
@@ -84,6 +79,27 @@
         .animate-fade-in { animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         @keyframes pulse-gold { 0% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.6); border-color: #facc15; } 70% { box-shadow: 0 0 0 10px rgba(250, 204, 21, 0); } 100% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0); border-color: #facc15; } }
         .highlight-pulse, .highlight-pulse-yellow { animation: pulse-gold 2s infinite; border: 1px solid #facc15 !important; background-color: rgba(250, 204, 21, 0.1) !important; z-index: 10; position: relative; }
+        
+        /* --- SUPER BRIGHT BLUE PULSE --- */
+        @keyframes pulse-bright-blue {
+            0% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.9); background-color: rgba(14, 165, 233, 0.3); border-color: #38bdf8; transform: scale(1); }
+            50% { box-shadow: 0 0 30px 5px rgba(56, 189, 248, 0.7); background-color: rgba(14, 165, 233, 0.5); transform: scale(1.02); }
+            100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); background-color: transparent; border-color: transparent; transform: scale(1); }
+        }
+        
+        .highlight-pulse-blue { 
+            animation: pulse-bright-blue 1s infinite !important; 
+            border: 2px solid #38bdf8 !important; 
+            background-color: rgba(14, 165, 233, 0.3) !important; 
+            z-index: 50 !important; 
+            position: relative !important; /* CRITICAL for z-index */
+            color: white !important;
+            text-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
+            transition: all 0.3s ease;
+        }
+
+        /* Search List Styles */
+        .table-search-list { position: absolute; top: 100%; left: 0; width: 100%; max-height: 250px; overflow-y: auto; background-color: rgba(2, 6, 23, 0.98); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 0 0 12px 12px; z-index: 60; display: none; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
         
         #cookieBanner { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 600px; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 20px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); z-index: 9999; display: none; animation: slideUp 0.5s ease-out; }
         @keyframes slideUp { from { transform: translate(-50%, 100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
@@ -182,7 +198,11 @@
                         <div id="fillInModeContainer" class="hidden flex items-center gap-3 border-l border-white/10 pl-4"><label class="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="fiMode" value="separate" checked onchange="loadDivisionLeaderboard()" class="text-yellow-500"><span class="text-xs text-slate-300">Separate</span></label><label class="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="fiMode" value="combine" onchange="loadDivisionLeaderboard()" class="text-yellow-500"><span class="text-xs text-slate-300">Combine</span></label></div>
                     </div>
                     <div class="grid grid-cols-2 gap-2 w-full">
-                        <div class="relative group col-span-2"><input type="text" id="divSearch" onkeyup="if(event.key === 'Enter') highlightRow('divSearch', 'leaderboardContent')" placeholder="Search..." class="w-full bg-black/40 border border-white/10 p-2 pl-9 rounded-lg text-white text-sm focus:border-yellow-500 focus:outline-none"><i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-500 group-focus-within:text-yellow-500"></i></div>
+                        <div class="relative group col-span-2">
+                            <input type="text" id="divSearch" placeholder="Search..." class="w-full bg-black/40 border border-white/10 p-2 pl-9 rounded-lg text-white text-sm focus:border-yellow-500 focus:outline-none">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-500 group-focus-within:text-yellow-500"></i>
+                            <div id="divSearchSuggestions" class="table-search-list"></div>
+                        </div>
                         
                         <select id="boardSort" class="input-premium p-2 rounded-lg text-sm font-bold" onchange="loadDivisionLeaderboard()">
                             <option value="rating">Sort: Rating</option>
@@ -198,8 +218,8 @@
                 </div>
             </div>
             
-            <div class="sticky top-[80px] z-30 bg-slate-900/95 backdrop-blur shadow-xl py-3 rounded-xl grid grid-cols-7 text-[10px] text-slate-500 mb-3 px-2 uppercase font-bold tracking-widest border border-white/5">
-                <div class="col-span-2">Player</div><div class="text-center text-yellow-600">Rating</div><div class="text-center">Matches</div><div class="text-center">Wins</div><div class="text-center">Losses</div><div class="text-center">Win %</div>
+            <div class="sticky top-[85px] z-30 bg-slate-900/95 backdrop-blur shadow-xl py-3 rounded-xl grid grid-cols-5 text-[10px] text-slate-500 mb-3 px-2 uppercase font-bold tracking-widest border border-white/5">
+                <div class="col-span-2">Player</div><div class="text-center text-yellow-600">Rating</div><div class="text-center">Wins</div><div class="text-center">Win %</div>
             </div>
             <div id="leaderboardContent" class="space-y-2 min-h-[200px]">
                 <div class="text-center text-slate-600 py-10">Select a season.</div>
@@ -215,7 +235,11 @@
                     <p id="globalBadge" class="text-xs text-yellow-500 font-bold uppercase tracking-wide mt-2 bg-yellow-500/10 inline-block px-2 py-1 rounded border border-yellow-500/20 hidden"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Based on Total Wins</p>
                 </div>
                 <div class="flex flex-wrap gap-2 items-center justify-center w-full">
-                    <div class="relative group w-full"><input type="text" id="liveSearch" onkeyup="if(event.key === 'Enter') highlightRow('liveSearch', 'globalContent')" placeholder="Search..." class="w-full bg-black/40 border border-white/10 p-2 pl-9 rounded-lg text-white text-sm focus:border-sky-500 focus:outline-none"><i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-500 group-focus-within:text-sky-500"></i></div>
+                    <div class="relative group w-full">
+                        <input type="text" id="liveSearch" placeholder="Search..." class="w-full bg-black/40 border border-white/10 p-2 pl-9 rounded-lg text-white text-sm focus:border-sky-500 focus:outline-none">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-500 group-focus-within:text-sky-500"></i>
+                        <div id="liveSearchSuggestions" class="table-search-list"></div>
+                    </div>
                     <input type="number" id="filterMinGames" placeholder="Min Games" class="input-premium p-2 rounded-lg text-sm w-24" onchange="loadGlobalStandings()">
                     
                     <select id="globalSort" class="input-premium p-2 rounded-lg text-sm font-bold text-sky-400 border-sky-900/50" onchange="loadGlobalStandings()">
@@ -228,13 +252,8 @@
                     <select id="globalSeason" class="input-premium p-2 rounded-lg text-sm" onchange="loadGlobalStandings()"></select>
                 </div>
             </div>
-            <div class="sticky top-[80px] z-30 bg-slate-900/95 backdrop-blur shadow-xl py-3 rounded-xl grid grid-cols-8 text-[10px] text-slate-500 mb-3 px-2 uppercase font-bold tracking-widest border border-white/5">
-                <div class="col-span-2">Player</div>
-                <div class="text-center">Division</div> <div class="text-center text-yellow-600">Rating</div>
-                <div class="text-center">Matches</div>
-                <div class="text-center">Wins</div>
-                <div class="text-center">Losses</div>
-                <div class="text-center">Win %</div>
+            <div class="sticky top-[85px] z-30 bg-slate-900/95 backdrop-blur shadow-xl py-3 rounded-xl grid grid-cols-5 text-[10px] text-slate-500 mb-3 px-2 uppercase font-bold tracking-widest border border-white/5">
+                <div class="col-span-2">Player</div><div class="text-center text-yellow-600">Rating</div><div class="text-center">Wins</div><div class="text-center">Win %</div>
             </div>
             <div id="globalContent" class="space-y-2 min-h-[200px]">
                 <div class="text-center text-slate-600 py-10">Select a season.</div>
@@ -290,12 +309,6 @@
         <div class="w-full"><h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left text-slate-500"></i> Match History</h3><div id="matchHistory" class="bg-black/40 rounded-2xl shadow-inner border border-white/5 overflow-hidden mb-6"></div><button id="seeAllBtn" onclick="toggleHistory()" class="w-full py-4 text-center text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-colors hidden font-bold">View All Matches</button></div>
     </div>
 
-    <div class="mt-auto py-8 text-center border-t border-white/5 w-full bg-black/60 backdrop-blur text-slate-500 relative z-30 pb-32">
-        <button onclick="openReportModal()" class="text-sm hover:text-yellow-500 underline flex items-center justify-center gap-2 mx-auto transition-colors"><i class="fa-solid fa-flag"></i> Report Incorrect Result</button>
-        <div class="text-xs mt-3 font-mono opacity-50 mb-4">Gold Coast Stats v2.5.7 • Built for GCTTA</div>
-        <a href="/admin" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white px-4 py-2 rounded-full text-xs font-bold border border-white/10 transition-all"><i class="fa-solid fa-lock"></i> Admin Login</a>
-    </div>
-
     <div id="cookieBanner" class="flex flex-col items-center justify-between gap-4"><div class="text-left"><h4 class="text-white font-bold text-lg mb-1"><i class="fa-solid fa-cookie-bite text-yellow-500 mr-2"></i> Cookies & Privacy</h4><p class="text-slate-400 text-sm">We use cookies to personalize content and ads to provide you with a great experience.</p></div><div class="flex gap-3"><button onclick="acceptCookies()" class="px-6 py-2 bg-yellow-500 hover:bg-yellow-400 text-slate-900 font-bold rounded-lg transition-colors">Accept</button><button onclick="declineCookies()" class="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg transition-colors">Decline</button></div></div>
     <button id="backToTopBtn" onclick="scrollToTop()" class="fixed bottom-24 right-6 bg-yellow-500 text-slate-900 p-3 rounded-full shadow-2xl shadow-yellow-500/30 hidden hover:scale-110 transition-all z-50 font-bold"><i class="fa-solid fa-arrow-up text-lg"></i></button>
 
@@ -303,29 +316,47 @@
     <div id="compareModal" class="fixed inset-0 flex items-center justify-center hidden z-50 modal-bg px-4"><div class="glass-panel rounded-2xl p-6 w-full max-w-md relative"><button onclick="closeCompareModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button><h3 class="text-2xl font-bold text-white mb-6">Head-to-Head</h3><div class="relative mb-8"><input type="text" id="compareInput" class="input-premium w-full p-4 rounded-xl text-lg" placeholder="VS Opponent Name..." autocomplete="off"><div id="compare-suggestions-list" class="absolute w-full mt-2 bg-slate-800 rounded-xl shadow-2xl z-50"></div></div><div id="compareResults" class="hidden"><div class="flex justify-between items-center mb-8"><div class="text-center w-1/3"><div class="text-yellow-500 font-bold text-lg truncate" id="comp-p1-name"></div><div class="text-5xl font-black text-white my-2" id="comp-p1-wins">0</div><div class="text-[10px] font-bold text-slate-500 tracking-widest">WINS</div></div><div class="text-slate-600 font-black text-2xl">VS</div><div class="text-center w-1/3"><div class="text-sky-500 font-bold text-lg truncate" id="comp-p2-name"></div><div class="text-5xl font-black text-white my-2" id="comp-p2-wins">0</div><div class="text-[10px] font-bold text-slate-500 tracking-widest">WINS</div></div></div><div id="compareLog" class="max-h-48 overflow-y-auto text-sm space-y-1"></div></div></div></div>
 
     <script>
-        // ... (SCRIPT IS IDENTICAL TO INDEX.HTML BUT OPTIMIZED FOR MOBILE IF NEEDED) ...
         let activeHoliday = 'normal';
         let allPlayers = [], currentSeason = "Career", currentDivision = "All", currentWeek = "All";
         let currentPlayerStats = null, currentMode = "regular", historyExpanded = false;
         let requestCache = {}; 
 
+        // --- REMOVE HIGHLIGHTS & CLOSE LISTS ---
+        function removeHighlights(event) {
+            const list = document.getElementById('suggestions-list');
+            const searchInput = document.getElementById('playerSearch');
+            const divList = document.getElementById('divSearchSuggestions');
+            const divInput = document.getElementById('divSearch');
+            const liveList = document.getElementById('liveSearchSuggestions');
+            const liveInput = document.getElementById('liveSearch');
+
+            if (list && !list.contains(event.target) && event.target !== searchInput) { list.classList.add('hidden'); }
+            if (divList && !divList.contains(event.target) && event.target !== divInput) { divList.style.display = 'none'; }
+            if (liveList && !liveList.contains(event.target) && event.target !== liveInput) { liveList.style.display = 'none'; }
+            
+            // NOTE: We do NOT remove the 'highlight-pulse-blue' here immediately. 
+            // It will remove itself via setTimeout to prevent accidental clearance.
+        }
+
         if (!localStorage.getItem('cookieConsent')) { document.getElementById('cookieBanner').style.display = 'flex'; }
         function acceptCookies() { localStorage.setItem('cookieConsent', 'true'); document.getElementById('cookieBanner').style.display = 'none'; }
         function declineCookies() { document.getElementById('cookieBanner').style.display = 'none'; }
 
-        // ... [Insert animation logic here if needed, or keep it minimal for mobile performance] ...
-        // For mobile, maybe disable heavy animations? keeping them for now as per "full code".
-        function generateStars(visibilityScore) { /* ... same ... */ } 
-        function createShootingStar() { /* ... same ... */ }
-        function applyStaticDecor(type) { /* ... same ... */ }
-        function startHolidayEffect(type) { /* ... same ... */ }
-        function createFloatingEmoji(container, char, mode) { /* ... same ... */ }
-        function createFirework(container, x, y) { /* ... same ... */ }
-        async function initEnvironment() { /* ... same ... */ }
+        // --- ANIMATION PLACEHOLDERS ---
+        function generateStars(visibilityScore) { const container = document.getElementById('starContainer'); container.innerHTML = ''; const starCount = Math.floor(100 * visibilityScore); for (let i = 0; i < starCount; i++) { const star = document.createElement('div'); const sizeClass = Math.random() < 0.6 ? 's-small' : (Math.random() < 0.9 ? 's-medium' : 's-large'); star.className = `star ${sizeClass}`; star.style.top = `${Math.random() * 100}%`; star.style.left = `${Math.random() * 100}%`; star.style.setProperty('--duration', `${2 + Math.random() * 3}s`); star.style.setProperty('--delay', `${Math.random() * 2}s`); container.appendChild(star); } }
+        function createShootingStar() { const container = document.getElementById('shootingStarContainer'); const star = document.createElement('div'); star.className = 'shooting-star-wrapper'; const startY = Math.random() * (window.innerHeight / 2); const endX = window.innerWidth + 200; const endY = startY + (Math.random() * 200 - 100); const angle = Math.atan2(endY - startY, endX + 200) * (180 / Math.PI); star.style.top = `${startY}px`; star.style.left = '-200px'; star.style.setProperty('--endX', `${endX + 200}px`); star.style.setProperty('--endY', `${endY - startY}px`); star.style.setProperty('--angle', `${angle}deg`); 
+            const head = document.createElement('div'); head.className = 'shooting-star-head';
+            if (activeHoliday === 'christmas' && Math.random() < 0.3) { star.classList.add('has-character', 'wrapper-right-to-left'); const char = document.createElement('div'); char.className = 'flying-character'; char.innerText = ['🎅', '🦌', '🛷'][Math.floor(Math.random()*3)]; star.appendChild(char); } 
+            else { star.appendChild(head); }
+            container.appendChild(star); setTimeout(() => star.remove(), 12000); }
+        function applyStaticDecor(type) { const container = document.getElementById('holidayDecor'); container.innerHTML = ''; if(type === 'christmas') { const lights = document.createElement('div'); lights.className = 'decor-lights'; for(let i=0; i<20; i++) { const bulb = document.createElement('div'); bulb.className = `light-bulb ${['light-red','light-green','light-gold','light-blue'][i%4]}`; lights.appendChild(bulb); } container.appendChild(lights); container.innerHTML += `<div class="corner-decor decor-left">🎄</div><div class="corner-decor decor-right">🎁</div>`; } }
+        function startHolidayEffect(type) { const container = document.getElementById('holidayParticles'); container.innerHTML = ''; if (type === 'christmas') { setInterval(() => createFloatingEmoji(container, '❄️', 'snow'), 800); } else if (type === 'newyear') { setInterval(() => createFirework(container, Math.random() * window.innerWidth, Math.random() * window.innerHeight / 2), 1500); } }
+        function createFloatingEmoji(container, char, mode) { const el = document.createElement('div'); el.innerText = char; el.className = mode === 'snow' ? 'snowflake' : 'holiday-particle'; el.style.left = `${Math.random() * 100}%`; el.style.fontSize = `${10 + Math.random() * 20}px`; el.style.animationDuration = `${5 + Math.random() * 5}s`; container.appendChild(el); setTimeout(() => el.remove(), 10000); }
+        function createFirework(container, x, y) { const colors = ['#f00', '#0f0', '#00f', '#ff0', '#f0f', '#0ff']; const color = colors[Math.floor(Math.random() * colors.length)]; for(let i=0; i<20; i++) { const p = document.createElement('div'); p.className = 'firework'; p.style.left = `${x}px`; p.style.top = `${y}px`; p.style.backgroundColor = color; const angle = (Math.PI * 2 * i) / 20; const tx = Math.cos(angle) * 100; const ty = Math.sin(angle) * 100; p.style.setProperty('--tx', `${tx}px`); p.style.setProperty('--ty', `${ty}px`); container.appendChild(p); } setTimeout(() => { const el = container.querySelectorAll('.firework'); el.forEach(e => e.remove()); }, 1000); }
+        async function initEnvironment() { const now = new Date(); const isXmas = now.getMonth() === 11 && now.getDate() >= 15; const isNYE = (now.getMonth() === 11 && now.getDate() >= 30) || (now.getMonth() === 0 && now.getDate() <= 2); if (isXmas) { activeHoliday = 'christmas'; applyStaticDecor('christmas'); startHolidayEffect('christmas'); } else if (isNYE) { activeHoliday = 'newyear'; startHolidayEffect('newyear'); } else { generateStars(0.8); setInterval(createShootingStar, 15000); } }
 
-        // --- NEW OPTIMIZED INIT ---
         window.onload = async () => {
-            // ... (Same Init Logic) ...
+            initEnvironment();
             try {
                 const [pRes, sRes, dRes] = await Promise.all([ fetch('/api/players'), fetch('/api/seasons'), fetch('/api/divisions') ]);
                 allPlayers = await pRes.json();
@@ -344,10 +375,14 @@
                 document.getElementById('seasonSelect').addEventListener('change', (e) => { currentSeason = e.target.value; reloadStats(false); });
                 document.getElementById('divisionSelect').addEventListener('change', (e) => { currentDivision = e.target.value; reloadStats(false); });
                 document.getElementById('weekSelect').addEventListener('change', (e) => { currentWeek = e.target.value; reloadStats(false); });
+                
+                // Initialize Table Searches
+                setupTableSearch('divSearch', 'divSearchSuggestions', 'leaderboardContent');
+                setupTableSearch('liveSearch', 'liveSearchSuggestions', 'globalContent');
+
             } catch(e) { console.error("Init failed", e); }
         };
 
-        // ... (Same Tab Switching Logic) ...
         function switchTab(tabId) {
             document.querySelectorAll('.b-nav-item').forEach(el => el.classList.remove('active'));
             if(document.getElementById(`b-nav-${tabId}`)) document.getElementById(`b-nav-${tabId}`).classList.add('active');
@@ -360,19 +395,253 @@
             window.scrollTo(0,0);
         }
 
-        // ... (All other functions are identical to index.html) ...
-        // For brevity, use the exact same JS as the previous response for:
-        // loadResultsSheet, filterResultsSheet, loadDivisionLeaderboard, renderLeaderboard, 
-        // loadGlobalStandings, renderRankings, reloadStats, setupSearch, loadStats, switchMode, 
-        // renderStats, renderHistory, toggleHistory, animateValue, openCompareModal, etc.
-        // ...
+        // --- TABLE SEARCH LOGIC (Dropdown + Scroll + Pulse + STOP PROPAGATION) ---
+        function setupTableSearch(inputId, suggestionBoxId, tableContentId) {
+            const input = document.getElementById(inputId);
+            const box = document.getElementById(suggestionBoxId);
+            const tableContainer = document.getElementById(tableContentId);
+
+            input.addEventListener('input', () => {
+                const query = input.value.toLowerCase().trim();
+                box.innerHTML = '';
+                if (!query) { box.style.display = 'none'; return; }
+
+                const rows = Array.from(tableContainer.children);
+                const matches = rows.filter(row => {
+                    const name = row.getAttribute('data-name');
+                    return name && name.includes(query);
+                });
+
+                if (matches.length > 0) {
+                    box.style.display = 'block';
+                    matches.slice(0, 8).forEach(row => {
+                        const name = row.querySelector('.player-name-target').innerText; 
+                        const div = document.createElement('div');
+                        div.className = 'p-3 hover:bg-slate-800 cursor-pointer text-sm text-white border-b border-slate-700 last:border-0';
+                        div.innerText = name;
+                        div.onclick = (e) => { 
+                            e.stopPropagation(); // Stop click from reaching body
+                            e.preventDefault();
+
+                            // 1. Clear previous highlights
+                            document.querySelectorAll('.highlight-pulse-blue').forEach(el => el.classList.remove('highlight-pulse-blue'));
+                            
+                            // 2. Hide box & clear input
+                            box.style.display = 'none';
+                            input.value = '';
+
+                            // 3. Scroll & Highlight
+                            // Use 'center' block to ensure it is visible even if sticky header is there
+                            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            
+                            // 4. Force animation with a slight delay
+                            setTimeout(() => {
+                                row.classList.add('highlight-pulse-blue');
+                            }, 100);
+
+                            // 5. Auto-remove after 3 seconds
+                            setTimeout(() => {
+                                row.classList.remove('highlight-pulse-blue');
+                            }, 3000);
+                        };
+                        box.appendChild(div);
+                    });
+                } else { box.style.display = 'none'; }
+            });
+        }
+
+        async function loadResultsSheet() {
+            const season = document.getElementById('resSeason').value; const week = document.getElementById('resWeek').value;
+            if(!season || season === "Loading...") return; 
+            const cacheKey = `week_${season}_${week}`;
+            const container = document.getElementById('resultsSheetContent');
+            if(container.innerHTML.includes('Select a week')) container.innerHTML = '<div class="text-center text-slate-500 py-20">Loading...</div>';
+            if(requestCache[cacheKey]) { weekMatchesCache = requestCache[cacheKey]; filterResultsSheet(); return; }
+            try {
+                const res = await fetch(`/api/week/${encodeURIComponent(season)}/${week}`);
+                const data = await res.json();
+                requestCache[cacheKey] = data; weekMatchesCache = data; filterResultsSheet();
+            } catch(e) { container.innerHTML = '<div class="text-center">Error loading results.</div>'; }
+        }
         
-        // (Copy JS block from index.html here for full functionality)
-        async function loadResultsSheet(){/*...*/} function filterResultsSheet(){/*...*/} async function loadDivisionLeaderboard(){/*...*/} function renderLeaderboard(container,rankings){/*...*/} async function loadGlobalStandings(){/*...*/} function renderRankings(containerElement,rankings){/*...*/} function reloadStats(resetDiv=true){/*...*/} function setupSearch(inputId,listId,callback){/*...*/} async function loadStats(player,autoDetectDiv=true){/*...*/} function switchMode(mode){/*...*/} function renderStats(){/*...*/} function renderHistory(matches){/*...*/} function toggleHistory(){/*...*/} function animateValue(id,end){/*...*/} function openCompareModal(){/*...*/} function closeCompareModal(){/*...*/} async function loadComparison(opponent){/*...*/} function openReportModal(){/*...*/} function closeReportModal(){/*...*/} async function submitReport(){/*...*/}
+        function filterResultsSheet() {
+            const div = document.getElementById('resDiv').value; const container = document.getElementById('resultsSheetContent'); 
+            let filtered = weekMatchesCache;
+            if(div !== "All") filtered = weekMatchesCache.filter(m => m.division === div); 
+            container.innerHTML = "";
+            if(filtered.length === 0) { container.innerHTML = '<div class="text-center text-slate-500 py-12 border border-slate-800 rounded-xl border-dashed">No matches found.</div>'; return; }
+            filtered.forEach(m => {
+                const row = document.createElement('div'); row.className = "flex justify-between items-center bg-black/40 p-4 rounded-xl border border-white/5 hover:bg-slate-900/50 transition-colors";
+                let dateText = m.date || ""; if (dateText.includes('-')) { const parts = dateText.split('-'); if(parts[0].length === 4) dateText = `${parts[2]}/${parts[1]}/${parts[0]}`; }
+                row.innerHTML = `<div class="flex flex-col"><div class="text-[10px] text-yellow-500 font-black uppercase mb-1 tracking-widest">${m.division}</div><div class="flex flex-col text-white font-bold gap-1 text-base"><span class="hover:text-yellow-400 cursor-pointer transition-colors" onclick="loadStats('${m.p1}')">${m.p1}</span><span class="text-xs text-slate-600">vs</span><span class="hover:text-yellow-400 cursor-pointer transition-colors" onclick="loadStats('${m.p2}')">${m.p2}</span></div></div><div class="text-right"><div class="font-mono text-2xl text-white font-black tracking-widest">${m.score}</div><div class="text-xs text-slate-500 mt-1">${dateText}</div></div>`; container.appendChild(row);
+            });
+        }
+
+        async function loadDivisionLeaderboard() {
+            const season = document.getElementById('boardSeason').value; const div = document.getElementById('boardDiv').value; 
+            if(!season || !div || season === "Loading...") return;
+            const week = document.getElementById('boardWeek').value; 
+            const sortMode = document.getElementById('boardSort').value; const showFillIns = document.getElementById('toggleShowFillIns').checked; const fillInMode = document.querySelector('input[name="fiMode"]:checked').value;
+            document.getElementById('fillInModeContainer').classList.toggle('hidden', !showFillIns);
+            const container = document.getElementById('leaderboardContent');
+            if(container.innerHTML.includes('Select a season')) container.innerHTML = '<div class="text-center text-slate-500 py-20">Updating...</div>';
+            
+            let url = `/api/rankings/${encodeURIComponent(season)}/${encodeURIComponent(div)}`; if(week !== "Latest") url += `?week=${week}`;
+            const res = await fetch(url); const rawData = await res.json();
+            
+            let processedRankings = [];
+            rawData.forEach(player => {
+                if (player.regular.matches > 0) {
+                    let finalStats = { ...player.regular };
+                    if (showFillIns && fillInMode === 'combine' && player.fillin.matches > 0) { finalStats.wins += player.fillin.wins; finalStats.losses += player.fillin.losses; finalStats.matches += player.fillin.matches; }
+                    finalStats.win_rate = finalStats.matches > 0 ? ((finalStats.wins / finalStats.matches) * 100).toFixed(1) : 0; 
+                    processedRankings.push({ name: player.name, rating: player.rating_val, ...finalStats, isFillInRow: false });
+                }
+                if (showFillIns && player.fillin.matches > 0) {
+                    if (fillInMode === 'separate' || player.regular.matches === 0) {
+                        let fStats = player.fillin; fStats.win_rate = fStats.matches > 0 ? ((fStats.wins / fStats.matches) * 100).toFixed(1) : 0; 
+                        processedRankings.push({ name: `${player.name} (Fill In)`, rating: player.rating_val, wins: fStats.wins, losses: fStats.losses, matches: fStats.matches, win_rate: fStats.win_rate, isFillInRow: true });
+                    }
+                }
+            });
+
+            processedRankings.sort((a, b) => { 
+                const nameSort = a.name.localeCompare(b.name);
+                if (sortMode === 'rating') return b.rating - a.rating || nameSort; 
+                if (sortMode === 'wins') return b.wins - a.wins || parseFloat(b.win_rate) - parseFloat(a.win_rate) || nameSort; 
+                if (sortMode === 'percent') return parseFloat(b.win_rate) - parseFloat(a.win_rate) || b.wins - a.wins || nameSort; 
+                if (sortMode === 'losses') return a.losses - b.losses || b.wins - a.wins || nameSort; 
+            });
+            renderLeaderboard(container, processedRankings);
+        }
+
+        function renderLeaderboard(container, rankings) {
+            container.innerHTML = ""; if(rankings.length === 0) { container.innerHTML = '<div class="text-center text-slate-500 py-4">No data found.</div>'; return; }
+            let displayRank = 1;
+            rankings.forEach((r, index) => {
+                const row = document.createElement('div'); const baseClass = "grid grid-cols-5 items-center p-3 rounded-xl text-xs mb-2 transition-all border relative"; /* Added relative here */
+                const regularClass = "bg-black/30 border-white/5 hover:bg-slate-900/60 hover:border-white/10"; const fillInClass = "highlight-pulse-yellow text-yellow-100 border-yellow-500/50";
+                row.className = `${baseClass} ${r.isFillInRow ? fillInClass : regularClass}`;
+                let rankIcon = `<span class="text-slate-600 w-6 inline-block text-center font-bold font-mono">${displayRank}</span>`; if(displayRank === 1) rankIcon = "🥇"; if(displayRank === 2) rankIcon = "🥈"; if(displayRank === 3) rankIcon = "🥉";
+                const cleanName = r.name.replace(" (Fill In)", "");
+                
+                // Add Name Attribute for Search
+                row.setAttribute('data-name', cleanName.toLowerCase());
+
+                row.innerHTML = `
+                    <div class="col-span-2 flex items-center gap-2 overflow-hidden"><span class="text-base">${rankIcon}</span><span class="truncate hover:text-yellow-400 cursor-pointer font-bold player-name-target" onclick="loadStats('${cleanName}')">${r.name}</span></div>
+                    <div class="text-center font-mono font-bold text-yellow-500 text-sm">${r.rating || '-'}</div>
+                    <div class="text-center text-green-400 font-black font-mono text-base">${r.wins}</div>
+                    <div class="text-center text-slate-500 font-mono text-xs">${r.win_rate}%</div>
+                `; 
+                container.appendChild(row); displayRank++;
+            });
+        }
         
-        // PASTE THE FULL JS FROM INDEX.HTML HERE TO ENSURE IT WORKS.
-        // I have truncated it visually here to save space but in your file, 
-        // paste the EXACT SAME SCRIPT BLOCK from index.html.
+        async function loadGlobalStandings() {
+            const season = document.getElementById('globalSeason').value; if(!season || season === "Loading...") return;
+            const sortMode = document.getElementById('globalSort').value; const minGames = parseInt(document.getElementById('filterMinGames').value) || 0;
+            const container = document.getElementById('globalContent'); const badge = document.getElementById('globalBadge');
+            if (sortMode === 'wins_desc') { badge.style.display = 'inline-block'; badge.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1"></i> Based on Total Wins'; } else { badge.style.display = 'none'; }
+            if(container.innerHTML.includes('Select a season')) container.innerHTML = '<div class="text-center text-slate-500 py-20">Updating...</div>';
+            
+            const res = await fetch(`/api/rankings/global/${encodeURIComponent(season)}`); let rankings = await res.json();
+            rankings = rankings.filter(r => r.matches >= minGames);
+            
+            rankings.sort((a, b) => { 
+                const nameSort = a.name.localeCompare(b.name); 
+                if (sortMode === 'rating_desc') return (b.rating || 0) - (a.rating || 0) || nameSort;
+                if (sortMode === 'wins_desc') return b.wins - a.wins || b.win_rate - a.win_rate || nameSort; 
+                if (sortMode === 'percent') return b.win_rate - a.win_rate || b.wins - a.wins || nameSort; 
+                if (sortMode === 'losses_asc') return a.losses - b.losses || b.wins - a.wins || nameSort; 
+                return 0; 
+            });
+            renderRankings(container, rankings);
+        }
+
+        function renderRankings(containerElement, rankings) {
+            containerElement.innerHTML = ""; if(rankings.length === 0) { containerElement.innerHTML = '<div class="text-center text-slate-500 py-4">No data.</div>'; return; }
+            let displayRank = 1;
+            rankings.slice(0, 100).forEach((r, index) => {
+                const row = document.createElement('div'); 
+                // 5-Column Grid for Mobile & Added Relative
+                row.className = "grid grid-cols-5 items-center bg-black/30 p-3 rounded-xl border border-white/5 text-xs mb-2 hover:bg-slate-900/60 transition-colors relative"; 
+                if (index > 0) displayRank++;
+                let rankIcon = `<span class="text-slate-600 w-6 inline-block text-center font-bold font-mono">${displayRank}</span>`; if(displayRank === 1) rankIcon = "🥇"; if(displayRank === 2) rankIcon = "🥈"; if(displayRank === 3) rankIcon = "🥉";
+                
+                // Add Name Attribute for Search
+                row.setAttribute('data-name', r.name.toLowerCase());
+
+                row.innerHTML = `
+                    <div class="col-span-2 flex items-center gap-2 overflow-hidden"><span class="text-base">${rankIcon}</span><span class="truncate text-white hover:text-yellow-400 cursor-pointer font-bold player-name-target" onclick="loadStats('${r.name}')">${r.name}</span></div>
+                    <div class="text-center font-mono font-bold text-yellow-500 text-sm">${r.rating || '-'}</div>
+                    <div class="text-center text-green-400 font-black font-mono text-base">${r.wins}</div>
+                    <div class="text-center text-slate-500 font-mono text-xs">${r.win_rate}%</div>
+                `; 
+                container.appendChild(row);
+            });
+        }
+        
+        function reloadStats(resetDiv = true) { const name = document.getElementById('playerName').innerText; if(name) loadStats(name, resetDiv); }
+        function setupSearch(inputId, listId, callback) {
+            const input = document.getElementById(inputId); const list = document.getElementById(listId);
+            input.addEventListener('input', () => {
+                const val = input.value.toLowerCase(); list.innerHTML = ''; if (!val) { list.classList.add('hidden'); return; }
+                const filtered = allPlayers.filter(p => p.toLowerCase().includes(val)).slice(0, 8);
+                filtered.forEach(player => { const div = document.createElement('div'); div.className = 'suggestion-item p-3 cursor-pointer text-sm text-slate-300 border-b border-slate-700 last:border-0'; div.innerText = player; div.onclick = () => { input.value = player; list.classList.add('hidden'); callback(player); }; list.appendChild(div); });
+                list.classList.remove('hidden');
+            });
+        }
+        setupSearch('playerSearch', 'suggestions-list', (name) => loadStats(name)); setupSearch('compareInput', 'compare-suggestions-list', (name) => loadComparison(name));
+
+        async function loadStats(player, autoDetectDiv = true) {
+            ['home', 'week', 'sheets', 'live', 'rules'].forEach(t => document.getElementById(`tab-${t}`).classList.add('hidden')); document.getElementById('statsContainer').classList.remove('hidden'); document.getElementById('b-nav-profile').classList.remove('hidden'); switchTab('statsContainer');
+            document.getElementById('playerName').innerText = player; document.getElementById('playerSearch').value = player; document.getElementById('repName').value = player; historyExpanded = false; 
+            let targetDivision = currentDivision;
+            if (autoDetectDiv) {
+                try {
+                    let probeUrl = `/api/stats/${encodeURIComponent(player)}?season=${encodeURIComponent(currentSeason)}&division=All&week=All`; 
+                    const probeRes = await fetch(probeUrl); const probeData = await probeRes.json();
+                    if (!probeData.error && probeData.combined && probeData.combined.match_history && probeData.combined.match_history.length > 0) {
+                        const latestMatch = probeData.combined.match_history[0];
+                        if (latestMatch && latestMatch.division) { targetDivision = latestMatch.division; currentDivision = targetDivision; document.getElementById('divisionSelect').value = targetDivision; }
+                    } else { targetDivision = "All"; currentDivision = "All"; document.getElementById('divisionSelect').value = "All"; }
+                } catch (e) { console.error("Probe failed", e); }
+            }
+            try {
+                let url = `/api/stats/${encodeURIComponent(player)}?season=${encodeURIComponent(currentSeason)}&division=${encodeURIComponent(targetDivision)}&week=${encodeURIComponent(currentWeek)}`; const start = document.getElementById('startDate').value; const end = document.getElementById('endDate').value; if(start) url += `&start=${start}`; if(end) url += `&end=${end}`;
+                const res = await fetch(url); const data = await res.json(); 
+                if (data.error) { alert("Player not found."); return; } 
+                currentPlayerStats = data; document.getElementById('playerRatingBadge').innerText = `Rating: ${data.rating} ±${data.sigma || '?'}`; document.getElementById('playerIdDisplay').innerText = data.id || "N/A"; renderStats();
+            } catch (err) { console.error("Error:", err); }
+        }
+
+        function switchMode(mode) { currentMode = mode; document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); document.getElementById(`btn-${mode}`).classList.add('active'); if (currentPlayerStats) renderStats(); }
+        function renderStats() { const stats = currentPlayerStats[currentMode]; animateValue("matchesPlayed", stats.matches); animateValue("wins", stats.wins); animateValue("losses", stats.losses); document.getElementById("winRate").innerText = stats.win_rate; animateValue("setsWon", stats.sets_won); animateValue("setsLost", stats.sets_lost); renderHistory(stats.match_history); }
+        function renderHistory(matches) {
+            const historyDiv = document.getElementById('matchHistory'); const seeAllBtn = document.getElementById('seeAllBtn'); historyDiv.innerHTML = ""; 
+            if (!matches || matches.length === 0) { historyDiv.innerHTML = '<div class="p-6 text-center text-slate-500">No matches found.</div>'; seeAllBtn.classList.add('hidden'); return; }
+            const limit = historyExpanded ? matches.length : 5; 
+            matches.slice(0, limit).forEach(match => {
+                const row = document.createElement('div'); row.className = "flex justify-between items-center p-4 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors";
+                const resultColor = match.result === "Win" ? "text-green-400" : "text-red-400"; const resultIcon = match.result === "Win" ? "W" : "L"; let dateText = match.date || ""; if (dateText.includes('-')) { const parts = dateText.split('-'); if(parts[0].length === 4) dateText = `${parts[2]}/${parts[1]}/${parts[0]}`; }
+                row.innerHTML = `<div class="flex flex-col"><div class="flex items-center gap-3 mb-1"><span class="${resultColor} font-black text-xl w-6">${resultIcon}</span><div class="flex items-center"><span class="text-slate-500 mr-2 text-xs">VS</span><a href="#" onclick="loadStats('${match.opponent}'); return false;" class="text-white hover:text-yellow-400 font-bold transition-colors">${match.opponent}</a></div></div></div><div class="text-right"><div class="font-mono text-slate-300 font-bold bg-slate-800 px-2 py-1 rounded inline-block text-sm mb-1">${match.score}</div><div class="text-[10px] text-slate-600 font-bold uppercase tracking-wider">${dateText}</div></div>`; historyDiv.appendChild(row);
+            });
+            seeAllBtn.classList.toggle('hidden', matches.length <= 5); seeAllBtn.innerHTML = historyExpanded ? 'Show Less' : 'View All Matches';
+        }
+        function toggleHistory() { historyExpanded = !historyExpanded; renderStats(); }
+        function animateValue(id, end) { document.getElementById(id).innerHTML = end; }
+        function openCompareModal() { document.getElementById('compareModal').classList.remove('hidden'); document.getElementById('compareResults').classList.add('hidden'); document.getElementById('compareInput').value = ''; }
+        function closeCompareModal() { document.getElementById('compareModal').classList.add('hidden'); }
+        async function loadComparison(opponent) {
+            const p1 = document.getElementById('playerName').innerText; const res = await fetch(`/api/compare/${encodeURIComponent(p1)}/${encodeURIComponent(opponent)}`); const data = await res.json();
+            document.getElementById('compareResults').classList.remove('hidden'); document.getElementById('comp-p1-name').innerText = data.player1; document.getElementById('comp-p2-name').innerText = data.player2; document.getElementById('comp-p1-wins').innerText = data.p1_wins; document.getElementById('comp-p2-wins').innerText = data.p2_wins;
+            const logDiv = document.getElementById('compareLog'); logDiv.innerHTML = '';
+            data.matches.forEach(m => { const color = m.result === "Win" ? "text-green-400" : "text-red-400"; logDiv.innerHTML += `<div class="flex justify-between py-2 border-b border-slate-700/50"><span class="${color} font-bold">${m.result}</span> <span class="font-mono text-slate-400">${m.score}</span></div>`; });
+        }
+        function openReportModal() { document.getElementById('reportModal').classList.remove('hidden'); document.getElementById('repMatch').value = ""; document.getElementById('repMatch').readOnly = false; }
+        function closeReportModal() { document.getElementById('reportModal').classList.add('hidden'); }
+        async function submitReport() { const payload = { reporter: document.getElementById('repName').value, season: currentSeason, match_info: "General/Other", description: document.getElementById('repDesc').value }; try { await fetch('/api/report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) }); alert("Report sent!"); closeReportModal(); } catch (e) { alert("Error."); } }
     </script>
 </body>
 </html>

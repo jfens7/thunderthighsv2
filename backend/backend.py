@@ -89,7 +89,7 @@ class ThunderData:
         self.date_lookup = {} 
         self.weekly_matches = {} 
         self.player_ids = {} 
-        self.alias_map = {} # NEW: Stores { "bad_name": "Good Name" }
+        self.alias_map = {} 
         
         self._authenticate()
         if self.sheet_results: self.refresh_data()
@@ -119,19 +119,26 @@ class ThunderData:
 
     def _clean_name(self, name): 
         if not name: return ""
-        # 1. Basic clean
         clean = " ".join(str(name).split())
-        
-        # 2. Check Alias Map (Case Insensitive)
         if clean.lower() in self.alias_map:
             return self.alias_map[clean.lower()]
-            
-        # 3. Default formatting
         return clean.title()
 
-    def _get_val(self, row, keys, default=''): 
-        for k in keys: 
+    # --- UPDATED FUZZY MATCHER (FIXES HIDDEN SPACES) ---
+    def _get_val(self, row, keys, default=''):
+        # 1. Fast exact match
+        for k in keys:
             if k in row: return row[k]
+        
+        # 2. Fuzzy match (ignore case and spaces)
+        # Create a map: { "name1": "Name 1 ", "sets1": "Sets  1" }
+        row_keys_norm = {k.strip().lower(): k for k in row.keys()}
+        
+        for k in keys:
+            norm_k = k.strip().lower()
+            if norm_k in row_keys_norm:
+                return row[row_keys_norm[norm_k]]
+                
         return default
 
     def _parse_date(self, date_str):
@@ -159,7 +166,6 @@ class ThunderData:
         except: pass
 
     def _load_aliases(self):
-        """Loads the 'Aliases' sheet to map duplicate names."""
         self.alias_map = {}
         try:
             try: ws = self.sheet_results.worksheet("Aliases")
@@ -194,13 +200,10 @@ class ThunderData:
         try:
             try: ws = self.sheet_results.worksheet("ratings updated")
             except: ws = self.sheet_results.add_worksheet(title="ratings updated", rows=1000, cols=5)
-            
             data = [['Player', 'Rating', 'Deviation', 'Volatility']]
             sorted_players = sorted(self.rating_engine.players.items(), key=lambda x: x[1]['rating'], reverse=True)
-            
             for name, stats in sorted_players:
                 data.append([name, int(stats['rating']), int(stats['rd']), round(stats['vol'], 6)])
-                
             ws.clear()
             ws.update('A1', data)
             logger.info(f"💾 Saved {len(sorted_players)} ratings to 'ratings updated'")
@@ -216,9 +219,7 @@ class ThunderData:
                 ws.append_row(["Player Name", "Player ID", "Date Added", "Status"])
 
             all_values = ws.get_all_values()
-            if not all_values:
-                ws.append_row(["Player Name", "Player ID", "Date Added", "Status"])
-                all_values = ws.get_all_values()
+            if not all_values: return
 
             updates = []
             existing_names = {}
@@ -231,7 +232,7 @@ class ThunderData:
             for i, row in enumerate(all_values[1:], start=2): 
                 if not row: continue
                 p_name = str(row[name_col]).strip() if len(row) > name_col else ""
-                clean_n = self._clean_name(p_name) # Ensure mapped name is used for ID lookup
+                clean_n = self._clean_name(p_name)
                 p_id = str(row[id_col]).strip() if len(row) > id_col else ""
                 
                 if clean_n:
@@ -239,7 +240,6 @@ class ThunderData:
                         new_id = self._generate_player_id()
                         updates.append({'range': f"{chr(65+id_col)}{i}", 'values': [[new_id]]}) 
                         p_id = new_id
-                        logger.info(f"🔹 Generated ID for {clean_n}: {new_id}")
                     self.player_ids[clean_n] = p_id
                     existing_names[clean_n.lower()] = True
 
@@ -252,7 +252,6 @@ class ThunderData:
                     new_id = self._generate_player_id()
                     new_rows.append([p_name, new_id, today_str, "Active"])
                     self.player_ids[p_name] = new_id
-                    logger.info(f"🆕 Added new player to roster: {p_name} ({new_id})")
 
             if updates: ws.batch_update(updates)
             if new_rows: ws.append_rows(new_rows)
@@ -260,17 +259,20 @@ class ThunderData:
         except Exception as e:
             logger.error(f"❌ Master Roster Error: {e}")
 
-    def add_alias(self, bad_name, good_name):
-        """Adds a new alias to the sheet and reloads."""
+    def get_potential_duplicates(self):
+        seen = {}
+        dupes = []
         try:
-            ws = self.sheet_results.worksheet("Aliases")
-            ws.append_row([bad_name, good_name])
-            self.refresh_data() # Force reload to apply change
-            return True
-        except: return False
+            ws = self.sheet_results.worksheet("Players")
+            names = [r['Player Name'] for r in ws.get_all_records() if r['Player Name']]
+            for name in names:
+                key = name.lower().replace(" ", "")
+                if key in seen: dupes.append({'name1': seen[key], 'name2': name})
+                else: seen[key] = name
+            return dupes
+        except: return []
 
     def rename_player_roster(self, old_name, new_name):
-        """Renames a player in the 'Players' roster sheet (used when distinct)."""
         try:
             ws = self.sheet_results.worksheet("Players")
             cell = ws.find(old_name)
@@ -281,26 +283,51 @@ class ThunderData:
             return False
         except: return False
 
-    def get_potential_duplicates(self):
-        """
-        Scans 'Players' sheet for names that are very similar
-        (e.g., same letters different case, or Levenshtein distance).
-        For now, we'll do Case Insensitive check which covers 'Jae yi' vs 'Jae Yi'.
-        """
-        seen = {}
-        dupes = []
+    def add_alias(self, bad_name, good_name):
         try:
-            ws = self.sheet_results.worksheet("Players")
-            names = [r['Player Name'] for r in ws.get_all_records() if r['Player Name']]
+            ws = self.sheet_results.worksheet("Aliases")
+            ws.append_row([bad_name, good_name])
+            self.refresh_data() 
+            return True
+        except: return False
+
+    # --- SAFE LOADER TO FIX DUPLICATE HEADERS ---
+    def _get_safe_records(self, worksheet):
+        try:
+            all_values = worksheet.get_all_values()
+            if not all_values: return []
             
-            for name in names:
-                key = name.lower().replace(" ", "")
-                if key in seen:
-                    dupes.append({'name1': seen[key], 'name2': name})
+            raw_headers = all_values[0]
+            clean_headers = []
+            counts = {'name': 0, 'sets': 0, 'ps': 0, 'pos': 0, 'player': 0}
+            
+            for h in raw_headers:
+                h_str = str(h).strip()
+                h_lower = h_str.lower()
+                key = None
+                if h_lower == 'name': key = 'name'
+                elif h_lower in ['sets', 's']: key = 'sets'
+                elif h_lower in ['pos', 'ps']: key = 'pos'
+                elif h_lower == 'player': key = 'player'
+                
+                if key:
+                    counts[key] += 1
+                    clean_headers.append(f"{h_str} {counts[key]}")
                 else:
-                    seen[key] = name
-            return dupes
-        except: return []
+                    clean_headers.append(h_str)
+
+            records = []
+            for row in all_values[1:]:
+                if len(row) < len(clean_headers):
+                    row = row + [''] * (len(clean_headers) - len(row))
+                record = {}
+                for i, header in enumerate(clean_headers):
+                    record[header] = row[i]
+                records.append(record)
+            return records
+        except Exception as e:
+            logger.error(f"Safe Read Error: {e}")
+            return []
 
     def refresh_data(self):
         logger.info("⚡️ Refreshing data...")
@@ -312,7 +339,7 @@ class ThunderData:
         self.rating_engine = RatingEngine() 
         
         self._load_calculated_dates()
-        self._load_aliases() # Load Aliases BEFORE processing matches
+        self._load_aliases()
         self._load_seed_ratings()
 
         match_queue = [] 
@@ -329,13 +356,18 @@ class ThunderData:
             if season_name not in self.weekly_matches: self.weekly_matches[season_name] = {}
             
             try:
-                records = worksheet.get_all_records()
+                # Use Safe Loader Here
+                records = self._get_safe_records(worksheet)
+                
                 for row in records:
                     fmt = str(self._get_val(row, ['Format', 'Match Format', 'Type'])).lower().strip()
                     if "doubles" in fmt: continue 
                     
-                    p1 = self._clean_name(self._get_val(row, ['Name 1', 'Player 1']))
+                    # --- FUZZY LOOKUP FOR NAMES ---
+                    # Will find 'Name 1', 'name 1 ', 'Name 1', etc.
+                    p1 = self._clean_name(self._get_val(row, ['Name 1', 'Player 1', 'Name']))
                     p2 = self._clean_name(self._get_val(row, ['Name 2', 'Player 2']))
+                    
                     if not p1 and not p2: continue
                     if not p1: p1 = "Unknown"
                     if not p2: p2 = "Unknown"
@@ -343,7 +375,7 @@ class ThunderData:
                     div = str(self._get_val(row, ['Division', 'Div'], 'Unknown')).strip()
                     if div: self.divisions_list.add(div)
                     
-                    p1_fill = "S" in str(self._get_val(row, ['PS 1', 'Pos 1'])).upper()
+                    p1_fill = "S" in str(self._get_val(row, ['PS 1', 'Pos 1', 'Pos'])).upper()
                     p2_fill = "S" in str(self._get_val(row, ['PS 2', 'Pos 2'])).upper()
 
                     match_date_obj = None
@@ -367,7 +399,7 @@ class ThunderData:
                     else:
                         match_date_str = match_date_obj.strftime("%d/%m/%Y")
 
-                    s1_val = self._get_val(row, ['Sets 1', 'S1'])
+                    s1_val = self._get_val(row, ['Sets 1', 'S1', 'Sets'])
                     s2_val = self._get_val(row, ['Sets 2', 'S2'])
                     try:
                         if str(s1_val).strip() == "" or str(s2_val).strip() == "": continue
