@@ -3,6 +3,8 @@ import json
 import os
 import sys
 import traceback
+import logging
+from apscheduler.schedulers.background import BackgroundScheduler  # <--- NEW IMPORT
 
 # --- PATH SETUP ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -35,6 +37,10 @@ except ImportError:
 
 app = Flask(__name__, template_folder='frontend/templates', static_folder='frontend/static')
 
+# Disable Flask default logging to clean up terminal
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
+
 try:
     db = ThunderData()
 except Exception as e:
@@ -44,6 +50,24 @@ except Exception as e:
 ADMIN_PASSWORD = "thunderadmin"
 SCORER_PASSWORD = "tabletennis" 
 SETTINGS_FILE = "settings.json"
+
+# --- AUTOMATIC SCHEDULER (THE ALARM CLOCK) ---
+def auto_refresh_job():
+    print("\n⏰ AUTO-SCHEDULER: It is 4:00 AM. Refreshing Google Sheets Data...")
+    if db:
+        try:
+            db.refresh_data()
+            print("✅ AUTO-SCHEDULER: Refresh Complete.\n")
+        except Exception as e:
+            print(f"❌ AUTO-SCHEDULER FAILED: {e}\n")
+
+# Start the Scheduler
+if os.environ.get("WERKZEUG_RUN_MAIN") == "true": # Only run in the main process, not the reloader
+    scheduler = BackgroundScheduler()
+    # Runs at 4:00 AM on Tue, Thu, Fri
+    scheduler.add_job(auto_refresh_job, 'cron', day_of_week='tue,thu,fri', hour=4, minute=0)
+    scheduler.start()
+    print("🕒 Scheduler Active: Auto-update set for Tue, Thu, Fri at 4:00 AM.")
 
 # --- HELPER: COLUMN MAPPER ---
 DIV_COLUMN_MAP = {
@@ -174,19 +198,13 @@ def get_player_stats(player_name):
     s = db.get_player_stats(player_name, request.args.get('season','Career'), request.args.get('division','All'), request.args.get('week','All'), request.args.get('start'), request.args.get('end'))
     return jsonify(s) if s else (jsonify({"error": "Not found"}), 404)
 
-# --- MISSING ROUTES ADDED HERE ---
-
 @app.route('/api/week/<season>/<week>')
 def get_week_matches(season, week):
-    """Returns matches for the Results Tab"""
     return jsonify(db.get_matches_by_week(season, week)) if db else jsonify([])
 
 @app.route('/api/compare/<p1>/<p2>')
 def compare_players(p1, p2):
-    """Returns Head-to-Head stats"""
     return jsonify(db.get_head_to_head(p1, p2)) if db else jsonify({})
-
-# ---------------------------------
 
 @app.route('/api/rankings/<season>/<division>')
 def get_rankings(season, division):
@@ -200,6 +218,18 @@ def get_global_rankings(season):
 def submit_report():
     d = request.json
     return jsonify({"message": "OK"}) if db and db.submit_request(d.get('reporter'), d.get('email'), d.get('season'), d.get('match_info'), d.get('description')) else jsonify({"error":"Fail"})
+
+# --- NEW ROUTE FOR HOT RELOAD (MANUAL) ---
+@app.route('/api/admin/refresh_data', methods=['POST'])
+def force_refresh():
+    if not db: return jsonify({"success": False, "error": "DB missing"})
+    try:
+        print("\n🔄 Manual Refresh Triggered via Admin Panel...")
+        db.refresh_data()
+        print("✅ Manual Refresh Complete.\n")
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 # --- ADMIN ROUTES ---
 @app.route('/api/admin/requests')
@@ -234,7 +264,16 @@ def resolve_dupe():
     return jsonify({"success": False})
 
 @app.route('/api/admin/sync_firebase', methods=['POST'])
-def run_firebase_sync(): return jsonify(syncer.sync_all()) if syncer else jsonify({"success":False})
+def run_firebase_sync():
+    if not syncer: return jsonify({"success": False, "error": "No Sync Module"})
+    # 1. Run the Bridge
+    result = syncer.sync_all()
+    # 2. If data changed, Force Python to re-read Sheets
+    if result.get("success") and result.get("count", 0) > 0:
+        print("🔄 New data synced from Firebase! Reloading Backend Memory...")
+        if db: db.refresh_data()
+    return jsonify(result)
 
 if __name__ == '__main__':
+    # Use 0.0.0.0 so you can see it on other devices (like the iPad)
     app.run(debug=True, port=5001, host='0.0.0.0')

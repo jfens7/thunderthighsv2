@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GCTTA - Live Centre</title>
+    <style>
+        /* BASIC STYLES */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f4f9; margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        
+        /* HEADER & PULSE */
+        .live-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; }
+        .status-badge { padding: 8px 16px; border-radius: 20px; font-weight: bold; color: white; background: #ccc; }
+        .status-badge.active { background: #ff3b30; animation: pulse 1.5s infinite; }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 59, 48, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); }
+        }
+
+        /* MATCH CARDS */
+        .section-title { font-size: 1.2rem; color: #666; margin-bottom: 15px; border-bottom: 2px solid #ddd; padding-bottom: 5px; }
+        .match-card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: transform 0.2s; }
+        .match-card:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        
+        .table-num { font-size: 0.9rem; font-weight: 800; color: #007aff; text-transform: uppercase; }
+        .scores { display: flex; align-items: center; gap: 20px; font-size: 1.5rem; font-weight: bold; }
+        .player-name { font-size: 1.1rem; }
+        .vs { color: #999; font-size: 0.9rem; margin: 0 10px; }
+        .live-indicator { color: #ff3b30; font-size: 0.8rem; font-weight: bold; display: none; }
+        .is-live .live-indicator { display: block; }
+        
+        /* EMPTY STATE */
+        .no-matches { text-align: center; color: #999; padding: 40px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="live-header">
+        <h1>Match Centre</h1>
+        <div id="mainStatusBadge" class="status-badge">OFFLINE</div>
+    </div>
+
+    <div id="liveSection" style="display:none;">
+        <div class="section-title">🔴 LIVE NOW</div>
+        <div id="liveContainer"></div>
+    </div>
+
+    <div class="section-title">📅 SCHEDULED TODAY</div>
+    <div id="scheduledContainer">
+        <div class="no-matches">Loading fixtures...</div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, query, where, onSnapshot } 
+    from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    // 1. PASTE YOUR CONFIG HERE
+    const firebaseConfig = {
+        // ... COPY FROM FIREBASE CONSOLE ...
+        projectId: "gctta-stats-live" // Based on your previous checks
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // 2. GET TODAY'S DATE (dd/MM/yyyy)
+    const today = new Date();
+    const dateString = String(today.getDate()).padStart(2, '0') + '/' + String(today.getMonth() + 1).padStart(2, '0') + '/' + today.getFullYear();
+
+    console.log("Listening for matches on:", dateString);
+
+    // 3. LISTEN TO DATABASE
+    const q = query(collection(db, "fixtures"), where("date", "==", dateString));
+
+    onSnapshot(q, (snapshot) => {
+        const liveContainer = document.getElementById("liveContainer");
+        const scheduledContainer = document.getElementById("scheduledContainer");
+        const liveSection = document.getElementById("liveSection");
+        const badge = document.getElementById("mainStatusBadge");
+
+        liveContainer.innerHTML = "";
+        scheduledContainer.innerHTML = "";
+
+        let liveCount = 0;
+
+        if (snapshot.empty) {
+            scheduledContainer.innerHTML = "<div class='no-matches'>No matches scheduled for today.</div>";
+            return;
+        }
+
+        snapshot.forEach((doc) => {
+            const m = doc.data();
+            const isLive = m.live_home_score !== undefined || m.current_server !== undefined;
+            
+            // HTML Template for a Card
+            const cardHTML = `
+                <div class="match-card ${isLive ? 'is-live' : ''}" onclick="window.location.href='match_detail.html?id=${doc.id}'">
+                    <div>
+                        <div class="table-num">Table ${m.table} • ${m.division}</div>
+                        <div class="scores">
+                            <div class="team">
+                                <div class="player-name">${m.home_team}</div>
+                            </div>
+                            ${isLive ? `<span>${m.live_home_score} - ${m.live_away_score}</span>` : `<span class="vs">vs</span>`}
+                            <div class="team">
+                                <div class="player-name">${m.away_team}</div>
+                            </div>
+                        </div>
+                    </div>
+                    ${isLive ? `<div class="live-indicator">● LIVE</div>` : ``}
+                </div>
+            `;
+
+            if (isLive) {
+                liveContainer.innerHTML += cardHTML;
+                liveCount++;
+            } else {
+                scheduledContainer.innerHTML += cardHTML;
+            }
+        });
+
+        // Toggle "Live Mode"
+        if (liveCount > 0) {
+            liveSection.style.display = "block";
+            badge.textContent = `${liveCount} LIVE`;
+            badge.classList.add("active");
+        } else {
+            liveSection.style.display = "none";
+            badge.textContent = "SCHEDULED";
+            badge.classList.remove("active");
+        }
+    });
+</script>
+
+</body>
+</html>

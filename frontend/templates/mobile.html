@@ -65,6 +65,11 @@
         .b-nav-item i { font-size: 20px; margin-bottom: 4px; transition: transform 0.2s; }
         .b-nav-item.active { color: #facc15; }
         .b-nav-item.active i { transform: translateY(-2px); filter: drop-shadow(0 0 8px rgba(250, 204, 21, 0.6)); }
+        
+        /* LIVE PULSE NAV */
+        .b-nav-item.live-active { color: #ff3b30 !important; animation: textPulse 1.5s infinite; }
+        @keyframes textPulse { 0% { text-shadow: 0 0 5px rgba(255, 59, 48, 0.5); } 50% { text-shadow: 0 0 15px rgba(255, 59, 48, 0.8); } 100% { text-shadow: 0 0 5px rgba(255, 59, 48, 0.5); } }
+
         .text-gradient-gold { background: linear-gradient(to right, #facc15, #fbbf24); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .card { background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9)); border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; padding: 24px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2); backdrop-filter: blur(10px); }
         .filter-btn { padding: 8px 20px; border-radius: 99px; font-weight: 600; font-size: 0.85rem; transition: all 0.3s; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; background: rgba(15, 23, 42, 0.4); }
@@ -103,6 +108,19 @@
         
         #cookieBanner { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 600px; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 20px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); z-index: 9999; display: none; animation: slideUp 0.5s ease-out; }
         @keyframes slideUp { from { transform: translate(-50%, 100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+
+        /* NOTIFICATION BANNER */
+        #matchNotification {
+            position: fixed; top: -100px; left: 0; right: 0; width: 100%;
+            background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            color: white; padding: 15px 20px; z-index: 99999;
+            display: flex; justify-content: center; align-items: center;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+            transition: top 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            cursor: pointer;
+        }
+        #matchNotification:hover { background: rgba(30, 41, 59, 0.95); }
     </style>
 </head>
 <body class="flex flex-col items-center min-h-screen relative" onclick="removeHighlights(event)">
@@ -314,6 +332,104 @@
 
     <div id="reportModal" class="fixed inset-0 flex items-center justify-center hidden z-50 modal-bg px-4"><div class="glass-panel rounded-2xl p-6 w-full max-w-lg relative"><button onclick="closeReportModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button><h3 class="text-2xl font-bold text-white mb-6">Report Issue</h3><label class="block text-slate-400 text-xs uppercase font-bold mb-2">Your Name</label><input id="repName" type="text" class="input-premium w-full p-3 rounded-lg mb-4"><label class="block text-slate-400 text-xs uppercase font-bold mb-2">Match Details</label><input id="repMatch" type="text" class="input-premium w-full p-3 rounded-lg mb-4 font-mono text-sm opacity-50 cursor-not-allowed" readonly><label class="block text-slate-400 text-xs uppercase font-bold mb-2">Description</label><textarea id="repDesc" class="input-premium w-full p-3 rounded-lg mb-6 h-24" placeholder="What is incorrect?"></textarea><button onclick="submitReport()" class="w-full py-3 bg-yellow-500 hover:bg-yellow-400 text-slate-900 font-bold rounded-xl transition-colors">Submit Report</button></div></div>
     <div id="compareModal" class="fixed inset-0 flex items-center justify-center hidden z-50 modal-bg px-4"><div class="glass-panel rounded-2xl p-6 w-full max-w-md relative"><button onclick="closeCompareModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button><h3 class="text-2xl font-bold text-white mb-6">Head-to-Head</h3><div class="relative mb-8"><input type="text" id="compareInput" class="input-premium w-full p-4 rounded-xl text-lg" placeholder="VS Opponent Name..." autocomplete="off"><div id="compare-suggestions-list" class="absolute w-full mt-2 bg-slate-800 rounded-xl shadow-2xl z-50"></div></div><div id="compareResults" class="hidden"><div class="flex justify-between items-center mb-8"><div class="text-center w-1/3"><div class="text-yellow-500 font-bold text-lg truncate" id="comp-p1-name"></div><div class="text-5xl font-black text-white my-2" id="comp-p1-wins">0</div><div class="text-[10px] font-bold text-slate-500 tracking-widest">WINS</div></div><div class="text-slate-600 font-black text-2xl">VS</div><div class="text-center w-1/3"><div class="text-sky-500 font-bold text-lg truncate" id="comp-p2-name"></div><div class="text-5xl font-black text-white my-2" id="comp-p2-wins">0</div><div class="text-[10px] font-bold text-slate-500 tracking-widest">WINS</div></div></div><div id="compareLog" class="max-h-48 overflow-y-auto text-sm space-y-1"></div></div></div></div>
+
+    <div id="matchNotification" onclick="window.location.href='live_matches.html'">
+        <div class="flex items-center gap-4 max-w-4xl w-full justify-center">
+            <div class="flex items-center gap-2">
+                <span class="relative flex h-3 w-3">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                </span>
+                <span class="font-bold text-red-500 text-xs tracking-widest uppercase">LIVE NOW</span>
+            </div>
+            <div id="notifText" class="text-sm md:text-base font-medium text-slate-200">
+                Match Starting...
+            </div>
+            <i class="fa-solid fa-chevron-right text-slate-500 text-xs"></i>
+        </div>
+    </div>
+
+    <script type="module">
+        // --- FIREBASE LIVE LISTENER ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, query, where, onSnapshot } 
+        from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // REPLACE WITH YOUR CONFIG FROM FIREBASE CONSOLE -> GENERAL
+        const firebaseConfig = {
+            // ... paste your config here ...
+            projectId: "gctta-stats-live"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // LIVE MATCH LOGIC
+        const today = new Date();
+        const dateString = String(today.getDate()).padStart(2, '0') + '/' + String(today.getMonth() + 1).padStart(2, '0') + '/' + today.getFullYear();
+        const q = query(collection(db, "fixtures"), where("date", "==", dateString));
+        
+        let knownLiveMatches = new Set();
+        let isFirstLoad = true;
+
+        onSnapshot(q, (snapshot) => {
+            const liveTab = document.getElementById("nav-live");
+            const mobileLiveTab = document.getElementById("b-nav-live");
+            let hasLive = false;
+
+            snapshot.forEach((doc) => {
+                const m = doc.data();
+                if (m.live_home_score !== undefined) {
+                    hasLive = true;
+                    
+                    if (!knownLiveMatches.has(doc.id)) {
+                        knownLiveMatches.add(doc.id);
+                        if (!isFirstLoad) {
+                            showNotification(m.home_team, m.away_team);
+                        }
+                    }
+                }
+            });
+
+            // PULSE THE NAV BUTTONS
+            if (hasLive) {
+                if(liveTab) {
+                    liveTab.innerHTML = `<i class="fa-solid fa-circle text-[10px] mr-2 text-red-500 animate-pulse"></i> LIVE`;
+                    liveTab.classList.add("text-red-400");
+                    liveTab.classList.add("live-active");
+                }
+                if(mobileLiveTab) {
+                    mobileLiveTab.querySelector('i').className = "fa-solid fa-circle-dot text-red-500 animate-pulse";
+                    mobileLiveTab.querySelector('span').innerText = "LIVE";
+                    mobileLiveTab.classList.add("live-active");
+                }
+            } else {
+                if(liveTab) {
+                    liveTab.innerHTML = `<i class="fa-solid fa-trophy mr-2"></i> Global`;
+                    liveTab.classList.remove("text-red-400");
+                    liveTab.classList.remove("live-active");
+                }
+                if(mobileLiveTab) {
+                    mobileLiveTab.querySelector('i').className = "fa-solid fa-trophy";
+                    mobileLiveTab.querySelector('span').innerText = "Global";
+                    mobileLiveTab.classList.remove("live-active");
+                }
+            }
+            isFirstLoad = false;
+        });
+
+        function showNotification(p1, p2) {
+            const banner = document.getElementById("matchNotification");
+            const text = document.getElementById("notifText");
+            text.innerHTML = `<span class="text-white font-bold">${p1}</span> vs <span class="text-white font-bold">${p2}</span>`;
+            
+            banner.style.top = "0";
+            
+            setTimeout(() => {
+                banner.style.top = "-100px";
+            }, 6000);
+        }
+    </script>
 
     <script>
         let activeHoliday = 'normal';
@@ -578,7 +694,7 @@
                     <div class="text-center text-green-400 font-black font-mono text-base">${r.wins}</div>
                     <div class="text-center text-slate-500 font-mono text-xs">${r.win_rate}%</div>
                 `; 
-                container.appendChild(row);
+                containerElement.appendChild(row);
             });
         }
         
