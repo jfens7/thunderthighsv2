@@ -123,7 +123,13 @@ class ThunderData:
             try:
                 app = firebase_admin.get_app()
             except ValueError:
-                cred = credentials.Certificate('firebase_credentials.json')
+                # Try to find the file in root or backend
+                cred_path = 'firebase_credentials.json'
+                if not os.path.exists(cred_path):
+                    if os.path.exists('backend/firebase_credentials.json'):
+                        cred_path = 'backend/firebase_credentials.json'
+                
+                cred = credentials.Certificate(cred_path)
                 firebase_admin.initialize_app(cred)
             
             self.db = firestore.client()
@@ -432,9 +438,13 @@ class ThunderData:
                     p1 = d.get('home_players', ['Unknown'])[0]
                     p2 = d.get('away_players', ['Unknown'])[0]
                     
+                    # FIXED: Don't force 'week' to be "Live"
+                    # Use the actual week from the database, or "Unknown"
+                    
                     raw_match_queue.append({
                         'p1': p1, 'p2': p2, 's1': s1, 's2': s2,
-                        'date': parsed_date, 'season': season_name, 'week': "Live",
+                        'date': parsed_date, 'season': season_name, 
+                        'week': d.get('week', 'Unknown'), 
                         'div': d.get('division', 'Unknown'), 
                         'p1_fill': False, 'p2_fill': False,
                         'game_history': d.get('game_scores_history', 'Rich Data') 

@@ -1,4 +1,13 @@
-venv/
+# Ignore all JSON credential files anywhere in the project
+**/firebase_credentials.json
+**/credentials.json
+firebase_credentials.json
 credentials.json
-__pycache__/firebase_key123.json
-firebase_key123.json
+
+# Python artifacts
+**/__pycache__/
+*.pyc
+
+# Virtual Environment
+venv/
+.env

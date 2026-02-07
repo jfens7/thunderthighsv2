@@ -5,7 +5,7 @@ import datetime
 
 # --- CONFIG ---
 SHEET_NAME = "master-sheet"
-CREDENTIALS_FILE = "firebase_key123.json"
+CREDENTIALS_FILE = "firebase_credentials.json"
 
 # --- CONNECT ---
 # 1. Connect to Sheets
