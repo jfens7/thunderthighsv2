@@ -1,0 +1,13 @@
+<div id="tab-week" class="w-full max-w-6xl px-4 hidden relative z-10">
+    <div class="glass-panel rounded-2xl p-4 md:p-8 shadow-2xl">
+        <div class="flex flex-col md:flex-row justify-between items-end mb-8 border-b border-white/10 pb-6 gap-4">
+            <div><h2 class="text-2xl md:text-3xl font-bold text-white">Weekly Results</h2><p class="text-sm text-slate-400 mt-1">Select a week to view match breakdown.</p></div>
+            <div class="flex gap-2 w-full md:w-auto overflow-x-auto">
+                <select id="resSeason" class="input-premium p-2 rounded-lg text-sm font-bold flex-1" onchange="loadResultsSheet()"></select>
+                <select id="resWeek" class="input-premium p-2 rounded-lg text-sm font-bold flex-1" onchange="loadResultsSheet()"><script>for(let i=1; i<=25; i++) document.write(`<option value="${i}">Week ${i}</option>`);</script></select>
+                <select id="resDiv" class="input-premium p-2 rounded-lg text-sm font-bold flex-1" onchange="filterResultsSheet()"><option value="All">All Divs</option></select>
+            </div>
+        </div>
+        <div id="resultsSheetContent" class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4"><div class="text-slate-500 col-span-1 md:col-span-2 text-center py-20 bg-black/20 rounded-2xl border border-white/5 border-dashed">Select a week to load matches.</div></div>
+    </div>
+</div>

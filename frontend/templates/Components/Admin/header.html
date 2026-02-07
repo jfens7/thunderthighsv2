@@ -1,0 +1,17 @@
+<div class="w-full bg-slate-900 border-b border-white/10 p-4 flex justify-between items-center sticky top-0 z-50">
+    <div class="flex items-center gap-3">
+        <i class="fa-solid fa-bolt text-yellow-500 text-2xl"></i>
+        <h1 class="text-xl font-black italic tracking-wider text-white">THUNDER <span class="text-yellow-500">CONTROL</span></h1>
+    </div>
+    <div class="flex gap-3">
+        <button onclick="reloadData()" id="reloadBtn" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-2">
+            <i class="fa-solid fa-database"></i> Reload Data
+        </button>
+        
+        <button onclick="syncToSheets()" id="syncBtn" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-2">
+            <i class="fa-solid fa-rotate"></i> Sync to Sheets
+        </button>
+        
+        <a href="/" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors">Exit</a>
+    </div>
+</div>

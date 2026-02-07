@@ -1,5 +1,7 @@
 import gspread
 from google.oauth2.service_account import Credentials
+import firebase_admin
+from firebase_admin import credentials, firestore
 import datetime
 import re
 import os
@@ -79,6 +81,8 @@ class ThunderData:
         self.scopes = ["https://www.googleapis.com/auth/spreadsheets"]
         self.client = None
         self.sheet_results = None
+        self.db = None # Firebase DB
+        
         self.sky_engine = SkyEngine() if SkyEngine else None
         
         self.rating_engine = RatingEngine()
@@ -92,16 +96,17 @@ class ThunderData:
         self.alias_map = {} 
         
         self._authenticate()
-        if self.sheet_results: self.refresh_data()
+        if self.sheet_results or self.db: self.refresh_data()
 
     def _authenticate(self):
+        # 1. Google Sheets Auth
         try:
             creds_json = os.environ.get("GOOGLE_CREDS_JSON")
             if creds_json:
                 info = json.loads(creds_json)
                 self.creds = Credentials.from_service_account_info(info, scopes=self.scopes)
             else:
-                paths = ["credentials.json", "backend/credentials.json", "gold-coast-table-tennis-firebase-adminsdk.json"]
+                paths = ["credentials.json", "backend/credentials.json"]
                 found = next((p for p in paths if os.path.exists(p)), None)
                 if found: self.creds = Credentials.from_service_account_file(found, scopes=self.scopes)
                 else: self.creds = None
@@ -111,7 +116,21 @@ class ThunderData:
                 self.sheet_results = self.client.open_by_key(RESULTS_SPREADSHEET_ID)
                 logger.info("✅ Connected to Google Sheets")
         except Exception as e:
-            logger.error(f"❌ Auth Error: {e}")
+            logger.error(f"❌ Google Sheets Auth Error: {e}")
+
+        # 2. Firebase Auth
+        try:
+            try:
+                app = firebase_admin.get_app()
+            except ValueError:
+                cred = credentials.Certificate('firebase_credentials.json')
+                firebase_admin.initialize_app(cred)
+            
+            self.db = firestore.client()
+            logger.info("🔥 Connected to Firebase")
+        except Exception as e:
+            logger.warning(f"⚠️ Firebase Connection Failed: {e}")
+            self.db = None
 
     def get_sky_data(self, lat=None, lon=None):
         if self.sky_engine: return self.sky_engine.get_environment_data(lat, lon)
@@ -124,21 +143,12 @@ class ThunderData:
             return self.alias_map[clean.lower()]
         return clean.title()
 
-    # --- UPDATED FUZZY MATCHER (FIXES HIDDEN SPACES) ---
     def _get_val(self, row, keys, default=''):
-        # 1. Fast exact match
-        for k in keys:
-            if k in row: return row[k]
-        
-        # 2. Fuzzy match (ignore case and spaces)
-        # Create a map: { "name1": "Name 1 ", "sets1": "Sets  1" }
         row_keys_norm = {k.strip().lower(): k for k in row.keys()}
-        
         for k in keys:
             norm_k = k.strip().lower()
             if norm_k in row_keys_norm:
                 return row[row_keys_norm[norm_k]]
-                
         return default
 
     def _parse_date(self, date_str):
@@ -197,6 +207,7 @@ class ThunderData:
             logger.warning(f"⚠️ Could not load 'ratings Origin': {e}")
 
     def _save_updated_ratings(self):
+        if not self.sheet_results: return
         try:
             try: ws = self.sheet_results.worksheet("ratings updated")
             except: ws = self.sheet_results.add_worksheet(title="ratings updated", rows=1000, cols=5)
@@ -211,6 +222,7 @@ class ThunderData:
             logger.error(f"❌ Failed to save ratings: {e}")
 
     def _update_master_roster(self):
+        if not self.sheet_results: return
         try:
             self.player_ids = {} 
             try: ws = self.sheet_results.worksheet("Players")
@@ -259,39 +271,6 @@ class ThunderData:
         except Exception as e:
             logger.error(f"❌ Master Roster Error: {e}")
 
-    def get_potential_duplicates(self):
-        seen = {}
-        dupes = []
-        try:
-            ws = self.sheet_results.worksheet("Players")
-            names = [r['Player Name'] for r in ws.get_all_records() if r['Player Name']]
-            for name in names:
-                key = name.lower().replace(" ", "")
-                if key in seen: dupes.append({'name1': seen[key], 'name2': name})
-                else: seen[key] = name
-            return dupes
-        except: return []
-
-    def rename_player_roster(self, old_name, new_name):
-        try:
-            ws = self.sheet_results.worksheet("Players")
-            cell = ws.find(old_name)
-            if cell:
-                ws.update_cell(cell.row, cell.col, new_name)
-                self.refresh_data()
-                return True
-            return False
-        except: return False
-
-    def add_alias(self, bad_name, good_name):
-        try:
-            ws = self.sheet_results.worksheet("Aliases")
-            ws.append_row([bad_name, good_name])
-            self.refresh_data() 
-            return True
-        except: return False
-
-    # --- SAFE LOADER TO FIX DUPLICATE HEADERS ---
     def _get_safe_records(self, worksheet):
         try:
             all_values = worksheet.get_all_values()
@@ -329,6 +308,38 @@ class ThunderData:
             logger.error(f"Safe Read Error: {e}")
             return []
 
+    def _deduplicate_matches(self, matches):
+        """
+        Prioritizes Live Matches (Firebase/iPad) over Manual Entries (Paper).
+        Key: Date + Player A + Player B (sorted)
+        """
+        unique_map = {}
+        for m in matches:
+            p1 = m['p1'].lower().strip()
+            p2 = m['p2'].lower().strip()
+            if not p1 or not p2: continue
+            
+            players = sorted([p1, p2])
+            date_key = m['date'].strftime("%Y%m%d") if m['date'] else "nodate"
+            match_key = f"{date_key}_{players[0]}_{players[1]}"
+
+            is_rich_data = len(str(m.get('game_history', ''))) > 5 
+
+            if match_key not in unique_map:
+                unique_map[match_key] = m
+            else:
+                existing = unique_map[match_key]
+                existing_is_rich = len(str(existing.get('game_history', ''))) > 5
+                
+                if is_rich_data and not existing_is_rich:
+                    # Live Overwrites Paper
+                    unique_map[match_key] = m
+                elif is_rich_data and existing_is_rich:
+                    # Both are Live? Keep the latest? Or just ignore.
+                    pass 
+        
+        return list(unique_map.values())
+
     def refresh_data(self):
         logger.info("⚡️ Refreshing data...")
         self.all_players = {}
@@ -338,109 +349,140 @@ class ThunderData:
         self.weekly_matches = {} 
         self.rating_engine = RatingEngine() 
         
-        self._load_calculated_dates()
-        self._load_aliases()
-        self._load_seed_ratings()
+        if self.sheet_results:
+            self._load_calculated_dates()
+            self._load_aliases()
+            self._load_seed_ratings()
 
-        match_queue = [] 
+        raw_match_queue = [] 
 
-        if not self.sheet_results: return
-
-        for worksheet in self.sheet_results.worksheets():
-            title = worksheet.title
-            if "Season:" not in title: continue
-            
-            season_name = title.replace("Season:", "").strip()
-            self.seasons_list.append(season_name)
-            self.season_stats[season_name] = {}
-            if season_name not in self.weekly_matches: self.weekly_matches[season_name] = {}
-            
-            try:
-                # Use Safe Loader Here
-                records = self._get_safe_records(worksheet)
+        # 1. LOAD FROM GOOGLE SHEETS (Legacy / Paper)
+        if self.sheet_results:
+            for worksheet in self.sheet_results.worksheets():
+                title = worksheet.title
+                if "Season:" not in title: continue
                 
-                for row in records:
-                    fmt = str(self._get_val(row, ['Format', 'Match Format', 'Type'])).lower().strip()
-                    if "doubles" in fmt: continue 
+                season_name = title.replace("Season:", "").strip()
+                self.seasons_list.append(season_name)
+                if season_name not in self.season_stats: self.season_stats[season_name] = {}
+                if season_name not in self.weekly_matches: self.weekly_matches[season_name] = {}
+                
+                try:
+                    records = self._get_safe_records(worksheet)
+                    for row in records:
+                        p1 = self._clean_name(self._get_val(row, ['Name 1', 'Player 1', 'Name']))
+                        p2 = self._clean_name(self._get_val(row, ['Name 2', 'Player 2']))
+                        if not p1 or not p2: continue
+                        
+                        div = str(self._get_val(row, ['Division', 'Div'], 'Unknown')).strip()
+                        if div: self.divisions_list.add(div)
+                        
+                        p1_fill = "S" in str(self._get_val(row, ['PS 1', 'Pos 1', 'Pos'])).upper()
+                        p2_fill = "S" in str(self._get_val(row, ['PS 2', 'Pos 2'])).upper()
+
+                        round_val = self._get_val(row, ['Round', 'Rd', 'Week'])
+                        week_num = "Unknown"
+                        if round_val:
+                            try: week_num = int(re.search(r'\d+', str(round_val)).group())
+                            except: pass
+                        
+                        raw_date = self._get_val(row, ['Date', 'Match Date'])
+                        parsed_date = self._parse_date(raw_date)
+                        if not parsed_date and week_num != "Unknown":
+                            parsed_date = self.date_lookup.get(f"{season_name}|{div}|{week_num}")
+                        
+                        if not parsed_date: parsed_date = datetime.date(1900, 1, 1)
+
+                        try:
+                            s1 = int(self._get_val(row, ['Sets 1', 'S1', 'Sets']))
+                            s2 = int(self._get_val(row, ['Sets 2', 'S2']))
+                        except: continue
+
+                        raw_match_queue.append({
+                            'p1': p1, 'p2': p2, 's1': s1, 's2': s2, 
+                            'date': parsed_date, 'season': season_name, 'week': week_num,
+                            'div': div, 'p1_fill': p1_fill, 'p2_fill': p2_fill,
+                            'game_history': '' # Paper has no history
+                        })
+
+                except Exception as e: logger.error(f"❌ Error loading {title}: {e}")
+
+        # 2. LOAD FROM FIREBASE (Live / Rich Data)
+        if self.db:
+            try:
+                # READING FROM Live_match_results
+                # This contains ONLY iPad matches
+                docs = self.db.collection('Live_match_results').stream()
+                for doc in docs:
+                    d = doc.to_dict()
                     
-                    # --- FUZZY LOOKUP FOR NAMES ---
-                    # Will find 'Name 1', 'name 1 ', 'Name 1', etc.
-                    p1 = self._clean_name(self._get_val(row, ['Name 1', 'Player 1', 'Name']))
-                    p2 = self._clean_name(self._get_val(row, ['Name 2', 'Player 2']))
+                    date_val = d.get('date')
+                    parsed_date = self._parse_date(date_val)
+                    if not parsed_date:
+                        ts = d.get('timestamp')
+                        if ts: parsed_date = ts.date()
+                        else: parsed_date = datetime.date.today()
+
+                    season_name = d.get('season', f"Season: {parsed_date.year}")
+                    if season_name not in self.season_stats: self.season_stats[season_name] = {}
                     
-                    if not p1 and not p2: continue
-                    if not p1: p1 = "Unknown"
-                    if not p2: p2 = "Unknown"
-
-                    div = str(self._get_val(row, ['Division', 'Div'], 'Unknown')).strip()
-                    if div: self.divisions_list.add(div)
+                    s1 = d.get('live_home_sets', 0)
+                    s2 = d.get('live_away_sets', 0)
                     
-                    p1_fill = "S" in str(self._get_val(row, ['PS 1', 'Pos 1', 'Pos'])).upper()
-                    p2_fill = "S" in str(self._get_val(row, ['PS 2', 'Pos 2'])).upper()
-
-                    match_date_obj = None
-                    week_num = "Unknown"
-                    round_val = self._get_val(row, ['Round', 'Rd', 'Week'])
-                    if round_val:
-                        try: week_num = int(re.search(r'\d+', str(round_val)).group())
-                        except: pass
+                    p1 = d.get('home_players', ['Unknown'])[0]
+                    p2 = d.get('away_players', ['Unknown'])[0]
                     
-                    raw_date = self._get_val(row, ['Date', 'Match Date'])
-                    parsed_row_date = self._parse_date(raw_date)
-
-                    if parsed_row_date: match_date_obj = parsed_row_date
-                    elif week_num != "Unknown":
-                        lookup = f"{season_name}|{div}|{week_num}"
-                        if lookup in self.date_lookup: match_date_obj = self.date_lookup[lookup]
+                    raw_match_queue.append({
+                        'p1': p1, 'p2': p2, 's1': s1, 's2': s2,
+                        'date': parsed_date, 'season': season_name, 'week': "Live",
+                        'div': d.get('division', 'Unknown'), 
+                        'p1_fill': False, 'p2_fill': False,
+                        'game_history': d.get('game_scores_history', 'Rich Data') 
+                    })
                     
-                    if not match_date_obj: 
-                        match_date_obj = datetime.date(1900, 1, 1)
-                        match_date_str = ""
-                    else:
-                        match_date_str = match_date_obj.strftime("%d/%m/%Y")
+            except Exception as e:
+                logger.error(f"❌ Firebase Load Error: {e}")
 
-                    s1_val = self._get_val(row, ['Sets 1', 'S1', 'Sets'])
-                    s2_val = self._get_val(row, ['Sets 2', 'S2'])
-                    try:
-                        if str(s1_val).strip() == "" or str(s2_val).strip() == "": continue
-                        p1_sets = int(s1_val); p2_sets = int(s2_val)
-                    except: continue 
+        # 3. DEDUPLICATE & PROCESS
+        # This is where we prioritize Live over Paper
+        cleaned_matches = self._deduplicate_matches(raw_match_queue)
+        logger.info(f"📚 Total Matches Loaded (After De-dupe): {len(cleaned_matches)}")
 
-                    self._update_player_stats(self.season_stats[season_name], p1, p1_sets, p2_sets, True, p2, p1_fill, div, match_date_str, week_num, season_name)
-                    self._update_player_stats(self.all_players, p1, p1_sets, p2_sets, True, p2, p1_fill, div, match_date_str, week_num, season_name)
-                    self._update_player_stats(self.season_stats[season_name], p2, p1_sets, p2_sets, False, p1, p2_fill, div, match_date_str, week_num, season_name)
-                    self._update_player_stats(self.all_players, p2, p1_sets, p2_sets, False, p1, p2_fill, div, match_date_str, week_num, season_name)
+        cleaned_matches.sort(key=lambda x: x['date'])
 
-                    match_queue.append({ 'p1': p1, 'p2': p2, 's1': p1_sets, 's2': p2_sets, 'date': match_date_obj })
-
-                    if week_num != "Unknown":
-                        w_key = str(week_num)
-                        if w_key not in self.weekly_matches[season_name]: self.weekly_matches[season_name][w_key] = []
-                        self.weekly_matches[season_name][w_key].append({'p1': p1, 'p2': p2, 'score': f"{p1_sets}-{p2_sets}", 'division': div, 'date': match_date_str})
-
-            except Exception as e: logger.error(f"❌ Error loading {title}: {e}")
-
-        logger.info(f"📚 Total Matches Loaded: {len(match_queue)}")
-
-        match_queue.sort(key=lambda x: x['date'])
-        rating_matches = [m for m in match_queue if m['date'] > RATING_START_DATE]
-        logger.info(f"🧮 Rating {len(rating_matches)} matches (Post-Christmas 2025)...")
-        
-        for m in rating_matches:
-            self.rating_engine.update_match(m['p1'], m['p2'], m['s1'], m['s2'])
+        for m in cleaned_matches:
+            if m['date'] > RATING_START_DATE:
+                self.rating_engine.update_match(m['p1'], m['p2'], m['s1'], m['s2'])
+            
+            d_str = m['date'].strftime("%d/%m/%Y")
+            self._update_player_stats(self.season_stats.get(m['season'], {}), m['p1'], m['s1'], m['s2'], True, m['p2'], m['p1_fill'], m['div'], d_str, m['week'], m['season'])
+            self._update_player_stats(self.all_players, m['p1'], m['s1'], m['s2'], True, m['p2'], m['p1_fill'], m['div'], d_str, m['week'], m['season'])
+            
+            self._update_player_stats(self.season_stats.get(m['season'], {}), m['p2'], m['s1'], m['s2'], False, m['p1'], m['p2_fill'], m['div'], d_str, m['week'], m['season'])
+            self._update_player_stats(self.all_players, m['p2'], m['s1'], m['s2'], False, m['p1'], m['p2_fill'], m['div'], d_str, m['week'], m['season'])
+            
+            if str(m['week']) != "Unknown":
+                if m['season'] not in self.weekly_matches: self.weekly_matches[m['season']] = {}
+                wk = str(m['week'])
+                if wk not in self.weekly_matches[m['season']]: self.weekly_matches[m['season']][wk] = []
+                self.weekly_matches[m['season']][wk].append({'p1': m['p1'], 'p2': m['p2'], 'score': f"{m['s1']}-{m['s2']}", 'division': m['div'], 'date': d_str})
 
         self._save_updated_ratings()
         self._update_master_roster()
 
     def _update_player_stats(self, stat_dict, player_name, p1_sets, p2_sets, is_p1, opponent, is_fillin, division, date_str, week_num, season_name):
+        if not stat_dict: return
         if player_name not in stat_dict:
             stat_dict[player_name] = {'regular': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'fillin': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'combined': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}}
+        
         buckets = [stat_dict[player_name]['combined']]
         if is_fillin: buckets.append(stat_dict[player_name]['fillin'])
         else: buckets.append(stat_dict[player_name]['regular'])
+        
         my_sets = p1_sets if is_p1 else p2_sets
         op_sets = p2_sets if is_p1 else p1_sets
         result = "Win" if my_sets > op_sets else "Loss"
+        
         for stats in buckets:
             stats['matches'] += 1; stats['sets_won'] += my_sets; stats['sets_lost'] += op_sets
             if result == "Win": stats['wins'] += 1
@@ -469,8 +511,8 @@ class ThunderData:
             if max_week and str(max_week) != "All":
                 try:
                     limit = int(max_week)
-                    reg_hist = [m for m in reg_hist if m['week'] != "Unknown" and int(m['week']) <= limit]
-                    fill_hist = [m for m in fill_hist if m['week'] != "Unknown" and int(m['week']) <= limit]
+                    reg_hist = [m for m in reg_hist if m['week'] != "Unknown" and str(m['week']).isdigit() and int(m['week']) <= limit]
+                    fill_hist = [m for m in fill_hist if m['week'] != "Unknown" and str(m['week']).isdigit() and int(m['week']) <= limit]
                 except: pass
             
             if not reg_hist and not fill_hist: continue 
@@ -512,7 +554,6 @@ class ThunderData:
         
         raw = data[player_name]
         rat = self.rating_engine.get_rating(player_name)
-        
         p_id = self.player_ids.get(player_name, "N/A")
         
         start_obj = self._parse_date(start_date) if start_date else None

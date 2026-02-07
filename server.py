@@ -4,7 +4,7 @@ import os
 import sys
 import traceback
 import logging
-from apscheduler.schedulers.background import BackgroundScheduler  # <--- NEW IMPORT
+from apscheduler.schedulers.background import BackgroundScheduler
 
 # --- PATH SETUP ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -37,10 +37,7 @@ except ImportError:
 
 app = Flask(__name__, template_folder='frontend/templates', static_folder='frontend/static')
 
-# Disable Flask default logging to clean up terminal
-log = logging.getLogger('werkzeug')
-log.setLevel(logging.ERROR)
-
+# --- DB INIT ---
 try:
     db = ThunderData()
 except Exception as e:
@@ -62,12 +59,15 @@ def auto_refresh_job():
             print(f"❌ AUTO-SCHEDULER FAILED: {e}\n")
 
 # Start the Scheduler
-if os.environ.get("WERKZEUG_RUN_MAIN") == "true": # Only run in the main process, not the reloader
-    scheduler = BackgroundScheduler()
-    # Runs at 4:00 AM on Tue, Thu, Fri
-    scheduler.add_job(auto_refresh_job, 'cron', day_of_week='tue,thu,fri', hour=4, minute=0)
-    scheduler.start()
-    print("🕒 Scheduler Active: Auto-update set for Tue, Thu, Fri at 4:00 AM.")
+if os.environ.get("WERKZEUG_RUN_MAIN") == "true": # Only run in the main process
+    try:
+        scheduler = BackgroundScheduler()
+        # Runs at 4:00 AM on Tue, Thu, Fri
+        scheduler.add_job(auto_refresh_job, 'cron', day_of_week='tue,thu,fri', hour=4, minute=0)
+        scheduler.start()
+        print("🕒 Scheduler Active: Auto-update set for Tue, Thu, Fri at 4:00 AM.")
+    except Exception as e:
+        print(f"⚠️ Scheduler Error: {e}")
 
 # --- HELPER: COLUMN MAPPER ---
 DIV_COLUMN_MAP = {

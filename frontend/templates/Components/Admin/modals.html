@@ -1,0 +1,41 @@
+<div id="editModal" class="fixed inset-0 bg-black/80 hidden z-[100] flex items-center justify-center p-4 modal-animate">
+    <div class="glass-panel w-full max-w-lg rounded-2xl p-6 relative bg-slate-900">
+        <button onclick="closeEditModal()" class="absolute top-4 right-4 text-slate-500 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+        
+        <h3 class="text-xl font-bold text-white mb-6">Edit Result</h3>
+        <input type="hidden" id="editMatchId">
+
+        <div class="grid grid-cols-2 gap-4 mb-4">
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Home Player(s)</label>
+                <input type="text" id="editHomeName" class="input-dark text-lg font-bold text-white">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Away Player(s)</label>
+                <input type="text" id="editAwayName" class="input-dark text-lg font-bold text-white">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Home Sets</label>
+                <input type="number" id="editHomeScore" class="input-dark text-3xl font-black text-center text-yellow-500">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Away Sets</label>
+                <input type="number" id="editAwayScore" class="input-dark text-3xl font-black text-center text-sky-500">
+            </div>
+        </div>
+
+        <div class="mb-6">
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Game Scores (Points)</label>
+            <input type="text" id="editGamePoints" placeholder="e.g. 11-9, 5-11, 11-8..." class="input-dark text-sm font-mono text-slate-300">
+            <div class="text-[10px] text-slate-600 mt-1">Edit the specific points for record keeping.</div>
+        </div>
+
+        <div class="flex gap-3">
+            <button onclick="saveEdit()" class="flex-1 bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-bold transition-colors">Save Changes</button>
+            <button onclick="closeEditModal()" class="px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-white border border-slate-700 hover:bg-slate-800 transition-colors">Cancel</button>
+        </div>
+    </div>
+</div>

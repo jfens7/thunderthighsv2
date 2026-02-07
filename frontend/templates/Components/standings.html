@@ -1,0 +1,29 @@
+<div id="tab-sheets" class="w-full max-w-6xl px-4 hidden relative z-10">
+    <div class="glass-panel rounded-2xl p-4 md:p-6 shadow-2xl relative">
+        <div class="absolute top-0 right-0 w-64 h-64 bg-yellow-500/10 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
+        <div class="flex flex-col xl:flex-row justify-between items-center mb-6 gap-6 relative z-10">
+            <div class="text-center xl:text-left"><h2 class="text-2xl md:text-3xl font-bold text-white">Division Standings</h2><p class="text-sm text-slate-400 mt-1">Current season performance</p></div>
+            <div class="flex flex-col items-end gap-3 w-full xl:w-auto">
+                <div class="flex justify-between w-full xl:justify-end items-center gap-4 bg-black/40 p-2 rounded-xl border border-white/10">
+                    <label class="flex items-center gap-2 cursor-pointer px-2"><input type="checkbox" id="toggleShowFillIns" onchange="loadDivisionLeaderboard()" class="w-4 h-4 rounded bg-slate-800 border-slate-600 text-yellow-500 focus:ring-yellow-500"><span class="text-xs font-bold text-slate-300">Show Fill-ins</span></label>
+                    <div id="fillInModeContainer" class="hidden flex items-center gap-3 border-l border-white/10 pl-4"><label class="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="fiMode" value="separate" checked onchange="loadDivisionLeaderboard()" class="text-yellow-500"><span class="text-xs text-slate-300">Separate</span></label><label class="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="fiMode" value="combine" onchange="loadDivisionLeaderboard()" class="text-yellow-500"><span class="text-xs text-slate-300">Combine</span></label></div>
+                </div>
+                <div class="grid grid-cols-2 md:flex gap-2 w-full">
+                    <div class="relative group col-span-2 md:col-span-1">
+                        <input type="text" id="divSearch" placeholder="Search..." class="w-full bg-black/40 border border-white/10 p-2 pl-9 rounded-lg text-white text-sm focus:border-yellow-500 focus:outline-none">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-500 group-focus-within:text-yellow-500"></i>
+                        <div id="divSearchSuggestions" class="table-search-list"></div>
+                    </div>
+                    <select id="boardSort" class="input-premium p-2 rounded-lg text-sm font-bold" onchange="loadDivisionLeaderboard()"><option value="rating">Sort: Rating</option><option value="wins" selected>Sort: Wins</option><option value="percent">Sort: Win %</option><option value="losses">Sort: Least Loss</option></select>
+                    <select id="boardSeason" class="input-premium p-2 rounded-lg text-sm" onchange="loadDivisionLeaderboard()"></select>
+                    <select id="boardDiv" class="input-premium p-2 rounded-lg text-sm" onchange="loadDivisionLeaderboard()"></select>
+                    <select id="boardWeek" class="input-premium p-2 rounded-lg text-sm col-span-2 md:col-span-1" onchange="loadDivisionLeaderboard()"><option value="Latest">Through Latest</option><script>for(let i=1; i<=25; i++) document.write(`<option value="${i}">Through Week ${i}</option>`);</script></select>
+                </div>
+            </div>
+        </div>
+        <div class="sticky top-[80px] md:top-[135px] z-30 bg-slate-900/95 backdrop-blur shadow-xl py-3 rounded-xl grid grid-cols-7 text-[10px] md:text-xs text-slate-500 mb-3 px-2 md:px-4 uppercase font-bold tracking-widest border border-white/5">
+            <div class="col-span-2">Player</div><div class="text-center text-yellow-600">Rating</div><div class="text-center">Matches</div><div class="text-center">Wins</div><div class="text-center">Losses</div><div class="text-center">Win %</div>
+        </div>
+        <div id="leaderboardContent" class="space-y-2 min-h-[200px]"><div class="text-center text-slate-600 py-10">Select a season.</div></div>
+    </div>
+</div>

@@ -1,0 +1,24 @@
+<div id="tab-global" class="w-full max-w-6xl px-4 hidden relative z-10">
+    <div class="glass-panel rounded-2xl p-4 md:p-6 shadow-2xl">
+        <div class="flex flex-col xl:flex-row justify-between items-center mb-8 gap-4">
+            <div class="text-center xl:text-left">
+                <h2 class="text-2xl md:text-3xl font-bold text-white flex items-center justify-center xl:justify-start gap-3"><i class="fa-solid fa-earth-oceania text-sky-500"></i> Global Rankings</h2>
+                <p id="globalBadge" class="text-xs text-yellow-500 font-bold uppercase tracking-wide mt-2 bg-yellow-500/10 inline-block px-2 py-1 rounded border border-yellow-500/20 hidden"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Based on Total Wins</p>
+            </div>
+            <div class="flex flex-wrap gap-2 items-center justify-center w-full xl:w-auto">
+                <div class="relative group w-full md:w-auto">
+                    <input type="text" id="liveSearch" placeholder="Search..." class="w-full bg-black/40 border border-white/10 p-2 pl-9 rounded-lg text-white text-sm focus:border-sky-500 focus:outline-none">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-500 group-focus-within:text-sky-500"></i>
+                    <div id="liveSearchSuggestions" class="table-search-list"></div>
+                </div>
+                <input type="number" id="filterMinGames" placeholder="Min Games" class="input-premium p-2 rounded-lg text-sm w-24" onchange="loadGlobalStandings()">
+                <select id="globalSort" class="input-premium p-2 rounded-lg text-sm font-bold text-sky-400 border-sky-900/50" onchange="loadGlobalStandings()"><option value="rating_desc" selected>Highest Rating</option><option value="wins_desc">Most Wins</option><option value="percent_desc">Highest %</option><option value="losses_asc">Least Losses</option></select>
+                <select id="globalSeason" class="input-premium p-2 rounded-lg text-sm" onchange="loadGlobalStandings()"></select>
+            </div>
+        </div>
+        <div class="sticky top-[80px] md:top-[135px] z-30 bg-slate-900/95 backdrop-blur shadow-xl py-3 rounded-xl grid grid-cols-8 text-[10px] md:text-xs text-slate-500 mb-3 px-2 md:px-4 uppercase font-bold tracking-widest border border-white/5">
+            <div class="col-span-2">Player</div><div class="text-center">Division</div> <div class="text-center text-yellow-600">Rating</div><div class="text-center">Matches</div><div class="text-center">Wins</div><div class="text-center">Losses</div><div class="text-center">Win %</div>
+        </div>
+        <div id="globalContent" class="space-y-2 min-h-[200px]"><div class="text-center text-slate-600 py-10">Select a season.</div></div>
+    </div>
+</div>

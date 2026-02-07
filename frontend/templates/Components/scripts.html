@@ -1,0 +1,228 @@
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    const firebaseConfig = { apiKey: "AIzaSyDq05wFsKLHtt8G0Z5yLOG9pIk9UX24S4o", authDomain: "gctta-stats-live.firebaseapp.com", projectId: "gctta-stats-live", storageBucket: "gctta-stats-live.firebasestorage.app", messagingSenderId: "1070856258556", appId: "1:1070856258556:web:be438e04c1941abc3c6879" };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const today = new Date();
+    const dateString = String(today.getDate()).padStart(2, '0') + '/' + String(today.getMonth() + 1).padStart(2, '0') + '/' + today.getFullYear();
+    const q = query(collection(db, "fixtures"), where("date", "==", dateString));
+    
+    let knownLiveMatches = new Set();
+    let tickerIntervals = {};
+
+    onSnapshot(q, (snapshot) => {
+        const navLive = document.getElementById("nav-live-center");
+        const navMobileLive = document.getElementById("b-nav-live-center");
+        const matchesContainer = document.getElementById("liveMatchesContainer");
+        const scheduledContainer = document.getElementById("scheduledContainer");
+        const scheduledList = document.getElementById("scheduledList");
+        let liveHTML = "";
+        let scheduledHTML = "";
+        let hasLive = false;
+        let hasScheduled = false;
+
+        snapshot.forEach((doc) => {
+            const m = doc.data();
+            let homeName = m.home_team;
+            let awayName = m.away_team;
+            if(m.current_home_players && m.current_home_players.length > 0) homeName = m.current_home_players.join(" / ");
+            if(m.current_away_players && m.current_away_players.length > 0) awayName = m.current_away_players.join(" / ");
+
+            if (m.live_home_score !== undefined) {
+                hasLive = true;
+                if (!knownLiveMatches.has(doc.id)) {
+                    knownLiveMatches.add(doc.id);
+                    showNotification(homeName, awayName);
+                    startTicker(homeName, awayName, doc.id);
+                }
+                
+                const bestOfBadge = m.best_of ? `<span class="bg-blue-900/50 text-blue-300 text-[9px] px-2 py-0.5 rounded border border-blue-500/30 uppercase font-bold tracking-wider">Best of ${m.best_of}</span>` : '';
+                let statusText = "Match in Progress";
+                if (m.live_home_sets > 0 || m.live_away_sets > 0) { statusText = `Set Score: ${m.live_home_sets}-${m.live_away_sets}`; } 
+                else if (m.match_status === "Setup") { statusText = "Warmup"; }
+
+                let historyHTML = "";
+                if (m.game_scores_history) {
+                    const scores = m.game_scores_history.split(',');
+                    historyHTML = `<div class="flex justify-center gap-2 mt-3 flex-wrap border-t border-white/5 pt-2">`;
+                    scores.forEach(s => { if(s.trim()) historyHTML += `<span class="text-[10px] font-mono font-bold text-slate-400 bg-white/5 border border-white/10 px-2 py-1 rounded shadow-sm">${s.trim()}</span>`; });
+                    historyHTML += `</div>`;
+                }
+
+                const serverName = m.current_server || '-';
+                const serverDisplay = serverName === '-' ? '-' : `<span class="cursor-pointer hover:text-white hover:underline transition-all" onclick="window.loadStats('${serverName}')">${serverName}</span>`;
+
+                liveHTML += `<div class="live-match-card" id="card-${doc.id}"><div class="flex justify-between w-full items-center mb-4"><div class="text-xs font-bold text-slate-500 uppercase tracking-widest">Table ${m.table}</div>${bestOfBadge}</div><div class="flex items-center justify-between w-full px-2"><div class="text-center w-5/12"><div class="text-lg font-bold text-white mb-1 leading-tight truncate cursor-pointer hover:text-yellow-500 transition-colors" onclick="window.loadStats('${homeName}')">${homeName}</div><div class="text-5xl font-black text-white font-mono score-box">${m.live_home_score}</div></div><div class="text-center w-2/12 flex flex-col justify-center"><div class="text-[10px] text-slate-500 font-bold uppercase mb-1">SETS</div><div class="text-xl font-bold text-yellow-500 font-mono bg-yellow-500/10 rounded px-2 py-1 border border-yellow-500/20">${m.live_home_sets}-${m.live_away_sets}</div></div><div class="text-center w-5/12"><div class="text-lg font-bold text-white mb-1 leading-tight truncate cursor-pointer hover:text-yellow-500 transition-colors" onclick="window.loadStats('${awayName}')">${awayName}</div><div class="text-5xl font-black text-white font-mono score-box">${m.live_away_score}</div></div></div>${historyHTML}<div class="text-xs text-slate-500 font-mono mb-2 mt-4 font-bold tracking-widest">SERVER: <span class="text-yellow-500">${serverDisplay}</span></div><div class="stats-ticker" id="ticker-${doc.id}">Loading Player Stats...</div></div>`;
+            } else {
+                hasScheduled = true;
+                scheduledHTML += `<div class="bg-slate-800/50 p-3 rounded-lg border border-white/5 flex justify-between items-center"><div><div class="text-[10px] text-slate-500 font-bold uppercase">Table ${m.table} • ${m.division}</div><div class="text-sm font-bold text-white">${m.home_team} vs ${m.away_team}</div></div><div class="text-xs text-slate-400 bg-slate-900 px-2 py-1 rounded">Pending</div></div>`;
+            }
+        });
+
+        if (hasLive) { navLive.style.display = "block"; navMobileLive.style.display = "flex"; matchesContainer.innerHTML = liveHTML; scheduledContainer.style.display = "none"; }
+        else { navLive.style.display = "none"; navMobileLive.style.display = "none"; matchesContainer.innerHTML = "<div class='text-center text-slate-500 py-10'>No matches currently live.</div>"; if(hasScheduled) { scheduledContainer.style.display = "block"; scheduledList.innerHTML = scheduledHTML; } }
+    });
+
+    function showNotification(p1, p2) { const banner = document.getElementById("matchNotification"); const text = document.getElementById("notifText"); text.innerHTML = `<span class="text-white font-bold">${p1}</span> vs <span class="text-white font-bold">${p2}</span>`; banner.style.top = "0"; setTimeout(() => { banner.style.top = "-100px"; }, 6000); }
+    
+    async function startTicker(p1, p2, cardId) {
+        if (tickerIntervals[cardId]) return;
+        setTimeout(async () => {
+            let stats = [];
+            const getStatLine = async (name) => {
+                try {
+                    const res = await fetch(`/api/stats/${encodeURIComponent(name)}?season=Career&division=All`);
+                    const data = await res.json();
+                    if (data.error) return `${name}: New Player`;
+                    const wr = data.combined.matches > 0 ? ((data.combined.wins / data.combined.matches)*100).toFixed(0) : 0;
+                    return `${name}: ${data.rating} Rating • ${wr}% Win Rate`;
+                } catch(e) { return `${name}: Stats Unavailable`; }
+            };
+            const s1 = await getStatLine(p1);
+            const s2 = await getStatLine(p2);
+            stats.push(s1); stats.push(s2); stats.push(`HEAD TO HEAD: Loading...`);
+            let index = 0;
+            tickerIntervals[cardId] = setInterval(() => {
+                const el = document.getElementById(`ticker-${cardId}`);
+                if(el) { el.style.opacity = 0; setTimeout(() => { el.innerHTML = stats[index % stats.length]; el.style.opacity = 1; index++; }, 500); } 
+                else { clearInterval(tickerIntervals[cardId]); delete tickerIntervals[cardId]; }
+            }, 5000);
+        }, 1000);
+    }
+    window.switchTab = (tabId) => { window.switchTabGlobal(tabId); };
+</script>
+
+<script>
+    // GLOBAL VARIABLES
+    window.allPlayers = {}; 
+    let currentSeason = "Career", currentDivision = "All", currentWeek = "All";
+    let currentPlayerStats = null, currentMode = "regular", historyExpanded = false;
+    let requestCache = {}; let playerActivityMap = {}; let weekMatchesCache = [];
+
+    // --- VISUAL EFFECTS (Restored!) ---
+    function generateStars() { const container = document.getElementById('starContainer'); if(!container) return; container.innerHTML = ''; const starCount = 80; for (let i = 0; i < starCount; i++) { const star = document.createElement('div'); const sizeClass = Math.random() < 0.6 ? 's-small' : (Math.random() < 0.9 ? 's-medium' : 's-large'); star.className = `star ${sizeClass}`; star.style.top = `${Math.random() * 100}%`; star.style.left = `${Math.random() * 100}%`; star.style.setProperty('--duration', `${2 + Math.random() * 3}s`); star.style.setProperty('--delay', `${Math.random() * 2}s`); container.appendChild(star); } }
+    function createShootingStar() { const container = document.getElementById('shootingStarContainer'); if(!container) return; const star = document.createElement('div'); star.className = 'shooting-star-wrapper'; const startY = Math.random() * (window.innerHeight / 2); const endX = window.innerWidth + 200; const endY = startY + (Math.random() * 200 - 100); const angle = Math.atan2(endY - startY, endX + 200) * (180 / Math.PI); star.style.top = `${startY}px`; star.style.left = '-200px'; star.style.setProperty('--endX', `${endX + 200}px`); star.style.setProperty('--endY', `${endY - startY}px`); star.style.setProperty('--angle', `${angle}deg`); const head = document.createElement('div'); head.className = 'shooting-star-head'; star.appendChild(head); container.appendChild(star); setTimeout(() => star.remove(), 12000); }
+
+    window.onload = async () => {
+        generateStars(); setInterval(createShootingStar, 15000);
+        try {
+            const [pRes, sRes, dRes] = await Promise.all([fetch('/api/players'), fetch('/api/seasons'), fetch('/api/divisions')]);
+            const pData = await pRes.json();
+            window.allPlayersRaw = pData;
+            const seasons = await sRes.json();
+            const divisions = await dRes.json();
+            const selects = { season: [document.getElementById('seasonSelect'), document.getElementById('boardSeason'), document.getElementById('resSeason'), document.getElementById('globalSeason')], division: [document.getElementById('divisionSelect'), document.getElementById('boardDiv'), document.getElementById('resDiv')] };
+            selects.season.forEach(el => { if(el) el.innerHTML = ''; }); selects.division.forEach(el => { if(el) el.innerHTML = ''; });
+            seasons.forEach(s => selects.season.forEach(el => { if(el) { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; el.appendChild(opt); } }));
+            divisions.forEach(d => selects.division.forEach(el => { if(el) { let opt = document.createElement('option'); opt.value = d; opt.innerText = d; el.appendChild(opt); } }));
+            if(seasons.length > 0) { const latest = seasons[seasons.length - 1]; currentSeason = latest; selects.season.forEach(el => { if(el) el.value = latest; }); initResultsDefaults(latest); }
+            currentDivision = "All"; if(divisions.length > 0 && document.getElementById('boardDiv')) document.getElementById('boardDiv').value = divisions[0];
+            document.getElementById('seasonSelect').addEventListener('change', (e) => { currentSeason = e.target.value; updateDivisionOptions(currentSeason); const d = document.getElementById('divisionSelect'); if(d.selectedOptions[0].disabled) d.value="All"; reloadStats(false); });
+            document.getElementById('divisionSelect').addEventListener('change', (e) => { currentDivision = e.target.value; reloadStats(false); });
+            document.getElementById('weekSelect').addEventListener('change', (e) => { currentWeek = e.target.value; reloadStats(false); });
+            setupTableSearch('divSearch', 'divSearchSuggestions', 'leaderboardContent'); setupTableSearch('liveSearch', 'liveSearchSuggestions', 'globalContent');
+            setupSearch('playerSearch', 'suggestions-list', (name) => loadStats(name)); setupSearch('compareInput', 'compare-suggestions-list', (name) => loadComparison(name));
+        } catch(e) { console.error(e); document.getElementById('apiErrorBanner').style.display = 'block'; }
+    };
+
+    // --- GLOBAL TAB SWITCHER ---
+    window.switchTabGlobal = (tabId) => { 
+        // 1. Hide Standard Tabs
+        ['home', 'week', 'sheets', 'global', 'live-center', 'rules'].forEach(t => { 
+            const el = document.getElementById(`tab-${t}`); 
+            if(el) el.classList.add('hidden'); 
+            const nav = document.getElementById(`nav-${t}`); 
+            if(nav) nav.classList.remove('active'); 
+            const bnav = document.getElementById(`b-nav-${t}`); 
+            if(bnav) bnav.classList.remove('active'); 
+        }); 
+        
+        // 2. Hide Stats Profile
+        const stats = document.getElementById('statsContainer');
+        if(stats) stats.classList.add('hidden');
+
+        // 3. Show Target
+        if (tabId === 'statsContainer') {
+            stats.classList.remove('hidden');
+            stats.classList.add('animate-fade-in');
+        } else {
+            const target = document.getElementById(`tab-${tabId}`); 
+            if(target) { 
+                target.classList.remove('hidden'); 
+                target.classList.add('animate-fade-in'); 
+            } 
+            const targetNav = document.getElementById(`nav-${tabId}`); 
+            if(targetNav) targetNav.classList.add('active');
+            const targetBNav = document.getElementById(`b-nav-${tabId}`); 
+            if(targetBNav) targetBNav.classList.add('active');
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    
+    // --- PROFILE LOADING ---
+    window.loadStats = async function(player) { 
+        window.switchTabGlobal('statsContainer'); // Call directly now
+        
+        document.getElementById('playerName').innerText = player; 
+        document.getElementById('playerSearch').value = player; 
+        document.getElementById('repName').value = player; 
+        historyExpanded = false; 
+        try { 
+            const careerRes = await fetch(`/api/stats/${encodeURIComponent(player)}?season=Career&division=All`); 
+            const careerData = await careerRes.json(); 
+            if (careerData.error) { alert("Player not found."); return; } 
+            playerActivityMap = {}; 
+            const history = careerData.combined.match_history || []; 
+            let latestMatch = null; 
+            const parseDate = (d) => { if(!d) return new Date(0); const p = d.split('/'); return new Date(p[2], p[1]-1, p[0]); }; 
+            history.forEach(m => { 
+                if (!playerActivityMap[m.season]) playerActivityMap[m.season] = new Set(); 
+                playerActivityMap[m.season].add(m.division); 
+                if (!latestMatch || parseDate(m.date) > parseDate(latestMatch.date)) latestMatch = m; 
+            }); 
+            if (latestMatch) { 
+                const sSel = document.getElementById('seasonSelect'); const dSel = document.getElementById('divisionSelect'); 
+                if (sSel.querySelector(`option[value="${latestMatch.season}"]`)) { 
+                    sSel.value = latestMatch.season; 
+                    currentSeason = latestMatch.season; 
+                } 
+                updateDivisionOptions(latestMatch.season); 
+                if (dSel.querySelector(`option[value="${latestMatch.division}"]`)) { 
+                    dSel.value = latestMatch.division; 
+                    currentDivision = latestMatch.division; 
+                } else { dSel.value = "All"; currentDivision = "All"; } 
+            } 
+            reloadStats(false); 
+        } catch (err) { console.error("Error loading stats:", err); } 
+    }
+
+    window.closeProfile = () => { window.switchTabGlobal('home'); document.getElementById('playerSearch').value = ''; }
+    
+    // --- HELPER FUNCTIONS ---
+    async function reloadStats(resetDiv = true) { const player = document.getElementById('playerName').innerText; const start = document.getElementById('startDate').value; const end = document.getElementById('endDate').value; let url = `/api/stats/${encodeURIComponent(player)}?season=${encodeURIComponent(currentSeason)}&division=${encodeURIComponent(currentDivision)}&week=${encodeURIComponent(currentWeek)}`; if(start) url += `&start=${start}`; if(end) url += `&end=${end}`; try { const res = await fetch(url); const data = await res.json(); if (data.error) return; currentPlayerStats = data; document.getElementById('playerRatingBadge').innerText = `Rating: ${data.rating} ±${data.sigma || '?'}`; document.getElementById('playerIdDisplay').innerText = data.id || "N/A"; renderStats(); } catch(e) { console.error(e); } }
+    function switchMode(mode) { currentMode = mode; document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); document.getElementById(`btn-${mode}`).classList.add('active'); if (currentPlayerStats) renderStats(); }
+    function renderStats() { const stats = currentPlayerStats[currentMode]; animateValue("matchesPlayed", stats.matches); animateValue("wins", stats.wins); animateValue("losses", stats.losses); document.getElementById("winRate").innerText = stats.win_rate; animateValue("setsWon", stats.sets_won); animateValue("setsLost", stats.sets_lost); renderHistory(stats.match_history); }
+    function renderHistory(matches) { const historyDiv = document.getElementById('matchHistory'); const seeAllBtn = document.getElementById('seeAllBtn'); historyDiv.innerHTML = ""; if (!matches || matches.length === 0) { historyDiv.innerHTML = '<div class="p-6 text-center text-slate-500">No matches found.</div>'; seeAllBtn.classList.add('hidden'); return; } const limit = historyExpanded ? matches.length : 5; matches.slice(0, limit).forEach(match => { const row = document.createElement('div'); row.className = "flex justify-between items-center p-4 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors"; const resultColor = match.result === "Win" ? "text-green-400" : "text-red-400"; const resultIcon = match.result === "Win" ? "W" : "L"; let dateText = match.date || ""; if (dateText.includes('-')) { const parts = dateText.split('-'); if(parts[0].length === 4) dateText = `${parts[2]}/${parts[1]}/${parts[0]}`; } row.innerHTML = `<div class="flex flex-col"><div class="flex items-center gap-3 mb-1"><span class="${resultColor} font-black text-xl w-6">${resultIcon}</span><div class="flex items-center"><span class="text-slate-500 mr-2 text-xs">VS</span><a href="#" onclick="loadStats('${match.opponent}'); return false;" class="text-white hover:text-yellow-400 font-bold transition-colors">${match.opponent}</a></div></div></div><div class="text-right"><div class="font-mono text-slate-300 font-bold bg-slate-800 px-2 py-1 rounded inline-block text-sm mb-1">${match.score}</div><div class="text-[10px] text-slate-600 font-bold uppercase tracking-wider">${dateText}</div></div>`; historyDiv.appendChild(row); }); seeAllBtn.classList.toggle('hidden', matches.length <= 5); seeAllBtn.innerHTML = historyExpanded ? 'Show Less' : 'View All Matches'; }
+    function toggleHistory() { historyExpanded = !historyExpanded; renderStats(); }
+    function animateValue(id, end) { document.getElementById(id).innerHTML = end; }
+    function removeHighlights(event) { const list = document.getElementById('suggestions-list'); const searchInput = document.getElementById('playerSearch'); if (list && !list.contains(event.target) && event.target !== searchInput) list.classList.add('hidden'); document.querySelectorAll('.highlight-pulse-blue').forEach(el => el.classList.remove('highlight-pulse-blue')); }
+    async function initResultsDefaults(season) { const resDiv = document.getElementById('resDiv'); const resWeek = document.getElementById('resWeek'); if(!resDiv || !resWeek) return; for (let w = 18; w >= 1; w--) { try { const res = await fetch(`/api/week/${encodeURIComponent(season)}/${w}`); const matches = await res.json(); if (matches && matches.length > 0) { resWeek.value = w; const lastMatch = matches[matches.length - 1]; if (lastMatch && lastMatch.division) { let divExists = false; for (let opt of resDiv.options) { if (opt.value === lastMatch.division) { divExists = true; break; } } if (divExists) { resDiv.value = lastMatch.division; } else { resDiv.value = "All"; } } loadResultsSheet(); return; } } catch (e) { } } resWeek.value = "1"; resDiv.value = "All"; loadResultsSheet(); }
+    function updateDivisionOptions(season) { const divSelect = document.getElementById('divisionSelect'); const validDivs = playerActivityMap[season] || new Set(); if (validDivs.size === 0) return; Array.from(divSelect.options).forEach(opt => { if (opt.value === "All") return; if (validDivs.has(opt.value)) { opt.disabled = false; opt.style.color = ""; } else { opt.disabled = true; opt.style.color = "rgba(255,255,255,0.2)"; } }); }
+    function setupTableSearch(inputId, suggestionBoxId, tableContentId) { const input = document.getElementById(inputId); const box = document.getElementById(suggestionBoxId); const tableContainer = document.getElementById(tableContentId); input.addEventListener('input', () => { const query = input.value.toLowerCase().trim(); box.innerHTML = ''; if (!query) { box.style.display = 'none'; return; } const rows = Array.from(tableContainer.children); const matches = rows.filter(row => { const name = row.getAttribute('data-name'); return name && name.includes(query); }); if (matches.length > 0) { box.style.display = 'block'; matches.slice(0, 8).forEach(row => { const name = row.querySelector('.player-name-target').innerText; const div = document.createElement('div'); div.className = 'p-3 hover:bg-slate-800 cursor-pointer text-sm text-white border-b border-slate-700 last:border-0'; div.innerText = name; div.onclick = () => { row.scrollIntoView({ behavior: 'smooth', block: 'center' }); row.classList.add('highlight-pulse-blue'); input.value = ''; box.style.display = 'none'; }; box.appendChild(div); }); } else { box.style.display = 'none'; } }); }
+    function setupSearch(inputId, listId, callback) { const input = document.getElementById(inputId); const list = document.getElementById(listId); input.addEventListener('input', () => { const val = input.value.toLowerCase(); list.innerHTML = ''; if (!val) { list.classList.add('hidden'); return; } const filtered = window.allPlayersRaw.filter(p => p.toLowerCase().includes(val)).slice(0, 8); filtered.forEach(player => { const div = document.createElement('div'); div.className = 'suggestion-item p-3 cursor-pointer text-sm text-slate-300 border-b border-slate-700 last:border-0'; div.innerText = player; div.onclick = () => { input.value = player; list.classList.add('hidden'); callback(player); }; list.appendChild(div); }); list.classList.remove('hidden'); }); }
+    async function loadResultsSheet() { const season = document.getElementById('resSeason').value; const week = document.getElementById('resWeek').value; if(!season || season === "Loading...") return; const cacheKey = `week_${season}_${week}`; const container = document.getElementById('resultsSheetContent'); if(container.innerHTML.includes('Select a week')) container.innerHTML = '<div class="col-span-2 text-center text-slate-500 py-20">Loading...</div>'; if(requestCache[cacheKey]) { weekMatchesCache = requestCache[cacheKey]; filterResultsSheet(); return; } try { const res = await fetch(`/api/week/${encodeURIComponent(season)}/${week}`); const data = await res.json(); requestCache[cacheKey] = data; weekMatchesCache = data; filterResultsSheet(); } catch(e) { container.innerHTML = '<div class="text-center">Error loading results.</div>'; } }
+    async function filterResultsSheet() { const div = document.getElementById('resDiv').value; const container = document.getElementById('resultsSheetContent'); let filtered = weekMatchesCache; if(div !== "All") filtered = weekMatchesCache.filter(m => m.division === div); container.innerHTML = ""; if(filtered.length === 0) { container.innerHTML = '<div class="col-span-1 md:col-span-2 text-center text-slate-500 py-12 border border-slate-800 rounded-xl border-dashed">No matches found.</div>'; return; } filtered.forEach(m => { const row = document.createElement('div'); row.className = "flex justify-between items-center bg-black/40 p-4 md:p-5 rounded-xl border border-white/5 hover:bg-slate-900/50 transition-colors"; let dateText = m.date || ""; if (dateText.includes('-')) { const parts = dateText.split('-'); if(parts[0].length === 4) dateText = `${parts[2]}/${parts[1]}/${parts[0]}`; } row.innerHTML = `<div class="flex flex-col"><div class="text-[10px] text-yellow-500 font-black uppercase mb-1 tracking-widest">${m.division}</div><div class="flex flex-col md:flex-row md:items-center text-white font-bold gap-1 md:gap-3 text-base md:text-lg"><span class="hover:text-yellow-400 cursor-pointer transition-colors" onclick="loadStats('${m.p1}')">${m.p1}</span><span class="text-slate-600 text-xs md:text-sm hidden md:inline">vs</span><span class="md:hidden text-xs text-slate-600">vs</span><span class="hover:text-yellow-400 cursor-pointer transition-colors" onclick="loadStats('${m.p2}')">${m.p2}</span></div></div><div class="text-right"><div class="font-mono text-2xl md:text-3xl text-white font-black tracking-widest">${m.score}</div><div class="text-xs text-slate-500 mt-1">${dateText}</div></div>`; container.appendChild(row); }); }
+    async function loadDivisionLeaderboard() { const season = document.getElementById('boardSeason').value; const div = document.getElementById('boardDiv').value; if(!season || !div || season === "Loading...") return; const week = document.getElementById('boardWeek').value; const sortMode = document.getElementById('boardSort').value; const showFillIns = document.getElementById('toggleShowFillIns').checked; const fillInMode = document.querySelector('input[name="fiMode"]:checked').value; document.getElementById('fillInModeContainer').classList.toggle('hidden', !showFillIns); const container = document.getElementById('leaderboardContent'); if(container.innerHTML.includes('Select a season')) container.innerHTML = '<div class="text-center text-slate-500 py-20">Updating...</div>'; let url = `/api/rankings/${encodeURIComponent(season)}/${encodeURIComponent(div)}`; if(week !== "Latest") url += `?week=${week}`; const res = await fetch(url); const rawData = await res.json(); let processedRankings = []; rawData.forEach(player => { if (player.regular.matches > 0) { let finalStats = { ...player.regular }; if (showFillIns && fillInMode === 'combine' && player.fillin.matches > 0) { finalStats.wins += player.fillin.wins; finalStats.losses += player.fillin.losses; finalStats.matches += player.fillin.matches; } finalStats.win_rate = finalStats.matches > 0 ? ((finalStats.wins / finalStats.matches) * 100).toFixed(1) : 0; processedRankings.push({ name: player.name, rating: player.rating_val, ...finalStats, isFillInRow: false }); } if (showFillIns && player.fillin.matches > 0) { if (fillInMode === 'separate' || player.regular.matches === 0) { let fStats = player.fillin; fStats.win_rate = fStats.matches > 0 ? ((fStats.wins / fStats.matches) * 100).toFixed(1) : 0; processedRankings.push({ name: `${player.name} (Fill In)`, rating: player.rating_val, wins: fStats.wins, losses: fStats.losses, matches: fStats.matches, win_rate: fStats.win_rate, isFillInRow: true }); } } }); processedRankings.sort((a, b) => { const nameSort = a.name.localeCompare(b.name); if (sortMode === 'rating') return b.rating - a.rating || nameSort; if (sortMode === 'wins') return b.wins - a.wins || parseFloat(b.win_rate) - parseFloat(a.win_rate) || nameSort; if (sortMode === 'percent') return parseFloat(b.win_rate) - parseFloat(a.win_rate) || b.wins - a.wins || nameSort; if (sortMode === 'losses') return a.losses - b.losses || b.wins - a.wins || nameSort; }); renderLeaderboard(container, processedRankings); }
+    function renderLeaderboard(container, rankings) { container.innerHTML = ""; if(rankings.length === 0) { container.innerHTML = '<div class="text-center text-slate-500 py-4">No data found.</div>'; return; } let displayRank = 1; rankings.forEach((r, index) => { const row = document.createElement('div'); const baseClass = "grid grid-cols-7 items-center p-3 md:p-4 rounded-xl text-xs md:text-sm mb-2 transition-all border"; const regularClass = "bg-black/30 border-white/5 hover:bg-slate-900/60 hover:border-white/10"; const fillInClass = "highlight-pulse-yellow text-yellow-100 border-yellow-500/50"; row.className = `${baseClass} ${r.isFillInRow ? fillInClass : regularClass}`; const cleanName = r.name.replace(" (Fill In)", ""); row.setAttribute('data-name', cleanName.toLowerCase()); let rankIcon = `<span class="text-slate-600 w-6 inline-block text-center font-bold font-mono">${displayRank}</span>`; if(displayRank === 1) rankIcon = "🥇"; if(displayRank === 2) rankIcon = "🥈"; if(displayRank === 3) rankIcon = "🥉"; row.innerHTML = `<div class="col-span-2 flex items-center gap-2 md:gap-4 overflow-hidden"><span class="text-base md:text-lg">${rankIcon}</span><span class="truncate hover:text-yellow-400 cursor-pointer font-bold player-name-target" onclick="loadStats('${cleanName}')">${r.name}</span></div><div class="text-center font-mono font-bold text-yellow-500 text-sm md:text-base">${r.rating || '-'}</div><div class="text-center text-slate-400 font-mono font-bold text-base md:text-lg">${r.matches}</div><div class="text-center text-green-400 font-black font-mono text-base md:text-lg">${r.wins}</div><div class="text-center text-red-400 font-black font-mono text-base md:text-lg">${r.losses}</div><div class="text-center text-slate-500 font-mono text-xs md:text-sm">${r.win_rate}%</div>`; container.appendChild(row); displayRank++; }); }
+    async function loadGlobalStandings() { const season = document.getElementById('globalSeason').value; if(!season || season === "Loading...") return; const sortMode = document.getElementById('globalSort').value; const minGames = parseInt(document.getElementById('filterMinGames').value) || 0; const container = document.getElementById('globalContent'); const badge = document.getElementById('globalBadge'); if (sortMode === 'wins_desc') { badge.style.display = 'inline-block'; badge.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1"></i> Based on Total Wins'; } else { badge.style.display = 'none'; } if(container.innerHTML.includes('Select a season')) container.innerHTML = '<div class="text-center text-slate-500 py-20">Updating...</div>'; const res = await fetch(`/api/rankings/global/${encodeURIComponent(season)}`); let rankings = await res.json(); rankings = rankings.filter(r => r.matches >= minGames); rankings.sort((a, b) => { const nameSort = a.name.localeCompare(b.name); if (sortMode === 'rating_desc') return (b.rating || 0) - (a.rating || 0) || nameSort; if (sortMode === 'wins_desc') return b.wins - a.wins || b.win_rate - a.win_rate || nameSort; if (sortMode === 'percent_desc') return b.win_rate - a.win_rate || b.wins - a.wins || nameSort; if (sortMode === 'losses_asc') return a.losses - b.losses || b.wins - a.wins || nameSort; return 0; }); renderRankings(container, rankings); }
+    function renderRankings(containerElement, rankings) { containerElement.innerHTML = ""; if(rankings.length === 0) { containerElement.innerHTML = '<div class="text-center text-slate-500 py-4">No data.</div>'; return; } let displayRank = 1; const getDivColor = (d) => { if (!d) return 'text-slate-400 bg-slate-400/10 border-slate-400/20'; const s = String(d).toLowerCase(); if (s.includes('premier') || s.includes('all stars')) return 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20'; if (s === '1' || s.includes('division 1') || s.includes('div 1')) return 'text-sky-400 bg-sky-400/10 border-sky-400/20'; if (s === '2' || s.includes('division 2') || s.includes('div 2')) return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20'; if (s === '3' || s.includes('division 3') || s.includes('div 3')) return 'text-purple-400 bg-purple-400/10 border-purple-400/20'; return 'text-slate-400 bg-slate-400/10 border-slate-400/20'; }; rankings.slice(0, 100).forEach((r, index) => { const row = document.createElement('div'); row.className = "grid grid-cols-8 items-center bg-black/30 p-3 md:p-4 rounded-xl border border-white/5 text-xs md:text-sm mb-2 hover:bg-slate-900/60 transition-colors"; if (index > 0) displayRank++; let rankIcon = `<span class="text-slate-600 w-6 inline-block text-center font-bold font-mono">${displayRank}</span>`; if(displayRank === 1) rankIcon = "🥇"; if(displayRank === 2) rankIcon = "🥈"; if(displayRank === 3) rankIcon = "🥉"; row.setAttribute('data-name', r.name.toLowerCase()); row.innerHTML = `<div class="col-span-2 flex items-center gap-2 md:gap-4 overflow-hidden"><span class="text-base md:text-lg">${rankIcon}</span><span class="truncate text-white hover:text-yellow-400 cursor-pointer font-bold player-name-target" onclick="loadStats('${r.name}')">${r.name}</span></div><div class="text-center"><span class="px-2 py-0.5 rounded text-[10px] border font-bold uppercase tracking-wider ${getDivColor(r.division)}">${r.division || '-'}</span></div><div class="text-center font-mono font-bold text-yellow-500 text-sm md:text-base">${r.rating || '-'}</div><div class="text-center text-slate-400 font-mono font-bold text-base md:text-lg">${r.matches}</div><div class="text-center text-green-400 font-black font-mono text-base md:text-lg">${r.wins}</div><div class="text-center text-red-400 font-black font-mono text-base md:text-lg">${r.losses}</div><div class="text-center text-slate-500 font-mono text-xs md:text-sm">${r.win_rate}%</div>`; containerElement.appendChild(row); }); }
+    function openCompareModal() { document.getElementById('compareModal').classList.remove('hidden'); document.getElementById('compareResults').classList.add('hidden'); document.getElementById('compareInput').value = ''; }
+    function closeCompareModal() { document.getElementById('compareModal').classList.add('hidden'); }
+    async function loadComparison(opponent) { const p1 = document.getElementById('playerName').innerText; const res = await fetch(`/api/compare/${encodeURIComponent(p1)}/${encodeURIComponent(opponent)}`); const data = await res.json(); document.getElementById('compareResults').classList.remove('hidden'); document.getElementById('comp-p1-name').innerText = data.player1; document.getElementById('comp-p2-name').innerText = data.player2; document.getElementById('comp-p1-wins').innerText = data.p1_wins; document.getElementById('comp-p2-wins').innerText = data.p2_wins; const logDiv = document.getElementById('compareLog'); logDiv.innerHTML = ''; data.matches.forEach(m => { const color = m.result === "Win" ? "text-green-400" : "text-red-400"; logDiv.innerHTML += `<div class="flex justify-between py-2 border-b border-slate-700/50"><span class="${color} font-bold">${m.result}</span> <span class="font-mono text-slate-400">${m.score}</span></div>`; }); }
+    function openReportModal() { document.getElementById('reportModal').classList.remove('hidden'); document.getElementById('repMatch').value = ""; document.getElementById('repMatch').readOnly = false; }
+    function closeReportModal() { document.getElementById('reportModal').classList.add('hidden'); }
+    async function submitReport() { const payload = { reporter: document.getElementById('repName').value, season: currentSeason, match_info: "General/Other", description: document.getElementById('repDesc').value }; try { await fetch('/api/report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) }); alert("Report sent!"); closeReportModal(); } catch (e) { alert("Error."); } }
+</script>

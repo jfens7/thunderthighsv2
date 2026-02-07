@@ -1,0 +1,233 @@
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, query, onSnapshot, doc, updateDoc, deleteDoc, orderBy, limit } 
+    from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    // CONFIG
+    const firebaseConfig = { apiKey: "AIzaSyDq05wFsKLHtt8G0Z5yLOG9pIk9UX24S4o", authDomain: "gctta-stats-live.firebaseapp.com", projectId: "gctta-stats-live", storageBucket: "gctta-stats-live.firebasestorage.app", messagingSenderId: "1070856258556", appId: "1:1070856258556:web:be438e04c1941abc3c6879" };
+    
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // STATE
+    let allMatches = [];
+
+    // LISTEN TO FIREBASE (Limit to last 50 to save data)
+    // We order by date so we see the newest stuff
+    const q = query(collection(db, "fixtures"));
+    
+    onSnapshot(q, (snapshot) => {
+        allMatches = [];
+        snapshot.forEach((doc) => {
+            let d = doc.data();
+            d.id = doc.id;
+            allMatches.push(d);
+        });
+        // Sort in memory (Newest First)
+        allMatches.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        renderAll();
+    });
+
+    // RENDER LOGIC
+    function renderAll() {
+        const liveContainer = document.getElementById('liveList');
+        const pendingContainer = document.getElementById('pendingList');
+        const approvedContainer = document.getElementById('approvedList');
+        const pendingCount = document.getElementById('pendingCount');
+        
+        let liveHTML = "";
+        let pendingHTML = "";
+        let approvedHTML = "";
+        let pCount = 0;
+
+        allMatches.forEach(m => {
+            // NAME LOGIC
+            let home = (m.current_home_players && m.current_home_players.length > 0) ? m.current_home_players.join(" / ") : m.home_team;
+            let away = (m.current_away_players && m.current_away_players.length > 0) ? m.current_away_players.join(" / ") : m.away_team;
+            let setScore = `${m.live_home_sets || 0}-${m.live_away_sets || 0}`;
+
+            // 1. LIVE MATCHES (Status is Live OR empty)
+            if (m.match_status === "Live" || !m.match_status) {
+                liveHTML += `
+                <div class="glass-panel p-4 rounded-xl flex flex-col md:flex-row justify-between items-center gap-4 border-l-4 border-yellow-500 relative overflow-hidden">
+                    <div class="flex-1 w-full">
+                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 flex justify-between">
+                            <span>Table ${m.table} • ${m.division}</span>
+                            <span class="text-yellow-500 animate-pulse">LIVE</span>
+                        </div>
+                        <div class="text-white font-bold text-lg leading-tight">${home} <span class="text-slate-500 mx-1">vs</span> ${away}</div>
+                        <div class="text-2xl font-black text-white mt-1 font-mono">${m.live_home_score} - ${m.live_away_score} <span class="text-sm text-yellow-500 ml-2 font-bold">(Sets: ${setScore})</span></div>
+                    </div>
+                    <div class="flex gap-2 w-full md:w-auto">
+                        <button onclick="forceFinish('${m.id}')" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-lg text-xs font-bold border border-white/10">FINISH</button>
+                        <button onclick="rejectMatch('${m.id}')" class="flex-1 bg-red-900/50 hover:bg-red-600 text-red-200 hover:text-white px-3 py-2 rounded-lg text-xs font-bold border border-red-800/50">DELETE</button>
+                    </div>
+                </div>`;
+            }
+
+            // 2. PENDING MATCHES (Finished but not Verified)
+            else if (m.match_status === "Finished") {
+                pCount++;
+                pendingHTML += `
+                <div class="glass-panel p-4 rounded-xl flex flex-col md:flex-row justify-between items-center gap-4 border-l-4 border-blue-500">
+                    <div class="flex-1 w-full">
+                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Waiting Approval</div>
+                        <div class="text-white font-bold text-lg leading-tight">${home} <span class="text-slate-500 mx-1">vs</span> ${away}</div>
+                        <div class="text-2xl font-black text-white mt-1 font-mono">${setScore}</div>
+                    </div>
+                    <div class="flex gap-2 w-full md:w-auto">
+                        <button onclick="openEdit('${m.id}')" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-xs font-bold">EDIT</button>
+                        <button onclick="rejectMatch('${m.id}')" class="bg-red-900/50 hover:bg-red-600 text-red-200 hover:text-white px-3 py-2 rounded-lg text-xs font-bold border border-red-800/50">DELETE</button>
+                        <button onclick="approveMatch('${m.id}')" class="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg text-xs font-bold shadow-lg shadow-green-900/20">APPROVE</button>
+                    </div>
+                </div>`;
+            }
+
+            // 3. APPROVED MATCHES (Verified or Archived)
+            else if (m.match_status === "Verified" || m.match_status === "Archived") {
+                let statusColor = m.match_status === "Archived" ? "text-purple-400" : "text-green-400";
+                approvedHTML += `
+                <div class="bg-slate-800/50 p-3 rounded-lg flex justify-between items-center border border-white/5">
+                    <div>
+                        <div class="text-white font-bold text-sm">${home} vs ${away}</div>
+                        <div class="text-[10px] text-slate-500 uppercase font-bold">${m.match_status} • Table ${m.table}</div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="text-xl font-black ${statusColor}">${setScore}</div>
+                        <button onclick="rejectMatch('${m.id}')" class="text-slate-600 hover:text-red-500 transition-colors"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>`;
+            }
+        });
+
+        // Update DOM
+        if(liveContainer) liveContainer.innerHTML = liveHTML || '<div class="text-slate-600 text-center col-span-full py-10">No matches currently in progress.</div>';
+        if(pendingContainer) pendingContainer.innerHTML = pendingHTML || '<div class="text-slate-600 text-center py-10">No completed matches waiting for approval.</div>';
+        if(approvedContainer) approvedContainer.innerHTML = approvedHTML || '<div class="text-slate-600 text-center py-10">No approved matches found.</div>';
+        
+        // Update Counter
+        if (pCount > 0) {
+            pendingCount.innerText = pCount;
+            pendingCount.classList.remove('hidden');
+        } else {
+            pendingCount.classList.add('hidden');
+        }
+    }
+
+    // --- ACTIONS ---
+
+    // REJECT / DELETE
+    window.rejectMatch = async (id) => {
+        if(!confirm("⚠️ PERMANENTLY DELETE?\nThis cannot be undone.")) return;
+        try {
+            await deleteDoc(doc(db, "fixtures", id));
+        } catch(e) {
+            alert("Error deleting: " + e.message);
+        }
+    };
+
+    // APPROVE
+    window.approveMatch = async (id) => {
+        const ref = doc(db, "fixtures", id);
+        await updateDoc(ref, { match_status: "Verified" });
+        // It will automatically move to the "Approved" tab because the listener updates
+    };
+
+    // FORCE FINISH
+    window.forceFinish = async (id) => {
+        if(!confirm("End this match now?")) return;
+        const ref = doc(db, "fixtures", id);
+        await updateDoc(ref, { match_status: "Finished" }); 
+    };
+
+    // EDIT NAMES
+    window.openEdit = (id) => {
+        const m = allMatches.find(x => x.id === id);
+        if (!m) return;
+        
+        document.getElementById('editMatchId').value = id;
+        
+        // Flatten names for input
+        let home = (m.current_home_players && m.current_home_players.length > 0) ? m.current_home_players.join(" / ") : m.home_team;
+        let away = (m.current_away_players && m.current_away_players.length > 0) ? m.current_away_players.join(" / ") : m.away_team;
+        
+        document.getElementById('editHomeName').value = home;
+        document.getElementById('editAwayName').value = away;
+        document.getElementById('editHomeScore').value = m.live_home_sets || 0;
+        document.getElementById('editAwayScore').value = m.live_away_sets || 0;
+        document.getElementById('editGamePoints').value = m.game_scores_history || "";
+
+        document.getElementById('editModal').classList.remove('hidden');
+    };
+
+    window.saveEdit = async () => {
+        const id = document.getElementById('editMatchId').value;
+        const homeName = document.getElementById('editHomeName').value;
+        const awayName = document.getElementById('editAwayName').value;
+        const hScore = parseInt(document.getElementById('editHomeScore').value);
+        const aScore = parseInt(document.getElementById('editAwayScore').value);
+        const points = document.getElementById('editGamePoints').value;
+
+        const hPlayers = homeName.includes('/') ? homeName.split('/').map(s => s.trim()) : [homeName];
+        const aPlayers = awayName.includes('/') ? awayName.split('/').map(s => s.trim()) : [awayName];
+
+        const ref = doc(db, "fixtures", id);
+        await updateDoc(ref, {
+            current_home_players: hPlayers,
+            current_away_players: aPlayers,
+            live_home_sets: hScore,
+            live_away_sets: aScore,
+            game_scores_history: points 
+        });
+
+        closeEditModal();
+    };
+
+    window.closeEditModal = () => document.getElementById('editModal').classList.add('hidden');
+
+    // TABS
+    window.switchTab = (tab) => {
+        ['live', 'pending', 'approved'].forEach(t => {
+            document.getElementById(`view-${t}`).classList.add('hidden');
+            document.getElementById(`tab-${t}`).classList.remove('active');
+        });
+        document.getElementById(`view-${tab}`).classList.remove('hidden');
+        document.getElementById(`tab-${tab}`).classList.add('active');
+    };
+
+    // SYNC
+    window.syncToSheets = async () => {
+        const btn = document.getElementById('syncBtn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Syncing...';
+        try {
+            const res = await fetch('/api/admin/sync_firebase', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) { alert(`Sync Complete! ${data.count} matches moved to Google Sheets.`); } 
+            else { alert("Sync Error: " + data.error); }
+        } catch(e) { alert("Network/Server Error: " + e); }
+        btn.innerHTML = originalText;
+    }
+
+    window.reloadData = async () => {
+        const btn = document.getElementById('reloadBtn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+        try {
+            const res = await fetch('/api/admin/refresh_data', { method: 'POST' });
+            const data = await res.json();
+            if(data.success) {
+                btn.classList.remove('bg-purple-600', 'hover:bg-purple-500');
+                btn.classList.add('bg-green-600', 'hover:bg-green-500');
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> Updated!';
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.classList.remove('bg-green-600', 'hover:bg-green-500');
+                    btn.classList.add('bg-purple-600', 'hover:bg-purple-500');
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }, 2000);
+            } else { alert("Error refreshing: " + data.error); btn.innerHTML = originalText; }
+        } catch(e) { alert("Network Error"); btn.innerHTML = originalText; }
+    };
+</script>
