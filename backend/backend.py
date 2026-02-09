@@ -34,6 +34,7 @@ except ImportError:
     DEFAULT_RATING, DEFAULT_RD, DEFAULT_VOL = 1500.0, 350.0, 0.06
     def calculate_match(w, l, s1, s2): return {'winner': w, 'loser': l}
 
+# --- CONFIGURATION ---
 RESULTS_SPREADSHEET_ID = "1tpxuUCl8ddpnBBr69vc4P1foRCRKWpts5-HaFPYb4po" 
 RATING_START_DATE = datetime.date(2025, 12, 25)
 
@@ -96,7 +97,8 @@ class ThunderData:
         self.alias_map = {} 
         
         self._authenticate()
-        if self.sheet_results or self.db: self.refresh_data()
+        # Auto-load on startup
+        self.refresh_data()
 
     def _authenticate(self):
         # 1. Google Sheets Auth
@@ -159,6 +161,9 @@ class ThunderData:
 
     def _parse_date(self, date_str):
         if not date_str: return None
+        if isinstance(date_str, datetime.date): return date_str
+        if isinstance(date_str, datetime.datetime): return date_str.date()
+        
         for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%Y/%m/%d"):
             try: return datetime.datetime.strptime(str(date_str).strip(), fmt).date()
             except ValueError: continue
@@ -337,12 +342,10 @@ class ThunderData:
                 existing = unique_map[match_key]
                 existing_is_rich = len(str(existing.get('game_history', ''))) > 5
                 
+                # If new match is rich (iPad) and existing is not (Paper), overwrite it.
                 if is_rich_data and not existing_is_rich:
-                    # Live Overwrites Paper
                     unique_map[match_key] = m
-                elif is_rich_data and existing_is_rich:
-                    # Both are Live? Keep the latest? Or just ignore.
-                    pass 
+                # If both are rich or both are paper, keep existing (first one found)
         
         return list(unique_map.values())
 
@@ -364,6 +367,7 @@ class ThunderData:
 
         # 1. LOAD FROM GOOGLE SHEETS (Legacy / Paper)
         if self.sheet_results:
+            logger.info("📄 Reading from Google Sheets...")
             for worksheet in self.sheet_results.worksheets():
                 title = worksheet.title
                 if "Season:" not in title: continue
@@ -411,36 +415,60 @@ class ThunderData:
                             'game_history': '' # Paper has no history
                         })
 
-                except Exception as e: logger.error(f"❌ Error loading {title}: {e}")
+                except Exception as e: logger.error(f"❌ Error loading Sheet {title}: {e}")
 
         # 2. LOAD FROM FIREBASE (Live / Rich Data)
         if self.db:
+            logger.info("🔥 Reading from Firebase (iPad Data)...")
             try:
-                # READING FROM Live_match_results
-                # This contains ONLY iPad matches
-                docs = self.db.collection('Live_match_results').stream()
+                # CHANGED: Now pointing to 'match_results' (Correct collection)
+                # docs = self.db.collection('Live_match_results').stream() 
+                docs = self.db.collection('match_results').stream()
+                
                 for doc in docs:
                     d = doc.to_dict()
                     
+                    # Handle Date
                     date_val = d.get('date')
                     parsed_date = self._parse_date(date_val)
                     if not parsed_date:
                         ts = d.get('timestamp')
-                        if ts: parsed_date = ts.date()
+                        if ts: 
+                            # Convert Firestore Timestamp to Date
+                            try: parsed_date = ts.date()
+                            except: parsed_date = datetime.date.today()
                         else: parsed_date = datetime.date.today()
 
                     season_name = d.get('season', f"Season: {parsed_date.year}")
                     if season_name not in self.season_stats: self.season_stats[season_name] = {}
                     
+                    # iPad uses 'home_players' list, we just take the first one for singles
+                    home_p = d.get('home_players', [])
+                    away_p = d.get('away_players', [])
+                    
+                    if not home_p or not away_p: continue
+                    
+                    p1 = self._clean_name(home_p[0])
+                    p2 = self._clean_name(away_p[0])
+                    
+                    # IMPORTANT: Calculate Sets from Game History if 'live_home_sets' is missing
                     s1 = d.get('live_home_sets', 0)
                     s2 = d.get('live_away_sets', 0)
                     
-                    p1 = d.get('home_players', ['Unknown'])[0]
-                    p2 = d.get('away_players', ['Unknown'])[0]
-                    
-                    # FIXED: Don't force 'week' to be "Live"
-                    # Use the actual week from the database, or "Unknown"
-                    
+                    # Fallback logic if sets are 0-0 but we have history
+                    if s1 == 0 and s2 == 0 and d.get('game_scores_history'):
+                        # e.g. "11-9, 5-11, 11-8" -> Count who won more sets
+                        hist = str(d.get('game_scores_history')).split(',')
+                        t1_sets = 0; t2_sets = 0
+                        for score in hist:
+                            try:
+                                pts = score.strip().split('-')
+                                if int(pts[0]) > int(pts[1]): t1_sets += 1
+                                else: t2_sets += 1
+                            except: pass
+                        s1, s2 = t1_sets, t2_sets
+
+                    # Append to the SAME queue as the paper matches
                     raw_match_queue.append({
                         'p1': p1, 'p2': p2, 's1': s1, 's2': s2,
                         'date': parsed_date, 'season': season_name, 
@@ -454,9 +482,8 @@ class ThunderData:
                 logger.error(f"❌ Firebase Load Error: {e}")
 
         # 3. DEDUPLICATE & PROCESS
-        # This is where we prioritize Live over Paper
         cleaned_matches = self._deduplicate_matches(raw_match_queue)
-        logger.info(f"📚 Total Matches Loaded (After De-dupe): {len(cleaned_matches)}")
+        logger.info(f"📚 Total Matches Merged & Loaded: {len(cleaned_matches)}")
 
         cleaned_matches.sort(key=lambda x: x['date'])
 

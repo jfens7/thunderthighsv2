@@ -1,233 +1,162 @@
+<script>
+    console.log("✅ Admin UI Script Loaded");
+
+    window.switchAdminTab = function(tabId) {
+        // 1. Hide all Tabs
+        ['pending', 'live', 'approved', 'migration'].forEach(t => {
+            const section = document.getElementById(`admin-${t}`);
+            if (section) section.classList.add('hidden');
+            
+            const btn = document.getElementById(`tab-btn-${t}`);
+            if (btn) btn.className = "px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer";
+        });
+        
+        // 2. Show Target Tab
+        const targetSection = document.getElementById(`admin-${tabId}`);
+        if (targetSection) targetSection.classList.remove('hidden');
+        
+        const targetBtn = document.getElementById(`tab-btn-${tabId}`);
+        if (targetBtn) targetBtn.className = "px-6 py-4 font-bold text-sm text-yellow-500 border-b-2 border-yellow-500 transition-all flex items-center gap-2 cursor-pointer";
+
+        // 3. Toggle Dashboard Stats (Hide on Migration Tab)
+        const dashboard = document.getElementById('admin-dashboard-stats');
+        if (dashboard) {
+            if (tabId === 'migration') {
+                dashboard.style.display = 'none';
+            } else {
+                dashboard.style.display = 'grid'; // Restore grid layout
+            }
+        }
+    };
+
+    window.refreshMigration = function() {
+        const list = document.getElementById("migration-list");
+        if(list) list.innerHTML = '<div class="text-center text-slate-500 py-10 animate-pulse">Refreshing data...</div>';
+    };
+</script>
+
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, query, onSnapshot, doc, updateDoc, deleteDoc, orderBy, limit } 
-    from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getFirestore, collection, query, onSnapshot, doc, deleteDoc, updateDoc, getDoc, setDoc, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-    // CONFIG
     const firebaseConfig = { apiKey: "AIzaSyDq05wFsKLHtt8G0Z5yLOG9pIk9UX24S4o", authDomain: "gctta-stats-live.firebaseapp.com", projectId: "gctta-stats-live", storageBucket: "gctta-stats-live.firebasestorage.app", messagingSenderId: "1070856258556", appId: "1:1070856258556:web:be438e04c1941abc3c6879" };
-    
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // STATE
-    let allMatches = [];
+    console.log("✅ Admin Firebase Module Loaded");
 
-    // LISTEN TO FIREBASE (Limit to last 50 to save data)
-    // We order by date so we see the newest stuff
-    const q = query(collection(db, "fixtures"));
-    
-    onSnapshot(q, (snapshot) => {
-        allMatches = [];
-        snapshot.forEach((doc) => {
-            let d = doc.data();
-            d.id = doc.id;
-            allMatches.push(d);
+    // --- LIVE CONTROL ---
+    try {
+        onSnapshot(query(collection(db, "fixture_schedule")), (snapshot) => {
+            const liveList = document.getElementById("live-matches-list");
+            let liveCount = 0;
+            snapshot.forEach((doc) => {
+                const m = doc.data();
+                if (m.match_status === "Live" || (m.live_home_score > 0 || m.live_away_score > 0)) liveCount++;
+            });
+            const countDisplay = document.getElementById("liveMatchCount");
+            if (countDisplay) countDisplay.innerText = liveCount;
         });
-        // Sort in memory (Newest First)
-        allMatches.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        renderAll();
-    });
+    } catch(e) { console.error("Live Control Error:", e); }
 
-    // RENDER LOGIC
-    function renderAll() {
-        const liveContainer = document.getElementById('liveList');
-        const pendingContainer = document.getElementById('pendingList');
-        const approvedContainer = document.getElementById('approvedList');
-        const pendingCount = document.getElementById('pendingCount');
-        
-        let liveHTML = "";
-        let pendingHTML = "";
-        let approvedHTML = "";
-        let pCount = 0;
+    // --- MIGRATION LOGIC ---
+    try {
+        onSnapshot(doc(db, "Admin_State", "terminal"), (docSnap) => {
+            if(docSnap.exists()) {
+                const data = docSnap.data();
+                const term = document.getElementById("migration-terminal");
+                if(term) {
+                    const line = document.createElement("div");
+                    line.className = "text-green-400 mb-1 border-b border-white/5 pb-1 font-mono text-xs break-all";
+                    line.innerText = `> ${data.log_line}`;
+                    term.appendChild(line);
+                    term.scrollTop = term.scrollHeight;
+                }
+            }
+        });
+    } catch(e) {}
 
-        allMatches.forEach(m => {
-            // NAME LOGIC
-            let home = (m.current_home_players && m.current_home_players.length > 0) ? m.current_home_players.join(" / ") : m.home_team;
-            let away = (m.current_away_players && m.current_away_players.length > 0) ? m.current_away_players.join(" / ") : m.away_team;
-            let setScore = `${m.live_home_sets || 0}-${m.live_away_sets || 0}`;
+    try {
+        const migrationRef = collection(db, "Migration_Review");
+        onSnapshot(migrationRef, (snapshot) => {
+            const list = document.getElementById("migration-list");
+            const countBadge = document.getElementById("review-count");
+            if(!list) return;
 
-            // 1. LIVE MATCHES (Status is Live OR empty)
-            if (m.match_status === "Live" || !m.match_status) {
-                liveHTML += `
-                <div class="glass-panel p-4 rounded-xl flex flex-col md:flex-row justify-between items-center gap-4 border-l-4 border-yellow-500 relative overflow-hidden">
+            list.innerHTML = "";
+            if(countBadge) countBadge.innerText = snapshot.size;
+
+            if(snapshot.empty) {
+                list.innerHTML = `<div class="text-center text-slate-500 py-10 italic border border-white/5 rounded-lg bg-slate-900/50">Queue Empty.</div>`;
+                return;
+            }
+
+            snapshot.forEach(docSnap => {
+                const m = docSnap.data();
+                const id = docSnap.id;
+                const p1 = m.home_players?.[0] || m.raw_p1 || "";
+                const p2 = m.away_players?.[0] || m.raw_p2 || "";
+                
+                const card = document.createElement("div");
+                card.className = "bg-slate-800 p-4 rounded-lg border border-white/10 flex flex-col md:flex-row gap-4 items-center animate-fade-in mb-3 shadow-lg";
+                card.innerHTML = `
                     <div class="flex-1 w-full">
-                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 flex justify-between">
-                            <span>Table ${m.table} • ${m.division}</span>
-                            <span class="text-yellow-500 animate-pulse">LIVE</span>
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="text-xs font-bold text-red-400 bg-red-900/30 px-2 py-1 rounded border border-red-500/20 uppercase">${m.issues ? m.issues.join(", ") : "Issue"}</span>
+                            <span class="text-xs text-slate-500 font-mono border border-white/10 px-2 py-1 rounded">${m.season}</span>
                         </div>
-                        <div class="text-white font-bold text-lg leading-tight">${home} <span class="text-slate-500 mx-1">vs</span> ${away}</div>
-                        <div class="text-2xl font-black text-white mt-1 font-mono">${m.live_home_score} - ${m.live_away_score} <span class="text-sm text-yellow-500 ml-2 font-bold">(Sets: ${setScore})</span></div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                            <input type="text" id="p1-${id}" value="${p1}" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-white text-sm">
+                            <input type="text" id="p2-${id}" value="${p2}" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-white text-sm">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="s1-${id}" value="${m.live_home_sets}" class="w-16 bg-black/30 border border-white/10 rounded px-2 py-1 text-white text-sm text-center">
+                            <span class="text-slate-500 font-bold">-</span>
+                            <input type="number" id="s2-${id}" value="${m.live_away_sets}" class="w-16 bg-black/30 border border-white/10 rounded px-2 py-1 text-white text-sm text-center">
+                        </div>
                     </div>
-                    <div class="flex gap-2 w-full md:w-auto">
-                        <button onclick="forceFinish('${m.id}')" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-lg text-xs font-bold border border-white/10">FINISH</button>
-                        <button onclick="rejectMatch('${m.id}')" class="flex-1 bg-red-900/50 hover:bg-red-600 text-red-200 hover:text-white px-3 py-2 rounded-lg text-xs font-bold border border-red-800/50">DELETE</button>
+                    <div class="flex flex-row md:flex-col gap-2 w-full md:w-32 border-t md:border-t-0 md:border-l border-white/5 pt-3 md:pt-0 md:pl-3">
+                        <button onclick="window.approveMigration('${id}')" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded text-sm flex-1 transition-colors shadow-lg"><i class="fa-solid fa-check mr-1"></i> Fix</button>
+                        <button onclick="window.denyMigration('${id}')" class="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded text-sm flex-1 transition-colors shadow-lg"><i class="fa-solid fa-trash mr-1"></i> Drop</button>
                     </div>
-                </div>`;
-            }
-
-            // 2. PENDING MATCHES (Finished but not Verified)
-            else if (m.match_status === "Finished") {
-                pCount++;
-                pendingHTML += `
-                <div class="glass-panel p-4 rounded-xl flex flex-col md:flex-row justify-between items-center gap-4 border-l-4 border-blue-500">
-                    <div class="flex-1 w-full">
-                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Waiting Approval</div>
-                        <div class="text-white font-bold text-lg leading-tight">${home} <span class="text-slate-500 mx-1">vs</span> ${away}</div>
-                        <div class="text-2xl font-black text-white mt-1 font-mono">${setScore}</div>
-                    </div>
-                    <div class="flex gap-2 w-full md:w-auto">
-                        <button onclick="openEdit('${m.id}')" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-xs font-bold">EDIT</button>
-                        <button onclick="rejectMatch('${m.id}')" class="bg-red-900/50 hover:bg-red-600 text-red-200 hover:text-white px-3 py-2 rounded-lg text-xs font-bold border border-red-800/50">DELETE</button>
-                        <button onclick="approveMatch('${m.id}')" class="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg text-xs font-bold shadow-lg shadow-green-900/20">APPROVE</button>
-                    </div>
-                </div>`;
-            }
-
-            // 3. APPROVED MATCHES (Verified or Archived)
-            else if (m.match_status === "Verified" || m.match_status === "Archived") {
-                let statusColor = m.match_status === "Archived" ? "text-purple-400" : "text-green-400";
-                approvedHTML += `
-                <div class="bg-slate-800/50 p-3 rounded-lg flex justify-between items-center border border-white/5">
-                    <div>
-                        <div class="text-white font-bold text-sm">${home} vs ${away}</div>
-                        <div class="text-[10px] text-slate-500 uppercase font-bold">${m.match_status} • Table ${m.table}</div>
-                    </div>
-                    <div class="flex items-center gap-4">
-                        <div class="text-xl font-black ${statusColor}">${setScore}</div>
-                        <button onclick="rejectMatch('${m.id}')" class="text-slate-600 hover:text-red-500 transition-colors"><i class="fa-solid fa-trash"></i></button>
-                    </div>
-                </div>`;
-            }
+                `;
+                list.appendChild(card);
+            });
         });
+    } catch(e) {}
 
-        // Update DOM
-        if(liveContainer) liveContainer.innerHTML = liveHTML || '<div class="text-slate-600 text-center col-span-full py-10">No matches currently in progress.</div>';
-        if(pendingContainer) pendingContainer.innerHTML = pendingHTML || '<div class="text-slate-600 text-center py-10">No completed matches waiting for approval.</div>';
-        if(approvedContainer) approvedContainer.innerHTML = approvedHTML || '<div class="text-slate-600 text-center py-10">No approved matches found.</div>';
-        
-        // Update Counter
-        if (pCount > 0) {
-            pendingCount.innerText = pCount;
-            pendingCount.classList.remove('hidden');
-        } else {
-            pendingCount.classList.add('hidden');
-        }
-    }
-
-    // --- ACTIONS ---
-
-    // REJECT / DELETE
-    window.rejectMatch = async (id) => {
-        if(!confirm("⚠️ PERMANENTLY DELETE?\nThis cannot be undone.")) return;
-        try {
-            await deleteDoc(doc(db, "fixtures", id));
-        } catch(e) {
-            alert("Error deleting: " + e.message);
+    // ACTIONS
+    window.stopMigration = async () => {
+        if(confirm("STOP MIGRATION? This will halt the script immediately.")) {
+            try {
+                await setDoc(doc(db, "Admin_State", "migration_control"), { status: "STOP" });
+                alert("🛑 STOP SIGNAL SENT. The script will terminate in a few seconds.");
+            } catch(e) { alert("Error sending stop signal: " + e.message); }
         }
     };
 
-    // APPROVE
-    window.approveMatch = async (id) => {
-        const ref = doc(db, "fixtures", id);
-        await updateDoc(ref, { match_status: "Verified" });
-        // It will automatically move to the "Approved" tab because the listener updates
-    };
-
-    // FORCE FINISH
-    window.forceFinish = async (id) => {
-        if(!confirm("End this match now?")) return;
-        const ref = doc(db, "fixtures", id);
-        await updateDoc(ref, { match_status: "Finished" }); 
-    };
-
-    // EDIT NAMES
-    window.openEdit = (id) => {
-        const m = allMatches.find(x => x.id === id);
-        if (!m) return;
-        
-        document.getElementById('editMatchId').value = id;
-        
-        // Flatten names for input
-        let home = (m.current_home_players && m.current_home_players.length > 0) ? m.current_home_players.join(" / ") : m.home_team;
-        let away = (m.current_away_players && m.current_away_players.length > 0) ? m.current_away_players.join(" / ") : m.away_team;
-        
-        document.getElementById('editHomeName').value = home;
-        document.getElementById('editAwayName').value = away;
-        document.getElementById('editHomeScore').value = m.live_home_sets || 0;
-        document.getElementById('editAwayScore').value = m.live_away_sets || 0;
-        document.getElementById('editGamePoints').value = m.game_scores_history || "";
-
-        document.getElementById('editModal').classList.remove('hidden');
-    };
-
-    window.saveEdit = async () => {
-        const id = document.getElementById('editMatchId').value;
-        const homeName = document.getElementById('editHomeName').value;
-        const awayName = document.getElementById('editAwayName').value;
-        const hScore = parseInt(document.getElementById('editHomeScore').value);
-        const aScore = parseInt(document.getElementById('editAwayScore').value);
-        const points = document.getElementById('editGamePoints').value;
-
-        const hPlayers = homeName.includes('/') ? homeName.split('/').map(s => s.trim()) : [homeName];
-        const aPlayers = awayName.includes('/') ? awayName.split('/').map(s => s.trim()) : [awayName];
-
-        const ref = doc(db, "fixtures", id);
-        await updateDoc(ref, {
-            current_home_players: hPlayers,
-            current_away_players: aPlayers,
-            live_home_sets: hScore,
-            live_away_sets: aScore,
-            game_scores_history: points 
-        });
-
-        closeEditModal();
-    };
-
-    window.closeEditModal = () => document.getElementById('editModal').classList.add('hidden');
-
-    // TABS
-    window.switchTab = (tab) => {
-        ['live', 'pending', 'approved'].forEach(t => {
-            document.getElementById(`view-${t}`).classList.add('hidden');
-            document.getElementById(`tab-${t}`).classList.remove('active');
-        });
-        document.getElementById(`view-${tab}`).classList.remove('hidden');
-        document.getElementById(`tab-${tab}`).classList.add('active');
-    };
-
-    // SYNC
-    window.syncToSheets = async () => {
-        const btn = document.getElementById('syncBtn');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Syncing...';
+    window.approveMigration = async (id) => {
         try {
-            const res = await fetch('/api/admin/sync_firebase', { method: 'POST' });
-            const data = await res.json();
-            if (data.success) { alert(`Sync Complete! ${data.count} matches moved to Google Sheets.`); } 
-            else { alert("Sync Error: " + data.error); }
-        } catch(e) { alert("Network/Server Error: " + e); }
-        btn.innerHTML = originalText;
-    }
+            const p1 = document.getElementById(`p1-${id}`).value;
+            const p2 = document.getElementById(`p2-${id}`).value;
+            const s1 = parseInt(document.getElementById(`s1-${id}`).value);
+            const s2 = parseInt(document.getElementById(`s2-${id}`).value);
+            const docRef = doc(db, "Migration_Review", id);
+            const snap = await getDoc(docRef);
+            if (!snap.exists()) return;
+            const data = snap.data();
+            const players = [p1.toLowerCase(), p2.toLowerCase()].sort();
+            const dateObj = data.timestamp ? data.timestamp.toDate() : new Date();
+            const dateStr = dateObj.toISOString().split('T')[0].replace(/-/g,''); 
+            const matchId = `${dateStr}_${players[0]}_${players[1]}`;
+            await setDoc(doc(db, "Archived_Seasons", matchId), {
+                ...data, home_players: [p1], away_players: [p2], live_home_sets: s1, live_away_sets: s2, match_status: "Finished", fixed_by_admin: true
+            });
+            await deleteDoc(docRef);
+        } catch(e) { console.error(e); }
+    };
 
-    window.reloadData = async () => {
-        const btn = document.getElementById('reloadBtn');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
-        btn.classList.add('opacity-50', 'cursor-not-allowed');
-        try {
-            const res = await fetch('/api/admin/refresh_data', { method: 'POST' });
-            const data = await res.json();
-            if(data.success) {
-                btn.classList.remove('bg-purple-600', 'hover:bg-purple-500');
-                btn.classList.add('bg-green-600', 'hover:bg-green-500');
-                btn.innerHTML = '<i class="fa-solid fa-check"></i> Updated!';
-                setTimeout(() => {
-                    btn.innerHTML = originalText;
-                    btn.classList.remove('bg-green-600', 'hover:bg-green-500');
-                    btn.classList.add('bg-purple-600', 'hover:bg-purple-500');
-                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                }, 2000);
-            } else { alert("Error refreshing: " + data.error); btn.innerHTML = originalText; }
-        } catch(e) { alert("Network Error"); btn.innerHTML = originalText; }
+    window.denyMigration = async (id) => {
+        if(confirm("Delete row?")) await deleteDoc(doc(db, "Migration_Review", id));
     };
 </script>

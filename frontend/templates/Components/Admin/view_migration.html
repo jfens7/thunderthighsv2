@@ -1,0 +1,40 @@
+<div id="admin-migration" class="hidden animate-fade-in p-2 md:p-6 max-w-6xl mx-auto">
+    
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h2 class="text-2xl font-black text-white tracking-tight flex items-center gap-3">
+                <i class="fa-solid fa-database text-yellow-500"></i> MIGRATION STATION
+            </h2>
+            <p class="text-slate-400 text-sm mt-1">Review and approve historical data from Sheets</p>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="window.stopMigration()" class="bg-red-600 hover:bg-red-500 text-white px-6 py-2 rounded-lg text-sm font-black transition-colors border border-red-400 shadow-[0_0_15px_rgba(239,68,68,0.5)] animate-pulse">
+                <i class="fa-solid fa-ban mr-2"></i> EMERGENCY STOP
+            </button>
+            <button onclick="window.refreshMigration()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors border border-white/10">
+                <i class="fa-solid fa-rotate mr-2"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <div class="bg-black/80 rounded-xl border border-white/10 p-4 mb-8 shadow-inner font-mono text-sm relative overflow-hidden group">
+        <div class="absolute top-2 right-4 text-[10px] text-slate-500 font-bold uppercase tracking-widest bg-black/50 px-2 rounded">Live Terminal</div>
+        <div class="h-48 overflow-y-auto pr-2 scrollbar-hide" id="migration-terminal">
+            <div class="text-slate-600 italic">Waiting for migration script...</div>
+        </div>
+    </div>
+
+    <div class="bg-slate-900/50 rounded-xl border border-white/5 p-6 shadow-xl">
+        <div class="flex justify-between items-end mb-6 border-b border-white/5 pb-4">
+            <h3 class="text-lg font-bold text-white flex items-center gap-3">
+                Pending Review
+                <span id="review-count" class="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full shadow-lg shadow-red-500/20 animate-pulse">0</span>
+            </h3>
+            <div class="text-xs text-slate-500">Items requiring manual fix</div>
+        </div>
+
+        <div id="migration-list" class="grid grid-cols-1 gap-4 max-h-[600px] overflow-y-auto pr-2">
+            <div class="text-center text-slate-500 py-10">Loading...</div>
+        </div>
+    </div>
+</div>
