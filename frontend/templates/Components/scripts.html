@@ -2,331 +2,253 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-    const firebaseConfig = { apiKey: "AIzaSyDq05wFsKLHtt8G0Z5yLOG9pIk9UX24S4o", authDomain: "gctta-stats-live.firebaseapp.com", projectId: "gctta-stats-live", storageBucket: "gctta-stats-live.firebasestorage.app", messagingSenderId: "1070856258556", appId: "1:1070856258556:web:be438e04c1941abc3c6879" };
+    // --- CONFIG ---
+    const firebaseConfig = { 
+        apiKey: "AIzaSyDq05wFsKLHtt8G0Z5yLOG9pIk9UX24S4o", 
+        authDomain: "gctta-stats-live.firebaseapp.com", 
+        projectId: "gctta-stats-live", 
+        storageBucket: "gctta-stats-live.firebasestorage.app", 
+        messagingSenderId: "1070856258556", 
+        appId: "1:1070856258556:web:be438e04c1941abc3c6879" 
+    };
+    
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // Get Today's Date in dd/mm/yyyy format
+    // --- STATE ---
     const today = new Date();
     const dateString = String(today.getDate()).padStart(2, '0') + '/' + String(today.getMonth() + 1).padStart(2, '0') + '/' + today.getFullYear();
     
-    // Global Store for Live Matches (so Profile can see them)
     window.liveMatchesRaw = [];
-
-    // Query 'fixture_schedule' for today's matches
-    const q = query(collection(db, "fixture_schedule"), where("date", "==", dateString));
-    
     let knownLiveMatches = new Set();
+    
+    // Stats Rotator (10 Seconds)
+    let statsIndex = 0;
+    setInterval(() => { statsIndex++; renderLiveMatches(); }, 10000); 
+
+    // --- LISTENER ---
+    const q = query(collection(db, "fixture_schedule"), where("date", "==", dateString));
 
     onSnapshot(q, (snapshot) => {
+        window.liveMatchesRaw = [];
+        snapshot.forEach(doc => {
+            let m = doc.data();
+            m.id = doc.id;
+            if (m.match_status !== "Finished") window.liveMatchesRaw.push(m);
+        });
+        renderLiveMatches();
+    });
+
+    // --- RENDERER ---
+    function renderLiveMatches() {
         const navLive = document.getElementById("nav-live-center");
         const navMobileLive = document.getElementById("b-nav-live-center");
         const matchesContainer = document.getElementById("liveMatchesContainer");
         const scheduledContainer = document.getElementById("scheduledContainer");
         const scheduledList = document.getElementById("scheduledList");
         
-        let liveHTML = "";
-        let scheduledHTML = "";
-        let hasLive = false;
+        let liveHTML = ""; 
+        let scheduledHTML = ""; 
+        let hasLive = false; 
         let hasScheduled = false;
-        
-        // Clear global list before rebuilding
-        window.liveMatchesRaw = [];
 
-        snapshot.forEach((doc) => {
-            const m = doc.data();
-            m.id = doc.id; // Save ID
-            
-            if (m.match_status === "Finished") return;
-            
-            // Store for Profile View
-            window.liveMatchesRaw.push(m);
+        window.liveMatchesRaw.forEach(m => {
+            // NAME RESOLVER
+            let homeDisplay = (m.home_players && m.home_players.length > 0) ? m.home_players.join(" / ") : m.home_team;
+            let awayDisplay = (m.away_players && m.away_players.length > 0) ? m.away_players.join(" / ") : m.away_team;
 
-            // NAME LOGIC: Prefer Players over Teams (Home/Away Players from iPad)
-            let homeDisplay = m.home_team;
-            let awayDisplay = m.away_team;
-            if(m.home_players && m.home_players.length > 0) homeDisplay = m.home_players.join(" / ");
-            if(m.away_players && m.away_players.length > 0) awayDisplay = m.away_players.join(" / ");
-
-            // LIVE CHECK
-            const isLive = m.match_status === "Live" || (m.live_home_score !== undefined && (m.live_home_score > 0 || m.live_away_score > 0));
+            const isLive = m.match_status === "Live" || m.match_status === "Paused" || (m.live_home_score > 0 || m.live_away_score > 0);
 
             if (isLive) {
                 hasLive = true;
-                if (!knownLiveMatches.has(doc.id)) {
-                    knownLiveMatches.add(doc.id);
-                    showNotification(homeDisplay, awayDisplay);
-                }
-                
-                // HISTORY LINE (Previous Sets)
-                let historyHTML = "";
-                if (m.game_scores_history) {
-                    const scores = m.game_scores_history.split(',');
-                    historyHTML = `<div class="flex justify-center gap-3 mt-6 pt-4 border-t border-white/10 w-full">`;
-                    scores.forEach(s => { 
-                        if(s.trim()) historyHTML += `<span class="text-sm font-mono font-bold text-slate-400 bg-slate-800 px-3 py-1 rounded-md border border-white/5 shadow-sm">${s.trim()}</span>`; 
-                    });
-                    historyHTML += `</div>`;
-                }
+                if (!knownLiveMatches.has(m.id)) { knownLiveMatches.add(m.id); showNotification(homeDisplay, awayDisplay); }
 
-                // SERVER ICON
-                const serverName = m.current_server || '';
-                let homeServerIcon = serverName && homeDisplay.includes(serverName) ? `<i class="fa-solid fa-table-tennis-paddle-ball text-yellow-400 text-2xl animate-bounce ml-3"></i>` : '';
-                let awayServerIcon = serverName && awayDisplay.includes(serverName) ? `<i class="fa-solid fa-table-tennis-paddle-ball text-yellow-400 text-2xl animate-bounce mr-3"></i>` : '';
-
-                // TIMER BADGE
+                // --- 1. TIMER BADGE ---
                 let timerBadge = "";
-                if (m.timer_label && m.timer_value > 0) {
-                    let tColor = 'bg-yellow-500 text-black';
-                    if (m.timer_label === 'WARMUP') tColor = 'bg-orange-600 text-white';
-                    if (m.timer_label === 'TIMEOUT') tColor = 'bg-red-600 text-white';
-                    if (m.timer_label === 'BREAK') tColor = 'bg-purple-600 text-white';
-                    timerBadge = `<div class="${tColor} font-black uppercase text-xs md:text-sm px-3 py-1 rounded-full animate-pulse shadow-xl absolute -top-3 left-1/2 transform -translate-x-1/2 z-20 border-2 border-slate-900 flex items-center gap-2"><i class="fa-solid fa-clock"></i> ${m.timer_label}: ${m.timer_value}s</div>`;
+                if (m.match_status === "Paused") {
+                    timerBadge = `<div class="absolute top-0 left-1/2 -translate-x-1/2 bg-red-600 text-white font-black uppercase text-xs px-4 py-1 rounded-b-lg shadow-lg z-20 flex items-center gap-2 animate-pulse"><i class="fa-solid fa-pause"></i> MATCH PAUSED</div>`;
+                } else if (m.timer_label && m.timer_value > 0) {
+                    let colorClass = "bg-yellow-500 text-black";
+                    if (m.timer_label === "WARMUP") colorClass = "bg-orange-500 text-white";
+                    if (m.timer_label === "TIMEOUT") colorClass = "bg-red-600 text-white";
+                    timerBadge = `<div class="absolute top-0 left-1/2 -translate-x-1/2 ${colorClass} font-black uppercase text-xs px-4 py-1 rounded-b-lg shadow-lg z-20 flex items-center gap-2"><i class="fa-solid fa-clock animate-spin-slow"></i> ${m.timer_label}: ${m.timer_value}s</div>`;
+                }
+
+                // --- 2. ROTATING STATS ---
+                let statsContent = `<span class="text-slate-500 italic text-sm">Collecting match data...</span>`;
+                let availableStats = [];
+                
+                // Only show if points played > 0
+                if ((m.live_home_score || 0) + (m.live_away_score || 0) > 0) {
+                    
+                    // A. Streak
+                    if (m.streaks) {
+                        if (m.streaks.home > 2) availableStats.push({ label: "HOT STREAK", text: `Home has won ${m.streaks.home} in a row! 🔥`, color: "text-orange-500" });
+                        if (m.streaks.away > 2) availableStats.push({ label: "HOT STREAK", text: `Away has won ${m.streaks.away} in a row! 🔥`, color: "text-orange-500" });
+                    }
+                    
+                    // B. Breaks
+                    if (m.breaks) {
+                        if (m.breaks.home > 0) availableStats.push({ label: "BREAK POINTS", text: `Home broken serve ${m.breaks.home} times`, color: "text-purple-400" });
+                        if (m.breaks.away > 0) availableStats.push({ label: "BREAK POINTS", text: `Away broken serve ${m.breaks.away} times`, color: "text-purple-400" });
+                    }
+
+                    // C. Momentum
+                    if (m.momentum && m.momentum.length > 5) {
+                        availableStats.push({ label: "MOMENTUM", text: m.momentum, color: "text-yellow-500" });
+                    }
+                    
+                    // D. Serve Stats
+                    if (m.serve_stats) {
+                        let hServe = m.serve_stats.home; let aServe = m.serve_stats.away;
+                        if (hServe && aServe) {
+                            let hPct = hServe.total > 0 ? Math.round((hServe.won / hServe.total) * 100) : 0;
+                            let aPct = aServe.total > 0 ? Math.round((aServe.won / aServe.total) * 100) : 0;
+                            availableStats.push({ label: "SERVE WIN %", text: `Home: ${hPct}% vs Away: ${aPct}%`, color: "text-blue-400" });
+                        }
+                    }
+                    
+                    // E. Duration
+                    if (m.play_duration) {
+                        availableStats.push({ label: "ACTIVE PLAY", text: `Duration: ${m.play_duration}`, color: "text-green-400" });
+                    }
+                }
+
+                if (availableStats.length > 0) {
+                    let stat = availableStats[statsIndex % availableStats.length];
+                    statsContent = `
+                        <div class="flex flex-col items-center animate-fade-in transition-all duration-500">
+                            <div class="text-[10px] ${stat.color} font-black uppercase tracking-widest mb-1">${stat.label}</div>
+                            <div class="text-white font-bold text-sm bg-slate-800/80 px-4 py-1.5 rounded-full border border-white/10 shadow-lg">${stat.text}</div>
+                        </div>
+                    `;
+                }
+
+                // --- 3. SERVING INDICATOR ---
+                // Helper to check if name matches server
+                const isHomeServing = m.current_server && homeDisplay.toLowerCase().includes(m.current_server.toLowerCase());
+                const isAwayServing = m.current_server && awayDisplay.toLowerCase().includes(m.current_server.toLowerCase());
+
+                // --- 4. LAYOUT ---
+                let lastSetHTML = ""; let prevSetsHTML = "";
+                if (m.game_scores_history) {
+                    let scores = m.game_scores_history.split(',').filter(s => s.trim().length > 0);
+                    if (scores.length > 0) {
+                        lastSetHTML = `<div class="text-white font-mono font-bold text-lg bg-slate-700/50 px-3 py-0.5 rounded border border-white/5 mb-1 shadow-sm">${scores[scores.length-1]}</div>`;
+                        scores.slice(0, -1).reverse().forEach(s => { prevSetsHTML += `<div class="text-slate-500 font-mono font-bold text-xs">${s}</div>`; });
+                    }
                 }
 
                 liveHTML += `
-                <div class="relative bg-slate-800/80 backdrop-blur-md border border-white/10 rounded-2xl p-6 md:p-8 mb-6 shadow-2xl mx-auto max-w-4xl" id="card-${doc.id}">
+                <div class="relative bg-slate-800/90 backdrop-blur-md border border-white/10 rounded-2xl p-6 mb-6 shadow-2xl mx-auto max-w-4xl overflow-hidden mt-6">
                     ${timerBadge}
-                    <div class="flex justify-between items-center mb-6 border-b border-white/5 pb-2">
-                        <div class="text-sm font-bold text-slate-500 uppercase tracking-[0.2em]">Table ${m.table}</div>
-                        <div class="text-sm font-bold text-yellow-500/80 uppercase tracking-widest">${m.division}</div>
+                    
+                    <div class="flex justify-between items-center mb-6 border-b border-white/5 pb-2 mt-2">
+                        <div class="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">TABLE ${m.table}</div>
+                        <div class="text-xs font-bold text-yellow-500 uppercase tracking-widest">${m.division}</div>
                     </div>
-                    <div class="flex items-center justify-between">
-                        <div class="flex-1 text-center">
-                            <div class="text-xl md:text-3xl font-black text-white mb-2 leading-tight flex justify-center items-center">${homeDisplay} ${homeServerIcon}</div>
-                            <div class="text-7xl md:text-9xl font-black text-white font-mono tracking-tighter shadow-text">${m.live_home_score || 0}</div>
+
+                    <div class="flex justify-between items-end mb-4 px-1">
+                        <div class="text-left w-2/5 relative">
+                            <div class="text-lg md:text-2xl font-black text-white leading-tight break-words">${homeDisplay}</div>
+                            ${isHomeServing ? '<div class="text-yellow-500 text-[10px] font-bold uppercase tracking-widest mt-1 animate-pulse"><i class="fa-solid fa-table-tennis-paddle-ball"></i> SERVING</div>' : ''}
                         </div>
-                        <div class="w-24 md:w-32 flex flex-col items-center justify-center bg-black/20 rounded-xl py-4 mx-4 border border-white/5">
-                            <div class="text-xs text-slate-500 font-bold uppercase mb-1 tracking-widest">SETS</div>
-                            <div class="text-3xl md:text-5xl font-bold text-yellow-500 font-mono">${m.live_home_sets || 0}-${m.live_away_sets || 0}</div>
-                        </div>
-                        <div class="flex-1 text-center">
-                            <div class="text-xl md:text-3xl font-black text-white mb-2 leading-tight flex justify-center items-center">${awayServerIcon} ${awayDisplay}</div>
-                            <div class="text-7xl md:text-9xl font-black text-white font-mono tracking-tighter shadow-text">${m.live_away_score || 0}</div>
+                        <div class="text-center w-1/5 text-xs text-slate-600 font-bold uppercase pb-1">VS</div>
+                        <div class="text-right w-2/5 relative">
+                            <div class="text-lg md:text-2xl font-black text-white leading-tight break-words">${awayDisplay}</div>
+                            ${isAwayServing ? '<div class="text-yellow-500 text-[10px] font-bold uppercase tracking-widest mt-1 animate-pulse text-right">SERVING <i class="fa-solid fa-table-tennis-paddle-ball"></i></div>' : ''}
                         </div>
                     </div>
-                    ${historyHTML}
+
+                    <div class="flex items-center justify-center gap-4 md:gap-8 bg-black/20 rounded-2xl p-4 border border-white/5 mb-4">
+                        <div class="text-6xl md:text-8xl font-black text-white font-mono tracking-tighter drop-shadow-2xl min-w-[60px] text-center">${m.live_home_score || 0}</div>
+                        <div class="flex flex-col items-center justify-center px-2 min-w-[90px]">
+                            <div class="text-3xl md:text-4xl font-black text-yellow-500 font-mono whitespace-nowrap mb-1">${m.live_home_sets || 0}-${m.live_away_sets || 0}</div>
+                            ${lastSetHTML}
+                            <div class="flex flex-col gap-0.5 mt-1 text-center">${prevSetsHTML}</div>
+                        </div>
+                        <div class="text-6xl md:text-8xl font-black text-white font-mono tracking-tighter drop-shadow-2xl min-w-[60px] text-center">${m.live_away_score || 0}</div>
+                    </div>
+                    
+                    <div class="h-14 flex items-center justify-center border-t border-white/5 pt-2">
+                        ${statsContent}
+                    </div>
                 </div>`;
             } else {
                 hasScheduled = true;
-                scheduledHTML += `
-                <div class="bg-slate-800/40 p-4 rounded-xl border border-white/5 flex justify-between items-center mb-3 hover:bg-slate-800/60 transition-colors">
-                    <div class="flex flex-col gap-1">
-                        <div class="flex items-center gap-2"><span class="text-xs font-bold bg-slate-700 text-slate-300 px-2 py-0.5 rounded">T${m.table}</span><span class="text-xs text-slate-500 font-bold uppercase tracking-wider">${m.division}</span></div>
-                        <div class="text-lg font-bold text-white">${homeDisplay} <span class="text-slate-500 text-sm mx-1">vs</span> ${awayDisplay}</div>
-                    </div>
-                    <div class="text-xs font-bold text-slate-400 bg-black/30 px-3 py-1.5 rounded-full border border-white/5">UPCOMING</div>
-                </div>`;
+                scheduledHTML += `<div class="bg-slate-800/40 p-4 rounded-xl border border-white/5 flex justify-between items-center mb-3 hover:bg-slate-800/60 transition-colors"><div class="flex flex-col gap-1"><div class="flex items-center gap-2"><span class="text-xs font-bold bg-slate-700 text-slate-300 px-2 py-0.5 rounded">T${m.table}</span><span class="text-xs text-slate-500 font-bold uppercase tracking-wider">${m.division}</span></div><div class="text-lg font-bold text-white">${homeDisplay} <span class="text-slate-500 text-sm mx-1">vs</span> ${awayDisplay}</div></div><div class="text-xs font-bold text-slate-400 bg-black/30 px-3 py-1.5 rounded-full border border-white/5">UPCOMING</div></div>`;
             }
         });
 
         if (hasLive) { 
-            navLive.style.display = "block"; navMobileLive.style.display = "flex"; matchesContainer.innerHTML = liveHTML; scheduledContainer.style.display = "none"; 
+            if(navLive) navLive.style.display = "block"; 
+            navMobileLive.style.display = "flex"; 
+            matchesContainer.innerHTML = liveHTML; 
+            scheduledContainer.style.display = "none"; 
         } else { 
-            navLive.style.display = "none"; navMobileLive.style.display = "none"; matchesContainer.innerHTML = "<div class='text-center text-slate-500 py-20 text-lg'>No matches live right now.</div>"; 
+            if(navLive) navLive.style.display = "none"; 
+            navMobileLive.style.display = "none"; 
+            matchesContainer.innerHTML = "<div class='text-center text-slate-500 py-20 text-lg'>No matches live right now.</div>"; 
             if(hasScheduled) { scheduledContainer.style.display = "block"; scheduledList.innerHTML = scheduledHTML; } 
         }
-    });
+    }
 
+    // --- NOTIFICATIONS ---
     function showNotification(p1, p2) { const banner = document.getElementById("matchNotification"); const text = document.getElementById("notifText"); if(banner && text) { text.innerHTML = `<span class="text-white font-bold">${p1}</span> vs <span class="text-white font-bold">${p2}</span>`; banner.style.top = "0"; setTimeout(() => { banner.style.top = "-100px"; }, 6000); } }
+    
+    // --- MODAL ---
+    window.openMatchDetails = function(p1, p2, score, division, season, date, details) {
+        document.getElementById('md-p1').innerText = p1; document.getElementById('md-p2').innerText = p2;
+        document.getElementById('md-score').innerText = score; document.getElementById('md-division').innerText = division;
+        document.getElementById('md-season').innerText = season; document.getElementById('md-date').innerText = date;
+        const histDiv = document.getElementById('md-history'); histDiv.innerHTML = '';
+        if (details && details.length > 2) {
+            details.split(',').forEach(s => {
+                const badge = document.createElement('span'); badge.className = "bg-slate-700 text-white font-mono font-bold px-3 py-1 rounded shadow"; badge.innerText = s.trim(); histDiv.appendChild(badge);
+            });
+        } else { histDiv.innerHTML = '<span class="text-slate-500 text-xs italic">No detailed set history available.</span>'; }
+        document.getElementById('matchDetailsModal').classList.remove('hidden');
+    }
+    window.closeMatchDetails = function() { document.getElementById('matchDetailsModal').classList.add('hidden'); }
     window.switchTab = (tabId) => { window.switchTabGlobal(tabId); };
 </script>
 
-
 <script>
-    // GLOBAL VARIABLES
-    window.allPlayersRaw = []; 
-    let currentSeason = "Career", currentDivision = "All";
-    let currentPlayerStats = null, currentMode = "regular";
-
-    // --- VISUAL STARS ---
+    // --- STANDARD JS (Profile, Search) ---
+    window.allPlayersRaw = []; let currentSeason = "Career", currentDivision = "All";
     function generateStars() { const container = document.getElementById('starContainer'); if(!container) return; container.innerHTML = ''; const starCount = 60; for (let i = 0; i < starCount; i++) { const star = document.createElement('div'); const sizeClass = Math.random() < 0.6 ? 's-small' : (Math.random() < 0.9 ? 's-medium' : 's-large'); star.className = `star ${sizeClass}`; star.style.top = `${Math.random() * 100}%`; star.style.left = `${Math.random() * 100}%`; star.style.setProperty('--duration', `${2 + Math.random() * 3}s`); star.style.setProperty('--delay', `${Math.random() * 2}s`); container.appendChild(star); } }
-
     window.onload = async () => {
         generateStars(); 
-        
         try {
-            // 1. Fetch Players
-            const pRes = await fetch('/api/players');
-            window.allPlayersRaw = await pRes.json();
-            
-            // 2. Setup Search
-            setupMainSearch(); 
-            
-            // 3. Load Dropdowns
+            const pRes = await fetch('/api/players'); window.allPlayersRaw = await pRes.json(); setupMainSearch(); 
             const [sRes, dRes] = await Promise.all([fetch('/api/seasons'), fetch('/api/divisions')]);
-            const seasons = await sRes.json();
-            const divisions = await dRes.json();
-            
-            const sSelect = document.getElementById('seasonSelect');
-            if (sSelect) { sSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; sSelect.appendChild(opt); }); }
-            
+            const seasons = await sRes.json(); const divisions = await dRes.json();
+            const sSelect = document.getElementById('seasonSelect'); if (sSelect) { sSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; sSelect.appendChild(opt); }); }
+            const pDivSelect = document.getElementById('profileDivisionSelect'); if (pDivSelect) { pDivSelect.innerHTML = '<option value="All">All Divisions</option>'; divisions.forEach(d => { let opt = document.createElement('option'); opt.value = d; opt.innerText = d; pDivSelect.appendChild(opt); }); }
             if(seasons.length > 0) { currentSeason = seasons[seasons.length - 1]; if(sSelect) sSelect.value = currentSeason; }
-
-            document.getElementById('seasonSelect')?.addEventListener('change', (e) => { currentSeason = e.target.value; reloadStats(); });
-            
+            const refreshProfile = () => { const pName = document.getElementById('playerName').innerText; if(pName && pName !== "Loading...") loadStats(pName); };
+            document.getElementById('seasonSelect')?.addEventListener('change', refreshProfile); document.getElementById('profileDivisionSelect')?.addEventListener('change', refreshProfile);
+            const boardDivSelect = document.getElementById('boardDiv'); const boardSeasonSelect = document.getElementById('boardSeason');
+            if(boardDivSelect) { boardDivSelect.innerHTML = ''; divisions.forEach(d => { let opt = document.createElement('option'); opt.value = d; opt.innerText = d; boardDivSelect.appendChild(opt); }); }
+            if(boardSeasonSelect) { boardSeasonSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; boardSeasonSelect.appendChild(opt); }); if(seasons.length > 0) boardSeasonSelect.value = seasons[seasons.length - 1]; }
+            const resultSeasonSelect = document.getElementById('resultsSeason'); if(resultSeasonSelect) { resultSeasonSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; resultSeasonSelect.appendChild(opt); }); if(seasons.length > 0) resultSeasonSelect.value = seasons[seasons.length - 1]; }
+            loadDivisionLeaderboard(); loadResults();
         } catch(e) { console.error("Init Error", e); }
     };
-
-    // --- FIXED SEARCH LOGIC ---
     function setupMainSearch() {
-        const input = document.getElementById('playerSearch');
-        const list = document.getElementById('suggestions-list');
-        
-        if (!input || !list) return;
-
+        const input = document.getElementById('playerSearch'); const list = document.getElementById('suggestions-list'); if (!input || !list) return;
         input.addEventListener('input', () => {
-            const val = input.value.toLowerCase().trim();
-            list.innerHTML = ''; 
-            
-            if (val.length < 2) { list.classList.add('hidden'); return; }
+            const val = input.value.toLowerCase().trim(); list.innerHTML = ''; if (val.length < 2) { list.classList.add('hidden'); return; }
             if (!window.allPlayersRaw) return;
-
-            const exact = window.allPlayersRaw.filter(p => p.toLowerCase().startsWith(val));
-            const partial = window.allPlayersRaw.filter(p => p.toLowerCase().includes(val) && !p.toLowerCase().startsWith(val));
-            const filtered = [...exact, ...partial].slice(0, 8);
-
+            const filtered = window.allPlayersRaw.filter(p => p.toLowerCase().includes(val)).slice(0, 8);
             list.classList.remove('hidden');
-
-            if (filtered.length > 0) {
-                filtered.forEach(player => {
-                    const div = document.createElement('div');
-                    div.className = 'p-3 hover:bg-slate-700 cursor-pointer text-white border-b border-white/5 transition-colors flex justify-between items-center bg-slate-800';
-                    div.innerHTML = `<span class="font-bold">${player}</span><i class="fa-solid fa-chevron-right text-xs text-slate-500"></i>`;
-                    div.onclick = () => { 
-                        input.value = player; 
-                        list.classList.add('hidden'); 
-                        loadStats(player); 
-                    };
-                    list.appendChild(div);
-                });
-            } else {
-                list.innerHTML = `<div class="p-4 text-slate-500 text-center text-sm bg-slate-800">No player found</div>`;
-            }
+            if (filtered.length > 0) { filtered.forEach(player => { const div = document.createElement('div'); div.className = 'p-3 hover:bg-slate-700 cursor-pointer text-white border-b border-white/5 transition-colors flex justify-between items-center bg-slate-800'; div.innerHTML = `<span class="font-bold">${player}</span><i class="fa-solid fa-chevron-right text-xs text-slate-500"></i>`; div.onclick = () => { input.value = player; list.classList.add('hidden'); loadStats(player); }; list.appendChild(div); }); } else { list.innerHTML = `<div class="p-4 text-slate-500 text-center text-sm bg-slate-800">No player found</div>`; }
         });
-
-        document.addEventListener('click', (e) => {
-            if (!input.contains(e.target) && !list.contains(e.target)) {
-                list.classList.add('hidden');
-            }
-        });
+        document.addEventListener('click', (e) => { if (!input.contains(e.target) && !list.contains(e.target)) list.classList.add('hidden'); });
     }
-
-    // --- TAB SWITCHER ---
-    window.switchTabGlobal = (tabId) => { 
-        ['home', 'week', 'sheets', 'global', 'live-center', 'rules'].forEach(t => { 
-            const el = document.getElementById(`tab-${t}`); if(el) el.classList.add('hidden'); 
-            const nav = document.getElementById(`nav-${t}`); if(nav) nav.classList.remove('active'); 
-            const bnav = document.getElementById(`b-nav-${t}`); if(bnav) bnav.classList.remove('active'); 
-        }); 
-        const stats = document.getElementById('statsContainer');
-        if(stats) stats.classList.add('hidden');
-
-        if (tabId === 'statsContainer') {
-            stats.classList.remove('hidden');
-            stats.classList.add('animate-fade-in');
-        } else {
-            const target = document.getElementById(`tab-${tabId}`); 
-            if(target) { target.classList.remove('hidden'); target.classList.add('animate-fade-in'); } 
-            const targetNav = document.getElementById(`nav-${tabId}`); if(targetNav) targetNav.classList.add('active');
-            const targetBNav = document.getElementById(`b-nav-${tabId}`); if(targetBNav) targetBNav.classList.add('active');
-        }
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-    
-    // --- PROFILE LOADING (WITH LIVE INJECTION) ---
-    window.loadStats = async function(player) { 
-        window.switchTabGlobal('statsContainer'); 
-        document.getElementById('playerName').innerText = player; 
-        document.getElementById('playerSearch').value = ""; 
-        try { 
-            const res = await fetch(`/api/stats/${encodeURIComponent(player)}?season=Career&division=All`); 
-            const data = await res.json(); 
-            if (data.error) { alert("Player not found."); return; } 
-            
-            currentPlayerStats = data; 
-            document.getElementById('playerRatingBadge').innerText = `Rating: ${data.rating}`; 
-            document.getElementById('matchesPlayed').innerText = data.combined?.matches || 0;
-            document.getElementById('wins').innerText = data.combined?.wins || 0;
-            document.getElementById('losses').innerText = data.combined?.losses || 0;
-            document.getElementById("winRate").innerText = data.combined?.win_rate || "0%"; 
-            
-            // Render History (injecting Live Matches if any)
-            renderHistory(data.combined?.match_history || [], player);
-            
-        } catch (err) { console.error("Error loading stats:", err); } 
-    }
-
-    window.closeProfile = () => { window.switchTabGlobal('home'); }
-    
-    function renderHistory(matches, playerName) { 
-        const historyDiv = document.getElementById('matchHistory'); 
-        historyDiv.innerHTML = ""; 
-        
-        // 1. CHECK FOR LIVE MATCHES
-        if (window.liveMatchesRaw && window.liveMatchesRaw.length > 0) {
-            window.liveMatchesRaw.forEach(m => {
-                let isPlaying = false;
-                let opponentName = "Unknown";
-                
-                // Check Home Players
-                if (m.home_players && m.home_players.includes(playerName)) {
-                    isPlaying = true;
-                    opponentName = m.away_players ? m.away_players.join("/") : m.away_team;
-                }
-                // Check Away Players
-                else if (m.away_players && m.away_players.includes(playerName)) {
-                    isPlaying = true;
-                    opponentName = m.home_players ? m.home_players.join("/") : m.home_team;
-                }
-                
-                if (isPlaying) {
-                    // Render "LIVE NOW" Card
-                    const liveRow = document.createElement('div');
-                    liveRow.className = "bg-red-500/10 border-l-4 border-red-500 p-4 mb-4 rounded-r-lg animate-pulse";
-                    liveRow.innerHTML = `
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <div class="text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">LIVE NOW • TABLE ${m.table}</div>
-                                <div class="text-white font-bold text-lg">vs ${opponentName}</div>
-                            </div>
-                            <div class="text-right">
-                                <div class="text-2xl font-mono font-black text-white">${m.live_home_score}-${m.live_away_score}</div>
-                                <div class="text-xs text-red-400 font-bold">SETS: ${m.live_home_sets}-${m.live_away_sets}</div>
-                            </div>
-                        </div>`;
-                    historyDiv.appendChild(liveRow);
-                }
-            });
-        }
-
-        // 2. RENDER HISTORICAL MATCHES
-        if (!matches || matches.length === 0) { 
-            if (historyDiv.innerHTML === "") historyDiv.innerHTML = '<div class="p-6 text-center text-slate-500">No matches found.</div>'; 
-            return; 
-        } 
-        
-        matches.slice(0, 10).forEach(match => { 
-            const row = document.createElement('div'); 
-            row.className = "flex justify-between items-center p-4 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors"; 
-            const resultColor = match.result === "Win" ? "text-green-400" : "text-red-400"; 
-            const resultIcon = match.result === "Win" ? "W" : "L"; 
-            
-            row.innerHTML = `
-            <div class="flex flex-col">
-                <div class="flex items-center gap-3 mb-1">
-                    <span class="${resultColor} font-black text-xl w-6">${resultIcon}</span>
-                    <div class="flex items-center">
-                        <span class="text-slate-500 mr-2 text-xs">VS</span>
-                        <a href="#" onclick="loadStats('${match.opponent}'); return false;" class="text-white hover:text-yellow-400 font-bold transition-colors">${match.opponent}</a>
-                    </div>
-                </div>
-            </div>
-            <div class="text-right">
-                <div class="font-mono text-slate-300 font-bold bg-slate-800 px-2 py-1 rounded inline-block text-sm mb-1">${match.score}</div>
-                <div class="text-[10px] text-slate-600 font-bold uppercase tracking-wider">${match.date}</div>
-            </div>`; 
-            historyDiv.appendChild(row); 
-        }); 
-    }
+    window.switchTabGlobal = (tabId) => { ['home', 'week', 'sheets', 'global', 'live-center', 'rules'].forEach(t => { const el = document.getElementById(`tab-${t}`); if(el) el.classList.add('hidden'); const nav = document.getElementById(`nav-${t}`); if(nav) nav.classList.remove('active'); const bnav = document.getElementById(`b-nav-${t}`); if(bnav) bnav.classList.remove('active'); }); const stats = document.getElementById('statsContainer'); if(stats) stats.classList.add('hidden'); if (tabId === 'statsContainer') { stats.classList.remove('hidden'); stats.classList.add('animate-fade-in'); } else { const target = document.getElementById(`tab-${tabId}`); if(target) { target.classList.remove('hidden'); target.classList.add('animate-fade-in'); } const targetNav = document.getElementById(`nav-${tabId}`); if(targetNav) targetNav.classList.add('active'); const targetBNav = document.getElementById(`b-nav-${tabId}`); if(targetBNav) targetBNav.classList.add('active'); } window.scrollTo({ top: 0, behavior: 'smooth' }); };
+    window.loadStats = async function(player) { window.switchTabGlobal('statsContainer'); document.getElementById('playerName').innerText = player; document.getElementById('playerSearch').value = ""; const seasonSelect = document.getElementById('seasonSelect'); const selectedSeason = seasonSelect ? seasonSelect.value : "Career"; const divSelect = document.getElementById('profileDivisionSelect'); const selectedDiv = divSelect ? divSelect.value : "All"; const histDiv = document.getElementById('matchHistory'); histDiv.innerHTML = '<div class="p-8 text-center text-slate-500"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><br>Loading history...</div>'; try { const res = await fetch(`/api/stats/${encodeURIComponent(player)}?season=${encodeURIComponent(selectedSeason)}&division=${encodeURIComponent(selectedDiv)}`); const data = await res.json(); if (data.error) { alert("Player not found."); return; } document.getElementById('playerRatingBadge').innerText = `Rating: ${data.rating}`; document.getElementById('matchesPlayed').innerText = data.combined?.matches || 0; document.getElementById('wins').innerText = data.combined?.wins || 0; document.getElementById('losses').innerText = data.combined?.losses || 0; document.getElementById("winRate").innerText = data.combined?.win_rate || "0%"; renderHistory(data.combined?.match_history || [], player); } catch (err) { console.error("Error loading stats:", err); } };
+    function renderHistory(matches, playerName) { const historyDiv = document.getElementById('matchHistory'); historyDiv.innerHTML = ""; if (window.liveMatchesRaw && window.liveMatchesRaw.length > 0) { window.liveMatchesRaw.forEach(m => { let isPlaying = false; let opponentName = "Unknown"; if (m.home_players && m.home_players.includes(playerName)) { isPlaying = true; opponentName = m.away_players ? m.away_players.join("/") : m.away_team; } else if (m.away_players && m.away_players.includes(playerName)) { isPlaying = true; opponentName = m.home_players ? m.home_players.join("/") : m.home_team; } if (isPlaying) { const liveRow = document.createElement('div'); liveRow.className = "bg-red-500/10 border-l-4 border-red-500 p-4 mb-4 rounded-r-lg animate-pulse"; liveRow.innerHTML = `<div class="flex justify-between items-center"><div><div class="text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">LIVE NOW • TABLE ${m.table}</div><div class="text-white font-bold text-lg">vs ${opponentName}</div></div><div class="text-right"><div class="text-2xl font-mono font-black text-white">${m.live_home_score}-${m.live_away_score}</div><div class="text-xs text-red-400 font-bold">SETS: ${m.live_home_sets}-${m.live_away_sets}</div></div></div>`; historyDiv.appendChild(liveRow); } }); } if (!matches || matches.length === 0) { if (historyDiv.innerHTML === "") historyDiv.innerHTML = '<div class="p-6 text-center text-slate-500">No matches found.</div>'; return; } matches.slice(0, 10).forEach(match => { const row = document.createElement('div'); row.onclick = () => openMatchDetails(playerName, match.opponent, match.score, match.division, match.season, match.date, match.details); row.className = "flex justify-between items-center p-4 border-b border-white/5 last:border-0 hover:bg-white/10 transition-colors cursor-pointer"; const resultColor = match.result === "Win" ? "text-green-400" : "text-red-400"; const resultIcon = match.result === "Win" ? "W" : "L"; row.innerHTML = `<div class="flex flex-col"><div class="flex items-center gap-3 mb-1"><span class="${resultColor} font-black text-xl w-6">${resultIcon}</span><div class="flex items-center"><span class="text-slate-500 mr-2 text-xs">VS</span><span class="text-white font-bold">${match.opponent}</span></div></div></div><div class="text-right"><div class="font-mono text-slate-300 font-bold bg-slate-800 px-2 py-1 rounded inline-block text-sm mb-1">${match.score}</div><div class="text-[10px] text-slate-600 font-bold uppercase tracking-wider">${match.date}</div></div></div>`; historyDiv.appendChild(row); }); }
+    window.loadDivisionLeaderboard = async function() { const season = document.getElementById('boardSeason')?.value || currentSeason; const div = document.getElementById('boardDiv')?.value || "Division 1"; const week = document.getElementById('boardWeek')?.value || "Latest"; const sortMode = document.getElementById('boardSort')?.value || "wins"; const showFillIns = document.getElementById('toggleShowFillIns')?.checked; const combineFillIns = document.querySelector('input[name="fiMode"]:checked')?.value === 'combine'; const container = document.getElementById('leaderboardContent'); if(!container) return; container.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-4xl text-yellow-500"></i></div>'; try { const res = await fetch(`/api/rankings/${encodeURIComponent(season)}/${encodeURIComponent(div)}?week=${week}`); let data = await res.json(); if (!data || data.length === 0) { container.innerHTML = '<div class="text-center text-slate-500 py-10">No standings data found.</div>'; return; } data.sort((a, b) => { const aStats = showFillIns ? (combineFillIns ? a.regular : a.fillin) : a.regular; const bStats = showFillIns ? (combineFillIns ? b.regular : b.fillin) : b.regular; if(!aStats) return 1; if(!bStats) return -1; if (sortMode === 'rating') return b.rating_val - a.rating_val; if (sortMode === 'wins') return bStats.wins - aStats.wins; if (sortMode === 'percent') { const aPct = aStats.matches > 0 ? aStats.wins / aStats.matches : 0; const bPct = bStats.matches > 0 ? bStats.wins / bStats.matches : 0; return bPct - aPct; } return aStats.losses - bStats.losses; }); let html = ""; data.forEach((p, index) => { const stats = showFillIns ? (combineFillIns ? p.regular : p.fillin) : p.regular; if(!stats || stats.matches === 0) return; const winPct = Math.round((stats.wins / stats.matches) * 100); html += `<div class="grid grid-cols-7 gap-2 items-center p-3 bg-black/20 rounded-lg border border-white/5 hover:bg-white/5 transition-colors"><div class="col-span-2 flex items-center gap-3"><div class="text-slate-500 font-mono text-xs w-4">${index + 1}</div><div class="font-bold text-white truncate cursor-pointer hover:text-yellow-400" onclick="loadStats('${p.name}')">${p.name}</div></div><div class="text-center font-mono text-yellow-500 font-bold">${p.rating_val}</div><div class="text-center text-slate-300">${stats.matches}</div><div class="text-center text-green-400 font-bold">${stats.wins}</div><div class="text-center text-red-400">${stats.losses}</div><div class="text-center text-slate-300 font-mono">${winPct}%</div></div>`; }); container.innerHTML = html; } catch (e) { console.error(e); container.innerHTML = '<div class="text-center text-red-400 py-10">Error loading data.</div>'; } };
+    window.loadResults = async function() { const season = document.getElementById('resultsSeason')?.value || currentSeason; const week = document.getElementById('resultsWeek')?.value || "1"; const search = document.getElementById('resultsSearch')?.value.toLowerCase() || ""; const container = document.getElementById('resultsContainer'); if(!container) return; container.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-4xl text-yellow-500"></i></div>'; try { const res = await fetch(`/api/week/${encodeURIComponent(season)}/${week}`); const matches = await res.json(); if (!matches || matches.length === 0) { container.innerHTML = '<div class="text-center text-slate-500 py-10">No matches found for this week.</div>'; return; } let html = ""; let filtered = matches; if (search) filtered = matches.filter(m => m.p1.toLowerCase().includes(search) || m.p2.toLowerCase().includes(search)); filtered.forEach(m => { html += `<div class="bg-slate-800/50 p-4 rounded-xl border border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 hover:bg-slate-800 transition-colors"><div class="flex items-center gap-4 flex-1"><div class="text-xs font-bold text-slate-500 uppercase tracking-widest bg-black/20 px-2 py-1 rounded">${m.division}</div><div class="font-bold text-white text-lg">${m.p1} <span class="text-slate-500 text-sm mx-2">vs</span> ${m.p2}</div></div><div class="text-right"><div class="text-2xl font-mono font-black text-yellow-500 tracking-tight">${m.score}</div><div class="text-[10px] text-slate-500 font-bold uppercase">${m.date}</div></div></div>`; }); container.innerHTML = html || '<div class="text-center text-slate-500 py-10">No matches match your search.</div>'; } catch(e) { console.error(e); container.innerHTML = '<div class="text-center text-red-400 py-10">Error loading results.</div>'; } };
 </script>
