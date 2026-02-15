@@ -224,7 +224,7 @@
 
         async function initAdmin() {
             try {
-                // Fetch rich roster
+                // FETCH RICH ROSTER DATA
                 const res = await fetch('/api/roster_detailed'); 
                 allPlayers = await res.json();
                 console.log("Loaded " + allPlayers.length + " players for autocomplete.");
@@ -246,6 +246,7 @@
                     list.classList.remove("hidden");
                     matches.forEach(player => {
                         const item = document.createElement("div");
+                        // Displays: "Jakob (Div 1 • 1500)"
                         item.innerText = player.label; 
                         item.addEventListener("click", function() {
                             input.value = player.name; 
