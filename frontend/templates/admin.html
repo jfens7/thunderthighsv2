@@ -3,98 +3,384 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Thunder Control</title>
+    <title>GCTTA Admin Command</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap');
+        body { background-color: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; }
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 1rem; }
+        .tab-btn.active { background-color: #3b82f6; color: white; border-color: #3b82f6; }
+        .tab-btn { border: 1px solid rgba(255,255,255,0.1); }
+        .bg-green-soft { background-color: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); }
+        .admin-view { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
-        body { 
-            background-color: #020617; 
-            color: #e2e8f0; 
-            font-family: 'Inter', sans-serif; 
+        .autocomplete-items {
+            position: absolute; border: 1px solid rgba(255,255,255,0.1); border-top: none;
+            z-index: 99; top: 100%; left: 0; right: 0; border-radius: 0 0 0.5rem 0.5rem;
+            background-color: #1e293b; max-height: 200px; overflow-y: auto; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
         }
-        
-        .tab-btn { padding: 10px 20px; font-weight: 700; color: #64748b; border-bottom: 2px solid transparent; transition: all 0.2s; }
-        .tab-btn:hover { color: #cbd5e1; }
-        .tab-btn.active { color: #facc15; border-bottom-color: #facc15; }
-        
-        /* Input Styles */
-        .input-dark { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; rounded: 6px; width: 100%; }
-        .input-dark:focus { border-color: #facc15; outline: none; }
-        
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .modal-animate { animation: fadeIn 0.2s ease-out forwards; }
-        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        .autocomplete-items div { padding: 10px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.875rem; color: #cbd5e1; }
+        .autocomplete-items div:hover { background-color: #3b82f6; color: #ffffff; }
     </style>
 </head>
-<body class="min-h-screen flex flex-col bg-slate-950 text-slate-200">
+<body class="min-h-screen p-6">
 
-    {% include 'Components/Admin/header.html' %}
-
-    <div class="w-full bg-slate-900/50 border-b border-white/5 sticky top-[72px] z-40 backdrop-blur-md">
-        <div class="max-w-7xl mx-auto px-4 flex overflow-x-auto">
-            <button onclick="switchAdminTab('pending')" id="tab-btn-pending" class="px-6 py-4 font-bold text-sm text-yellow-500 border-b-2 border-yellow-500 transition-all flex items-center gap-2">
-                <i class="fa-solid fa-clock"></i> Pending
+    <div class="max-w-7xl mx-auto flex justify-between items-center mb-8">
+        <div class="flex items-center gap-4">
+            <div class="bg-gradient-to-br from-blue-600 to-blue-800 p-3 rounded-xl shadow-lg border border-white/10">
+                <i class="fa-solid fa-shield-cat text-2xl text-white"></i>
+            </div>
+            <div>
+                <h1 class="text-3xl font-black text-white tracking-tighter">ADMIN <span class="text-blue-500">CONSOLE</span></h1>
+                <p class="text-slate-400 text-xs font-bold uppercase tracking-widest">System Control & Recovery</p>
+            </div>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="location.href='/'" class="bg-slate-800 hover:bg-slate-700 px-5 py-2.5 rounded-lg font-bold text-sm border border-white/10 transition flex items-center gap-2">
+                <i class="fa-solid fa-arrow-left"></i> Main Site
             </button>
-            <button onclick="switchAdminTab('live')" id="tab-btn-live" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2">
-                <i class="fa-solid fa-tower-broadcast"></i> Live Control
-            </button>
-            <button onclick="switchAdminTab('approved')" id="tab-btn-approved" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2">
-                <i class="fa-solid fa-check-double"></i> History
-            </button>
-            <button onclick="switchAdminTab('migration')" id="tab-btn-migration" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2">
-                <i class="fa-solid fa-database"></i> Migration
+            <button onclick="forceRefresh()" class="bg-yellow-500 hover:bg-yellow-400 text-black px-5 py-2.5 rounded-lg font-bold text-sm transition shadow-lg shadow-yellow-500/20 flex items-center gap-2">
+                <i class="fa-solid fa-bolt"></i> Force Sync
             </button>
         </div>
     </div>
 
-    <main class="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
+    <div class="max-w-7xl mx-auto mb-6 flex gap-4 overflow-x-auto pb-2">
+        <button onclick="switchAdminTab('live')" id="tab-live" class="tab-btn active px-6 py-3 rounded-lg font-bold text-sm flex items-center gap-2 transition whitespace-nowrap"><i class="fa-solid fa-tower-broadcast"></i> Live Control</button>
+        <button onclick="switchAdminTab('inbox')" id="tab-inbox" class="tab-btn px-6 py-3 rounded-lg font-bold text-sm flex items-center gap-2 transition whitespace-nowrap relative">
+            <i class="fa-solid fa-inbox"></i> Issues Inbox
+            <span id="inbox-badge" class="hidden absolute -top-2 -right-2 bg-red-600 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full border border-slate-900">0</span>
+        </button>
+        <button onclick="switchAdminTab('history')" id="tab-history" class="tab-btn px-6 py-3 rounded-lg font-bold text-sm flex items-center gap-2 transition whitespace-nowrap"><i class="fa-solid fa-clock-rotate-left"></i> History Editor</button>
+        <button onclick="switchAdminTab('players')" id="tab-players" class="tab-btn px-6 py-3 rounded-lg font-bold text-sm flex items-center gap-2 transition whitespace-nowrap"><i class="fa-solid fa-users-gear"></i> Player Manager</button>
+    </div>
+
+    <div id="view-live" class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6 admin-view">
+        <div class="glass-panel p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-white flex items-center gap-3"><i class="fa-solid fa-circle-play text-green-500"></i> Active Matches</h2>
+                <div class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-xs font-bold uppercase border border-green-500/30 animate-pulse" id="live-count">0 Live</div>
+            </div>
+            <div id="live-list" class="space-y-4">
+                <div class="text-center py-10 text-slate-500"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</div>
+            </div>
+        </div>
+        <div class="glass-panel p-6">
+            <h2 class="text-xl font-bold text-white mb-6 flex items-center gap-3"><i class="fa-solid fa-calendar text-blue-400"></i> Scheduled Tonight</h2>
+            <div id="sched-list" class="space-y-4"></div>
+        </div>
+    </div>
+
+    <div id="view-inbox" class="max-w-7xl mx-auto hidden admin-view">
+        <div class="glass-panel p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-white flex items-center gap-3"><i class="fa-solid fa-triangle-exclamation text-yellow-500"></i> Player Reports</h2>
+                <button onclick="loadInbox()" class="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded transition"><i class="fa-solid fa-refresh"></i> Refresh</button>
+            </div>
+            <div id="inbox-list" class="space-y-4">
+                <div class="text-center py-10 text-slate-500 italic">No pending reports.</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="view-history" class="max-w-7xl mx-auto hidden admin-view">
+        <div class="glass-panel p-6 mb-6">
+            <div class="flex gap-4">
+                <input type="text" id="hist-search" placeholder="Search Player Name or Date (YYYY-MM-DD)" class="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                <button onclick="searchHistory()" class="bg-blue-600 hover:bg-blue-500 px-8 py-3 rounded-lg font-bold text-white transition">Search</button>
+            </div>
+        </div>
+        <div id="history-results" class="space-y-3">
+            <div class="text-center text-slate-500 py-20 italic">Search to find past matches to edit...</div>
+        </div>
+    </div>
+
+    <div id="view-players" class="max-w-7xl mx-auto hidden admin-view">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="glass-panel p-8 border-l-4 border-l-purple-500 flex flex-col h-full">
+                <h2 class="text-2xl font-bold text-white mb-2">Identify & Merge</h2>
+                <p class="text-slate-400 text-sm mb-6">Fix typos (e.g. "Jimy" -> "Jimmy"). This updates all past matches and deletes the bad profile.</p>
+                
+                <div class="space-y-6 flex-grow">
+                    <div class="relative autocomplete">
+                        <label class="text-xs font-bold text-slate-500 uppercase block mb-1">Incorrect Name (Source)</label>
+                        <input id="merge-bad" class="w-full bg-black/30 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition placeholder-slate-600" placeholder="Type to search..." autocomplete="off">
+                        <div id="merge-bad-list" class="autocomplete-items hidden"></div>
+                    </div>
+
+                    <div class="flex justify-center text-purple-500 text-xl animate-bounce pt-2"><i class="fa-solid fa-arrow-down"></i></div>
+
+                    <div class="relative autocomplete">
+                        <label class="text-xs font-bold text-slate-500 uppercase block mb-1">Correct Name (Target)</label>
+                        <input id="merge-good" class="w-full bg-black/30 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition placeholder-slate-600" placeholder="Type to search..." autocomplete="off">
+                        <div id="merge-good-list" class="autocomplete-items hidden"></div>
+                    </div>
+                </div>
+                
+                <button onclick="performMerge()" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-purple-900/50 transition mt-8">MERGE RECORDS</button>
+            </div>
+            
+            <div class="glass-panel p-8">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-white"><i class="fa-solid fa-magnifying-glass text-blue-400 mr-2"></i> Likely Duplicates</h2>
+                    <button onclick="scanForDuplicates()" class="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded">SCAN NOW</button>
+                </div>
+                <div id="dup-list" class="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                    <div class="text-center text-slate-500 text-sm py-4">Click Scan to find typos.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="liveEditModal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-lg p-6">
+            <input type="hidden" id="live-id">
+            <h3 class="text-xl font-bold text-white mb-4">Manage Live Match</h3>
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <input type="number" id="live-h-score" class="bg-black/50 border border-white/10 rounded p-2 text-white text-center">
+                <input type="number" id="live-a-score" class="bg-black/50 border border-white/10 rounded p-2 text-white text-center">
+            </div>
+            <button onclick="saveLiveScore()" class="w-full bg-blue-600 py-2 rounded font-bold text-white mb-2">Save Score</button>
+            <button onclick="forceFinishLive()" class="w-full bg-red-900/50 text-red-300 py-2 rounded font-bold border border-red-500/30">Force Finish</button>
+            <button onclick="closeModal('liveEditModal')" class="w-full mt-2 text-slate-500">Cancel</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, query, where, onSnapshot, doc, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = { apiKey: "AIzaSyDq05wFsKLHtt8G0Z5yLOG9pIk9UX24S4o", authDomain: "gctta-stats-live.firebaseapp.com", projectId: "gctta-stats-live", storageBucket: "gctta-stats-live.firebasestorage.app", messagingSenderId: "1070856258556", appId: "1:1070856258556:web:be438e04c1941abc3c6879" };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
         
-        <div id="admin-dashboard-stats" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 transition-all duration-300">
-            <div class="bg-slate-900 p-4 rounded-xl border border-white/5 flex items-center justify-between shadow-lg">
-                <div>
-                    <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">SYSTEM STATUS</div>
-                    <div class="text-green-400 font-bold flex items-center gap-2 text-sm"><div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div> ONLINE</div>
-                </div>
-                <i class="fa-solid fa-server text-slate-700 text-2xl"></i>
-            </div>
-            <div class="bg-slate-900 p-4 rounded-xl border border-white/5 flex items-center justify-between shadow-lg">
-                <div>
-                    <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">ACTIVE SEASON</div>
-                    <div class="text-white font-bold text-sm" id="currentSeasonDisplay">Loading...</div>
-                </div>
-                <i class="fa-solid fa-calendar text-slate-700 text-2xl"></i>
-            </div>
-            <div class="bg-slate-900 p-4 rounded-xl border border-white/5 flex items-center justify-between shadow-lg">
-                <div>
-                    <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">LIVE MATCHES</div>
-                    <div class="text-white font-bold text-xl" id="liveMatchCount">0</div>
-                </div>
-                <i class="fa-solid fa-bolt text-slate-700 text-2xl"></i>
-            </div>
-        </div>
+        const today = new Date();
+        const dateString = String(today.getDate()).padStart(2, '0') + '/' + String(today.getMonth() + 1).padStart(2, '0') + '/' + today.getFullYear();
 
-        <div id="admin-pending" class="space-y-6">
-            {% include 'Components/Admin/view_pending.html' %}
-        </div>
+        // LIVE LISTENER
+        const q = query(collection(db, "fixture_schedule"), where("date", "==", dateString));
+        onSnapshot(q, (snapshot) => {
+            const liveContainer = document.getElementById("live-list");
+            const schedContainer = document.getElementById("sched-list");
+            let liveHTML = ""; let schedHTML = ""; let count = 0;
 
-        <div id="admin-live" class="hidden space-y-6">
-            {% include 'Components/Admin/view_live.html' %}
-        </div>
+            snapshot.forEach(doc => {
+                const m = doc.data(); const id = doc.id;
+                const p1 = (m.home_players && m.home_players.length > 0) ? m.home_players.join("/") : m.home_team;
+                const p2 = (m.away_players && m.away_players.length > 0) ? m.away_players.join("/") : m.away_team;
+                const isLive = m.match_status === "Live" || m.match_status === "Paused";
 
-        <div id="admin-approved" class="hidden space-y-6">
-            {% include 'Components/Admin/view_approved.html' %}
-        </div>
+                const card = `
+                <div class="bg-black/20 border border-white/5 rounded-xl p-4 flex justify-between items-center group hover:bg-white/5 transition cursor-pointer" onclick="openLiveEdit('${id}', '${m.live_home_score}', '${m.live_away_score}')">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-xs font-bold bg-slate-700 text-slate-300 px-2 py-0.5 rounded">T${m.table}</span>
+                            <span class="text-[10px] uppercase font-bold text-slate-500">${m.division}</span>
+                        </div>
+                        <div class="font-bold text-white">${p1} <span class="text-slate-500 text-sm">vs</span> ${p2}</div>
+                    </div>
+                    <div class="text-right">
+                        ${isLive ? `<div class="text-2xl font-mono font-black text-yellow-500">${m.live_home_score}-${m.live_away_score}</div>` : '<div class="text-slate-600 text-sm">WAITING</div>'}
+                    </div>
+                </div>`;
+
+                if (isLive) { liveHTML += card; count++; } 
+                else if (m.match_status !== "Finished") { schedHTML += card; }
+            });
+
+            liveContainer.innerHTML = liveHTML || '<div class="text-slate-500 italic text-sm">No active matches.</div>';
+            schedContainer.innerHTML = schedHTML || '<div class="text-slate-500 italic text-sm">No scheduled matches.</div>';
+            document.getElementById("live-count").innerText = `${count} LIVE`;
+        });
+
+        window.openLiveEdit = (id, s1, s2) => {
+            document.getElementById('live-id').value = id;
+            document.getElementById('live-h-score').value = s1 || 0;
+            document.getElementById('live-a-score').value = s2 || 0;
+            document.getElementById('liveEditModal').classList.remove('hidden');
+        };
+
+        window.saveLiveScore = async () => {
+            const id = document.getElementById('live-id').value;
+            const s1 = parseInt(document.getElementById('live-h-score').value);
+            const s2 = parseInt(document.getElementById('live-a-score').value);
+            await updateDoc(doc(db, "fixture_schedule", id), { live_home_score: s1, live_away_score: s2 });
+            closeModal('liveEditModal');
+        };
+
+        window.forceFinishLive = async () => {
+            if(!confirm("Force FINISH?")) return;
+            const id = document.getElementById('live-id').value;
+            await updateDoc(doc(db, "fixture_schedule", id), { match_status: "Finished" });
+            closeModal('liveEditModal');
+        };
         
-        <div id="admin-migration" class="hidden space-y-6">
-            {% include 'Components/Admin/view_migration.html' %}
-        </div>
+        window.closeModal = (id) => document.getElementById(id).classList.add('hidden');
+    </script>
 
-    </main>
+    <script>
+        let allPlayers = [];
 
-    {% include 'Components/Admin/modals.html' %}
-    {% include 'Components/Admin/scripts.html' %}
+        async function initAdmin() {
+            try {
+                // Fetch rich roster
+                const res = await fetch('/api/roster_detailed'); 
+                allPlayers = await res.json();
+                console.log("Loaded " + allPlayers.length + " players for autocomplete.");
+                setupAutocomplete("merge-bad", "merge-bad-list");
+                setupAutocomplete("merge-good", "merge-good-list");
+                loadInbox();
+            } catch(e) { console.error("Admin init error", e); }
+        }
 
+        function setupAutocomplete(inputId, listId) {
+            const input = document.getElementById(inputId);
+            const list = document.getElementById(listId);
+            input.addEventListener("input", function() {
+                const val = this.value;
+                list.innerHTML = "";
+                if (!val) { list.classList.add("hidden"); return; }
+                const matches = allPlayers.filter(p => p.name.toLowerCase().includes(val.toLowerCase())).slice(0, 8);
+                if (matches.length > 0) {
+                    list.classList.remove("hidden");
+                    matches.forEach(player => {
+                        const item = document.createElement("div");
+                        item.innerText = player.label; 
+                        item.addEventListener("click", function() {
+                            input.value = player.name; 
+                            list.classList.add("hidden");
+                        });
+                        list.appendChild(item);
+                    });
+                } else { list.classList.add("hidden"); }
+            });
+            document.addEventListener("click", function (e) { if (e.target !== input && e.target !== list) list.classList.add("hidden"); });
+        }
+
+        // --- SCAN FOR DUPLICATES ---
+        async function scanForDuplicates() {
+            const el = document.getElementById('dup-list');
+            el.innerHTML = '<div class="text-center text-blue-400 py-4"><i class="fa-solid fa-spinner fa-spin"></i> Scanning...</div>';
+            try {
+                const res = await fetch('/api/admin/duplicates');
+                const data = await res.json();
+                if(data.length === 0) {
+                    el.innerHTML = '<div class="text-center text-green-400 py-4"><i class="fa-solid fa-check mr-2"></i> No likely duplicates found.</div>';
+                    return;
+                }
+                let html = "";
+                data.forEach(d => {
+                    html += `
+                    <div class="bg-black/30 border border-white/5 rounded p-3 flex justify-between items-center text-sm">
+                        <div>
+                            <div class="text-red-400 font-bold">${d.bad}</div>
+                            <div class="text-slate-500 text-xs">Likely Typo</div>
+                        </div>
+                        <div class="text-slate-600"><i class="fa-solid fa-arrow-right"></i></div>
+                        <div>
+                            <div class="text-green-400 font-bold">${d.good}</div>
+                            <div class="text-slate-500 text-xs">Official Record</div>
+                        </div>
+                        <button onclick="fillMerge('${d.bad}', '${d.good}')" class="bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded text-xs">USE</button>
+                    </div>`;
+                });
+                el.innerHTML = html;
+            } catch(e) { el.innerHTML = "Error scanning."; }
+        }
+
+        function fillMerge(bad, good) {
+            document.getElementById('merge-bad').value = bad;
+            document.getElementById('merge-good').value = good;
+        }
+
+        // --- TABS & STANDARD LOGIC ---
+        function switchAdminTab(tab) {
+            document.querySelectorAll('.admin-view').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`view-${tab}`).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(`tab-${tab}`).classList.add('active');
+            if(tab === 'inbox') loadInbox();
+        }
+
+        async function loadInbox() {
+            const el = document.getElementById('inbox-list');
+            el.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-yellow-500"></i></div>';
+            try {
+                const res = await fetch('/api/admin/reports');
+                const data = await res.json();
+                if(data.length === 0) {
+                    el.innerHTML = '<div class="text-slate-500 text-center italic py-4">No pending reports.</div>';
+                    document.getElementById('inbox-badge').classList.add('hidden');
+                    return;
+                }
+                document.getElementById('inbox-badge').innerText = data.length;
+                document.getElementById('inbox-badge').classList.remove('hidden');
+                let html = "";
+                data.forEach(r => {
+                    html += `
+                    <div class="bg-black/30 border border-white/10 rounded-lg p-4 mb-2">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="font-bold text-white">${r.match_desc}</div>
+                            <div class="text-xs text-slate-500">Reported by ${r.reporter}</div>
+                        </div>
+                        <div class="text-sm text-slate-400 mb-2">"${r.problem}"</div>
+                        <div class="flex items-center gap-4 bg-black/40 p-2 rounded mb-3">
+                            <div class="flex-1 text-center font-mono font-bold text-red-400">${r.original_score}</div>
+                            <i class="fa-solid fa-arrow-right text-slate-600"></i>
+                            <div class="flex-1 text-center font-mono font-bold text-green-400">${r.suggested_score}</div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="resolve('${r.id}', 'approve')" class="flex-1 bg-green-600 py-1 rounded text-xs font-bold text-white">APPROVE</button>
+                            <button onclick="resolve('${r.id}', 'reject')" class="flex-1 bg-red-600 py-1 rounded text-xs font-bold text-white">REJECT</button>
+                        </div>
+                    </div>`;
+                });
+                el.innerHTML = html;
+            } catch(e) { el.innerHTML = "Error."; }
+        }
+
+        async function resolve(rid, action) {
+            if(!confirm("Confirm action?")) return;
+            try { await fetch('/api/admin/resolve', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ report_id: rid, action: action }) }); loadInbox(); } catch(e) { alert("Error."); }
+        }
+
+        async function searchHistory() {
+            const query = document.getElementById('hist-search').value;
+            const container = document.getElementById('history-results');
+            container.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-blue-500"></i></div>';
+            try {
+                const res = await fetch(`/api/admin/history?q=${encodeURIComponent(query)}`);
+                const data = await res.json();
+                if(data.length === 0) { container.innerHTML = '<div class="text-center text-slate-500 italic">No matches found.</div>'; return; }
+                let html = "";
+                data.forEach(m => {
+                    html += `
+                    <div class="bg-slate-800 border border-white/10 rounded-lg p-4 flex justify-between items-center">
+                        <div><div class="text-xs text-slate-500 font-bold">${m.date} • ${m.division}</div><div class="text-white font-bold">${m.home_players || m.home_team} vs ${m.away_players || m.away_team}</div></div>
+                        <div class="flex items-center gap-4"><div class="font-mono font-bold text-lg text-yellow-500">${m.score || m.set_scores || "N/A"}</div><button class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded font-bold">EDIT</button></div>
+                    </div>`;
+                });
+                container.innerHTML = html;
+            } catch(e) { container.innerHTML = '<div class="text-center text-red-400">Error searching history.</div>'; }
+        }
+
+        async function performMerge() {
+            const bad = document.getElementById('merge-bad').value;
+            const good = document.getElementById('merge-good').value;
+            if(!bad || !good) return alert("Enter both names.");
+            if(!confirm(`Merge "${bad}" into "${good}"?`)) return;
+            try {
+                const res = await fetch('/api/admin/merge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bad_name: bad, good_name: good }) });
+                const data = await res.json();
+                if(data.success) alert("Merge Successful!");
+                else alert("Merge Failed: " + data.error);
+            } catch(e) { alert("Network Error"); }
+        }
+
+        async function forceRefresh() { await fetch('/api/refresh'); alert("Backend Refresh Triggered."); }
+
+        initAdmin();
+    </script>
 </body>
 </html>
