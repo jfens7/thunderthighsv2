@@ -34,8 +34,8 @@ except ImportError:
     def calculate_match(w, l, s1, s2): return {'winner': w, 'loser': l}
 
 # --- CONFIG ---
-RESULTS_SPREADSHEET_ID = "1tpxuUCl8ddpnBBr69vc4P1foRCRKWpts5-HaFPYb4po" # Master (Read)
-EXPORT_SPREADSHEET_ID = "1Vo4HUelw9Vvy24BjuQ7XVhWI6F7dYtlwrrzT9bv0CVw"   # Exports (Write)
+RESULTS_SPREADSHEET_ID = "1tpxuUCl8ddpnBBr69vc4P1foRCRKWpts5-HaFPYb4po" 
+EXPORT_SPREADSHEET_ID = "1Vo4HUelw9Vvy24BjuQ7XVhWI6F7dYtlwrrzT9bv0CVw"   
 RATING_START_DATE = datetime.date(2025, 12, 25)
 
 class RatingEngine:
@@ -48,10 +48,8 @@ class RatingEngine:
     def set_seed(self, name, rating, rd=None, vol=None):
         try:
             r_val = float(rating)
-            if rd and str(rd).strip(): rd_val = float(rd)
-            else: rd_val = DEFAULT_RD
-            if vol and str(vol).strip(): vol_val = float(vol)
-            else: vol_val = DEFAULT_VOL
+            rd_val = float(rd) if rd and str(rd).strip() else DEFAULT_RD
+            vol_val = float(vol) if vol and str(vol).strip() else DEFAULT_VOL
             if vol_val <= 0.0001: vol_val = DEFAULT_VOL
             if rd_val < 0: rd_val = DEFAULT_RD
             self.players[name] = {'rating': r_val, 'rd': rd_val, 'vol': vol_val}
@@ -77,7 +75,8 @@ class ThunderData:
         self.all_players = {}; self.season_stats = {}; self.seasons_list = ["Career"] 
         self.divisions_list = set(); self.date_lookup = {}; self.weekly_matches = {} 
         self.player_ids = {}; self.alias_map = {}; self.date_to_week_map = {} 
-        self._authenticate(); self.refresh_data()
+        self._authenticate()
+        # REMOVED: self.refresh_data() -> This allows the server to boot instantly.
 
     def _authenticate(self):
         try:
@@ -94,8 +93,8 @@ class ThunderData:
                 self.client = gspread.authorize(self.creds)
                 try: self.sheet_results = self.client.open_by_key(RESULTS_SPREADSHEET_ID); logger.info("✅ Connected to Master")
                 except: logger.error("❌ Master Sheet Fail")
-                try: self.sheet_export = self.client.open_by_key(EXPORT_SPREADSHEET_ID); logger.info("✅ Connected to Export")
-                except: logger.warning("⚠️ Export Sheet Fail")
+                try: self.sheet_export = self.client.open_by_key(EXPORT_SPREADSHEET_ID)
+                except: pass
         except Exception as e: logger.error(f"Auth Error: {e}")
         try:
             try: app = firebase_admin.get_app()
@@ -106,7 +105,7 @@ class ThunderData:
                 firebase_admin.initialize_app(cred)
             self.db = firestore.client()
             logger.info("🔥 Connected to Firebase")
-        except Exception as e: logger.warning(f"⚠️ Firebase Fail: {e}"); self.db = None
+        except: self.db = None
 
     def _clean_name(self, name): 
         if not name: return ""
@@ -195,34 +194,19 @@ class ThunderData:
                 if p_name.lower() not in existing_names: new_id = self._generate_player_id(); new_rows.append([p_name, new_id, today_str, "Active"]); self.player_ids[p_name] = new_id
             if updates: ws.batch_update(updates)
             if new_rows: ws.append_rows(new_rows)
-        except Exception as e: logger.error(f"❌ Master Roster Error: {e}")
+        except: pass
 
     def _sync_to_firebase(self):
         if not self.db: return
         try:
-            batch = self.db.batch(); batch_count = 0; MAX_BATCH = 450
+            batch = self.db.batch(); batch_count = 0
             for player_name, stats in self.all_players.items():
                 rat = self.rating_engine.get_rating(player_name)
                 safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()
                 doc_ref = self.db.collection('player_profiles').document(safe_id)
                 data = {'name': player_name, 'rating': int(rat['rating']), 'wins': stats['combined']['wins'], 'losses': stats['combined']['losses'], 'matches_played': stats['combined']['matches'], 'last_updated': datetime.datetime.now()}
                 batch.set(doc_ref, data, merge=True); batch_count += 1
-                if batch_count >= MAX_BATCH: batch.commit(); batch = self.db.batch(); batch_count = 0
-            if batch_count > 0: batch.commit()
-        except: pass
-
-    def _sync_roster_to_firestore_search(self):
-        if not self.db: return
-        try:
-            all_known_names = set(self.all_players.keys())
-            batch = self.db.batch(); batch_count = 0; MAX_BATCH = 450
-            for name in all_known_names:
-                safe_id = re.sub(r'[^a-zA-Z0-9]', '_', name).lower()
-                if not name.strip(): continue
-                doc_ref = self.db.collection('players').document(safe_id)
-                data = { 'name': name, 'active': True, 'isProvisional': False }
-                batch.set(doc_ref, data, merge=True); batch_count += 1
-                if batch_count >= MAX_BATCH: batch.commit(); batch = self.db.batch(); batch_count = 0
+                if batch_count >= 400: batch.commit(); batch = self.db.batch(); batch_count = 0
             if batch_count > 0: batch.commit()
         except: pass
 
@@ -257,86 +241,15 @@ class ThunderData:
             players = sorted([p1, p2])
             date_key = m['date'].strftime("%Y%m%d") if m['date'] else "nodate"
             match_key = f"{date_key}_{players[0]}_{players[1]}"
-            is_rich = False
-            if m.get('rich_stats'): is_rich = True
-            elif len(str(m.get('game_history', ''))) > 5: is_rich = True
-            if match_key not in unique_map: unique_map[match_key] = m
+            
+            if match_key not in unique_map: 
+                unique_map[match_key] = m
             else:
                 existing = unique_map[match_key]
-                if (is_rich and not (existing.get('rich_stats') or len(str(existing.get('game_history', ''))) > 5)): unique_map[match_key] = m
+                if m.get('manual_override'): unique_map[match_key] = m
+                elif existing.get('manual_override'): continue
+                elif m.get('rich_stats') and not existing.get('rich_stats'): unique_map[match_key] = m
         return list(unique_map.values())
-
-    # --- EXPORT TO EXACT 17-COLUMN FORMAT ---
-    def _export_finished_matches_to_sheet(self):
-        if not self.db or not self.sheet_export: return
-        try:
-            docs = self.db.collection('match_results').where('match_status', '==', 'Finished').where('exported_to_sheet', '!=', True).stream()
-            rows_to_append = []; batch = self.db.batch(); count = 0
-            
-            for doc in docs:
-                d = doc.to_dict()
-                
-                # Format: ID, Week, Division, Sheet, Player Team, Opp Team, Format, Pos 1, Name 1, PS 1, Pos 2, Name 2, PS 2, Sets 1, Sets 2, Win 1, Win 2
-                week_val = d.get('week', '?')
-                div_val = d.get('division', '')
-                sheet_val = "iPad" # Or table number e.g. str(d.get('table', ''))
-                
-                home_team = d.get('home_team', '')
-                away_team = d.get('away_team', '')
-                
-                # Players
-                home_p_list = d.get('home_players', [])
-                name1 = home_p_list[0] if home_p_list else "Unknown"
-                name2 = d.get('away_players', ["Unknown"])[0]
-                
-                # Logic to define Format & Position (Default to Singles/A/X if unknown)
-                is_doubles = len(home_p_list) > 1
-                fmt = "Doubles" if is_doubles else "Singles"
-                pos1 = "BC" if is_doubles else "A" 
-                pos2 = "YZ" if is_doubles else "X"
-                
-                # Scores
-                s_scores = d.get('set_scores', [])
-                s1 = sum(1 for s in s_scores if s.get('home',0) > s.get('away',0))
-                s2 = sum(1 for s in s_scores if s.get('away',0) > s.get('home',0))
-                win1 = 1 if s1 > s2 else 0
-                win2 = 1 if s2 > s1 else 0
-                
-                row = [
-                    "",             # ID
-                    week_val,       # Week
-                    div_val,        # Division
-                    sheet_val,      # Sheet
-                    home_team,      # Player Team
-                    away_team,      # Opp Team
-                    fmt,            # Format
-                    pos1,           # Pos 1
-                    name1,          # Name 1
-                    "P",            # PS 1
-                    pos2,           # Pos 2
-                    name2,          # Name 2
-                    "P",            # PS 2
-                    s1,             # Sets 1
-                    s2,             # Sets 2
-                    win1,           # Win 1
-                    win2            # Win 2
-                ]
-                
-                rows_to_append.append(row)
-                batch.update(doc.reference, {'exported_to_sheet': True})
-                count += 1
-            
-            if rows_to_append:
-                try: ws = self.sheet_export.worksheet("iPad_Exports")
-                except: 
-                    ws = self.sheet_export.add_worksheet(title="iPad_Exports", rows=1000, cols=17)
-                    ws.append_row(["ID", "Week", "Division", "Sheet", "Player Team", "Opp Team", "Format", "Pos 1", "Name 1", "PS 1", "Pos 2", "Name 2", "PS 2", "Sets 1", "Sets 2", "Win 1", "Win 2"])
-                
-                ws.append_rows(rows_to_append)
-                batch.commit()
-                logger.info(f"📤 Exported {count} matches to 'iPad_Exports' in Master Format.")
-                
-        except Exception as e: logger.error(f"Sheet Export Error: {e}")
 
     def _update_player_stats(self, stat_dict, player_name, p1_sets, p2_sets, is_p1, opponent, is_fillin, division, date_str, week_num, season_name, details="", rich_stats=None):
         if stat_dict is None: return 
@@ -352,12 +265,13 @@ class ThunderData:
             stats['history'].append({'season': season_name, 'week': week_num, 'date': date_str, 'opponent': opponent, 'result': result, 'score': f"{my_sets}-{op_sets}", 'type': 'Fill-in' if is_fillin else 'Regular', 'division': division, 'details': details, 'rich_stats': rich_stats})
 
     def refresh_data(self):
-        logger.info("⚡️ Refreshing data...")
+        logger.info("⚡️ Fetching and Processing Data...")
         self.all_players = {}; self.season_stats = {}; self.seasons_list = ["Career"]; self.divisions_list = set(); self.weekly_matches = {}; self.rating_engine = RatingEngine() 
         if self.sheet_results: self._load_calculated_dates(); self._load_aliases(); self._load_seed_ratings()
         raw_match_queue = [] 
+        
+        # 1. LOAD FROM GOOGLE SHEETS
         if self.sheet_results:
-            logger.info("📄 Reading from Google Sheets...")
             for worksheet in self.sheet_results.worksheets():
                 title = worksheet.title
                 if "Season:" not in title: continue
@@ -382,11 +296,13 @@ class ThunderData:
                         if not parsed_date: parsed_date = datetime.date(1900, 1, 1)
                         try: s1 = int(self._get_val(row, ['Sets 1', 'S1', 'Sets'])); s2 = int(self._get_val(row, ['Sets 2', 'S2']))
                         except: continue
-                        raw_match_queue.append({'p1': p1, 'p2': p2, 's1': s1, 's2': s2, 'date': parsed_date, 'season': season_name, 'week': week_num, 'div': div, 'p1_fill': p1_fill, 'p2_fill': p2_fill, 'game_history': '', 'rich_stats': None})
+                        raw_match_queue.append({'p1': p1, 'p2': p2, 's1': s1, 's2': s2, 'date': parsed_date, 'season': season_name, 'week': week_num, 'div': div, 'p1_fill': p1_fill, 'p2_fill': p2_fill, 'game_history': '', 'rich_stats': None, 'manual_override': False})
                 except: pass
+                
+        # 2. LOAD FROM FIREBASE (iPad)
         if self.db:
             try:
-                self.sync_todays_fixtures(); docs = self.db.collection('match_results').stream()
+                docs = self.db.collection('match_results').stream()
                 for doc in docs:
                     d = doc.to_dict(); date_val = d.get('date'); parsed_date = self._parse_date(date_val) or datetime.date.today()
                     season_name = d.get('season', f"Season: {parsed_date.year}"); home_p = d.get('home_players', []); away_p = d.get('away_players', [])
@@ -403,8 +319,38 @@ class ThunderData:
                         s1=t1; s2=t2
                     week_val = d.get('week', 'Unknown')
                     if str(week_val) == "Unknown" and parsed_date: key = f"{season_name}|{parsed_date.strftime('%Y-%m-%d')}"; week_val = self.date_to_week_map.get(key, "Unknown")
-                    raw_match_queue.append({'p1': p1, 'p2': p2, 's1': s1, 's2': s2, 'date': parsed_date, 'season': season_name, 'week': week_val, 'div': d.get('division', 'Unknown'), 'p1_fill': False, 'p2_fill': False, 'game_history': d.get('game_scores_history', ''), 'rich_stats': {'duration': d.get('match_duration')}})
+                    raw_match_queue.append({'p1': p1, 'p2': p2, 's1': s1, 's2': s2, 'date': parsed_date, 'season': season_name, 'week': week_val, 'div': d.get('division', 'Unknown'), 'p1_fill': False, 'p2_fill': False, 'game_history': d.get('game_scores_history', ''), 'rich_stats': {'duration': d.get('match_duration')}, 'manual_override': d.get('manual_override', False)})
             except: pass
+
+        # 3. LOAD CORRECTIONS AND OVERRIDE
+        corrections = {}
+        if self.db:
+            try:
+                c_docs = self.db.collection('match_corrections').stream()
+                for doc in c_docs:
+                    c = doc.to_dict()
+                    c_p1 = self._clean_name(c.get('p1', ''))
+                    c_p2 = self._clean_name(c.get('p2', ''))
+                    d_str = str(c.get('date', ''))
+                    players = sorted([c_p1, c_p2])
+                    key = f"{d_str}_{players[0]}_{players[1]}"
+                    corrections[key] = {'s1': c.get('s1', 0), 's2': c.get('s2', 0), 'c_p1': c_p1}
+            except Exception as e: logger.error(f"Error loading corrections: {e}")
+
+        # APPLY CORRECTIONS (INTERCEPT THE DATA)
+        for m in raw_match_queue:
+            players = sorted([m['p1'], m['p2']])
+            d_str = m['date'].strftime("%d/%m/%Y") if m['date'] else "nodate"
+            key = f"{d_str}_{players[0]}_{players[1]}"
+            if key in corrections:
+                c = corrections[key]
+                if m['p1'] == c['c_p1']:
+                    m['s1'] = c['s1']; m['s2'] = c['s2']
+                else:
+                    m['s1'] = c['s2']; m['s2'] = c['s1']
+                m['manual_override'] = True
+
+        # 4. CALCULATE STATS & SAVE
         cleaned_matches = self._deduplicate_matches(raw_match_queue); cleaned_matches.sort(key=lambda x: x['date'])
         player_set = set()
         for m in cleaned_matches:
@@ -419,54 +365,95 @@ class ThunderData:
                 wk = str(m['week']); 
                 if wk not in self.weekly_matches[m['season']]: self.weekly_matches[m['season']][wk] = []
                 self.weekly_matches[m['season']][wk].append({'p1': m['p1'], 'p2': m['p2'], 'score': f"{m['s1']}-{m['s2']}", 'division': m['div'], 'date': d_str})
+        
         logger.info(f"👤 Total Unique Players Loaded: {len(player_set)}")
-        self._save_updated_ratings(); self._update_master_roster(); self._sync_to_firebase(); self._sync_roster_to_firestore_search(); self._export_finished_matches_to_sheet()
-
-    def _count_sets(self, scores):
-        h=0; a=0
-        for s in scores:
-            if s.get('home',0) > s.get('away',0): h+=1
-            else: a+=1
-        return f"{h}-{a}"
+        self._save_updated_ratings(); self._update_master_roster(); self._sync_to_firebase()
 
     # --- ADMIN METHODS ---
-    def admin_get_recent_results(self, limit=50):
-        if not self.db: return []
-        results = []
-        try:
-            docs = self.db.collection('match_results').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(limit).stream()
-            for doc in docs: d = doc.to_dict(); d['id'] = doc.id; results.append(d)
-        except: pass
-        return results
-
-    def admin_verify_result(self, match_id):
-        if not self.db: return False
-        try: self.db.collection('match_results').document(match_id).update({'verified': True}); return True
-        except: return False
-
-    def admin_reject_result(self, result_id, fixture_id):
-        if not self.db: return False
-        try:
-            self.db.collection('match_results').document(result_id).delete()
-            if fixture_id:
-                self.db.collection('fixture_schedule').document(fixture_id).update({'live_home_score': 0, 'live_away_score': 0, 'live_home_sets': 0, 'live_away_sets': 0, 'match_status': 'Scheduled', 'game_scores_history': '', 'set_history_json': firestore.DELETE_FIELD})
-            self.refresh_data(); return True
-        except: return False
-
+    
     def admin_search_history(self, query_text):
-        if not self.db: return []
-        results = []
-        docs = self.db.collection('match_results').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(200).stream()
         q_lower = query_text.lower()
-        for doc in docs:
-            d = doc.to_dict(); d['id'] = doc.id
-            p1 = (d.get('home_players') or [""])[0].lower(); p2 = (d.get('away_players') or [""])[0].lower(); date = str(d.get('date', ''))
-            if q_lower in p1 or q_lower in p2 or q_lower in date: results.append(d)
+        results = []
+        seen = set()
+        for p_name, data in self.all_players.items():
+            if q_lower in p_name.lower() or q_lower in str(data.get('combined', {}).get('history', [])).lower():
+                for m in data['combined']['history']:
+                    date = m.get('date', '')
+                    opp = m.get('opponent', '')
+                    if q_lower in p_name.lower() or q_lower in opp.lower() or q_lower in date:
+                        players = sorted([p_name, opp])
+                        match_hash = f"{date}_{players[0]}_{players[1]}"
+                        if match_hash not in seen:
+                            seen.add(match_hash)
+                            score = m.get('score', '0-0')
+                            try: s1, s2 = map(int, score.split('-'))
+                            except: s1, s2 = 0, 0
+                            
+                            results.append({
+                                'id': match_hash,
+                                'date': date,
+                                'division': m.get('division', ''),
+                                'home_players': [p_name],
+                                'away_players': [opp],
+                                'score': score,
+                                's1': s1,
+                                's2': s2
+                            })
         return results
 
-    def admin_update_historical_match(self, match_id, new_data):
+    def admin_update_historical_match(self, p1, p2, date, s1, s2):
         if not self.db: return False
-        try: self.db.collection('match_results').document(match_id).update(new_data); self.refresh_data(); return True
+        try:
+            self.db.collection('match_corrections').add({
+                'p1': p1, 'p2': p2, 'date': date,
+                's1': int(s1), 's2': int(s2),
+                'timestamp': firestore.SERVER_TIMESTAMP
+            })
+            self.refresh_data()
+            return True
+        except: return False
+
+    def user_submit_report(self, p1, p2, date, reporter, problem, suggested_s1, suggested_s2):
+        if not self.db: return False
+        try:
+            report_data = {
+                'p1': p1, 'p2': p2, 'date': date,
+                'reporter': reporter, 'problem': problem,
+                'suggested_s1': int(suggested_s1), 'suggested_s2': int(suggested_s2),
+                'match_desc': f"{p1} vs {p2} on {date}",
+                'status': 'Pending', 'timestamp': firestore.SERVER_TIMESTAMP
+            }
+            self.db.collection('match_reports').add(report_data); return True
+        except: return False
+
+    def admin_get_reports(self):
+        if not self.db: return []
+        try:
+            docs = self.db.collection('match_reports').where('status', '==', 'Pending').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
+            reports = []
+            for d in docs: data = d.to_dict(); data['id'] = d.id; reports.append(data)
+            return reports
+        except: return []
+
+    def admin_resolve_report(self, report_id, action):
+        if not self.db: return False
+        try:
+            report_ref = self.db.collection('match_reports').document(report_id)
+            report = report_ref.get().to_dict()
+            if action == 'approve':
+                self.db.collection('match_corrections').add({
+                    'p1': report['p1'],
+                    'p2': report['p2'],
+                    'date': report['date'],
+                    's1': report['suggested_s1'],
+                    's2': report['suggested_s2'],
+                    'timestamp': firestore.SERVER_TIMESTAMP
+                })
+                report_ref.update({'status': 'Approved'})
+                self.refresh_data()
+            elif action == 'reject': 
+                report_ref.update({'status': 'Rejected'})
+            return True
         except: return False
 
     def admin_merge_players(self, bad_name, good_name):
@@ -505,62 +492,10 @@ class ThunderData:
                     seen.add(pair)
         return suggestions
 
-    def admin_reset_match(self, match_id):
-        if not self.db: return False
-        try:
-            ref = self.db.collection('fixture_schedule').document(match_id)
-            ref.update({'live_home_score': 0, 'live_away_score': 0, 'live_home_sets': 0, 'live_away_sets': 0, 'match_status': 'Scheduled', 'game_scores_history': '', 'set_history_json': firestore.DELETE_FIELD, 'timer_label': '', 'timer_value': 0})
-            return True
-        except: return False
-
-    def admin_force_finish(self, match_id):
-        if not self.db: return False
-        try: self.db.collection('fixture_schedule').document(match_id).update({'match_status': 'Finished'}); return True
-        except: return False
-
-    def admin_update_match_meta(self, match_id, new_data):
-        if not self.db: return False
-        try: self.db.collection('fixture_schedule').document(match_id).update(new_data); return True
-        except: return False
-
-    def user_submit_report(self, match_id, reporter, problem, suggested_home, suggested_away):
-        if not self.db: return False
-        try:
-            match_doc = self.db.collection('match_results').document(match_id).get(); match_data = match_doc.to_dict() or {}
-            report_data = {
-                'match_id': match_id, 'reporter': reporter, 'problem': problem,
-                'suggested_score': f"{suggested_home}-{suggested_away}", 'suggested_home': int(suggested_home), 'suggested_away': int(suggested_away),
-                'original_score': self._count_sets(match_data.get('set_scores', [])),
-                'match_desc': f"{match_data.get('home_team')} vs {match_data.get('away_team')}",
-                'status': 'Pending', 'timestamp': firestore.SERVER_TIMESTAMP
-            }
-            self.db.collection('match_reports').add(report_data); return True
-        except: return False
-
-    def admin_get_reports(self):
-        if not self.db: return []
-        try:
-            docs = self.db.collection('match_reports').where('status', '==', 'Pending').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
-            reports = []
-            for d in docs: data = d.to_dict(); data['id'] = d.id; reports.append(data)
-            return reports
-        except: return []
-
-    def admin_resolve_report(self, report_id, action):
-        if not self.db: return False
-        try:
-            report_ref = self.db.collection('match_reports').document(report_id); report = report_ref.get().to_dict()
-            if action == 'approve':
-                match_ref = self.db.collection('match_results').document(report['match_id'])
-                h = report['suggested_home']; a = report['suggested_away']; new_sets = []
-                for _ in range(h): new_sets.append({'home': 11, 'away': 0})
-                for _ in range(a): new_sets.append({'home': 0, 'away': 11})
-                match_ref.update({'set_scores': new_sets, 'manual_override': True, 'verified': True}); report_ref.update({'status': 'Approved'}); self.refresh_data()
-            elif action == 'reject': report_ref.update({'status': 'Rejected'})
-            return True
-        except: return False
-
     def get_all_players(self): return self.all_players
+    def get_matches_by_week(self, season, week): return self.weekly_matches.get(season, {}).get(str(week), [])
+    def get_seasons(self): return self.seasons_list
+    def get_divisions(self): return sorted(list(self.divisions_list))
     
     def get_roster_with_meta(self):
         roster = []
@@ -572,8 +507,7 @@ class ThunderData:
             main_div = max(divs, key=divs.get) if divs else "New"
             roster.append({"name": name, "label": f"{name} ({main_div} • {int(rat['rating'])} • {m} games)"})
         return sorted(roster, key=lambda x: x['name'])
-
-    def get_matches_by_week(self, season, week): return self.weekly_matches.get(season, {}).get(str(week), [])
+        
     def get_division_rankings(self, season, division, max_week=None):
         if season not in self.season_stats: return []
         ranking_list = []
@@ -587,6 +521,7 @@ class ThunderData:
                 return {'wins': wins, 'losses': len(history) - wins, 'matches': len(history)}
             ranking_list.append({'name': player_name, 'rating_val': int(rat['rating']), 'sigma': int(rat['rd']), 'regular': calc_summary(reg_hist), 'fillin': calc_summary(fill_hist)})
         return ranking_list
+        
     def get_player_stats(self, player_name, season="Career", division="All", week="All", start_date=None, end_date=None):
         data = self.all_players if season == "Career" else self.season_stats.get(season, {})
         if player_name not in data: return None
@@ -599,5 +534,3 @@ class ThunderData:
             disp_hist = list(hist); disp_hist.reverse()
             return {'matches': len(hist), 'wins': wins, 'losses': len(hist)-wins, 'win_rate': f"{win_rate}%", 'match_history': disp_hist}
         return {'name': player_name, 'rating': int(rat['rating']), 'combined': format_bucket(raw['combined'])}
-    def get_seasons(self): return self.seasons_list
-    def get_divisions(self): return sorted(list(self.divisions_list))
