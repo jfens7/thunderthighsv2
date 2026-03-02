@@ -11,59 +11,127 @@ import logging
 import random
 import string
 import difflib
+import math
 
-# --- SETUP LOGGING ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path: sys.path.append(current_dir)
 
-# Import Dependencies
-try:
-    from sky_engine import SkyEngine
+try: from sky_engine import SkyEngine
 except ImportError:
     try: from backend.sky_engine import SkyEngine
     except: SkyEngine = None
 
-try:
-    from ratings_logic import calculate_match, DEFAULT_RATING, DEFAULT_RD, DEFAULT_VOL
-except ImportError:
-    logger.error("⚠️ ratings_logic.py not found! Using dummy logic.")
-    DEFAULT_RATING, DEFAULT_RD, DEFAULT_VOL = 1500.0, 350.0, 0.06
-    def calculate_match(w, l, s1, s2): return {'winner': w, 'loser': l}
+# ==========================================
+# GLICKO-2 RATING ENGINE (RATINGS CENTRAL STYLE)
+# ==========================================
+DEFAULT_RATING = 1500.0
+DEFAULT_RD = 350.0
+DEFAULT_VOL = 0.06
+TAU = 0.5        # System constant (constrains volatility over time)
+SCALE = 173.7178 # Glicko-2 scaling factor
 
-# --- CONFIG ---
+def _glicko2_core(mu, phi, vol, opponent_mu, opponent_phi, score):
+    # Step 3 & 4
+    def g(p): return 1.0 / math.sqrt(1.0 + 3.0 * p**2 / (math.pi**2))
+    def E(m, mj, pj): return 1.0 / (1.0 + math.exp(-g(pj) * (m - mj)))
+    
+    g_j = g(opponent_phi)
+    E_j = E(mu, opponent_mu, opponent_phi)
+    
+    # Estimated variance
+    v = 1.0 / (g_j**2 * E_j * (1.0 - E_j))
+    
+    # Estimated improvement
+    delta = v * g_j * (score - E_j)
+    
+    # Step 5: Illinois algorithm to update Volatility
+    a = math.log(vol**2)
+    def f(x):
+        ex = math.exp(x)
+        num = ex * (delta**2 - phi**2 - v - ex)
+        den = 2.0 * (phi**2 + v + ex)**2
+        return (num / den) - ((x - a) / TAU**2)
+    
+    A = a
+    if delta**2 > phi**2 + v:
+        B = math.log(delta**2 - phi**2 - v)
+    else:
+        k = 1
+        while f(a - k * TAU) < 0: k += 1
+        B = a - k * TAU
+        
+    fA, fB = f(A), f(B)
+    
+    for _ in range(100): # Cap iterations to prevent infinite loop
+        if abs(B - A) <= 0.000001: break
+        C = A + (A - B) * fA / (fB - fA)
+        fC = f(C)
+        if fC * fB <= 0:
+            A, fA = B, fB
+        else:
+            fA /= 2.0
+        B, fB = C, fC
+        
+    new_vol = math.exp(A / 2.0)
+    
+    # Step 6: Update Rating Deviation to pre-rating period
+    phi_star = math.sqrt(phi**2 + new_vol**2)
+    
+    # Step 7: Update Rating and RD
+    new_phi = 1.0 / math.sqrt(1.0 / phi_star**2 + 1.0 / v)
+    new_mu = mu + new_phi**2 * g_j * (score - E_j)
+    
+    return new_mu, new_phi, new_vol
+
+def calculate_match(w, l, s1, s2):
+    # Step 2: Convert to Glicko-2 scale
+    mu_w, phi_w, vol_w = (w['rating'] - 1500) / SCALE, w['rd'] / SCALE, w['vol']
+    mu_l, phi_l, vol_l = (l['rating'] - 1500) / SCALE, l['rd'] / SCALE, l['vol']
+    
+    # Process Winner (Score = 1.0)
+    new_mu_w, new_phi_w, new_vol_w = _glicko2_core(mu_w, phi_w, vol_w, mu_l, phi_l, 1.0)
+    
+    # Process Loser (Score = 0.0)
+    new_mu_l, new_phi_l, new_vol_l = _glicko2_core(mu_l, phi_l, vol_l, mu_w, phi_w, 0.0)
+    
+    # Step 8: Convert back to original scale
+    w['rating'] = new_mu_w * SCALE + 1500
+    w['rd'] = new_phi_w * SCALE
+    w['vol'] = new_vol_w
+    
+    l['rating'] = new_mu_l * SCALE + 1500
+    l['rd'] = new_phi_l * SCALE
+    l['vol'] = new_vol_l
+    
+    return {'winner': w, 'loser': l}
+
+# ==========================================
+# SYSTEM DATA HANDLER
+# ==========================================
 RESULTS_SPREADSHEET_ID = "1tpxuUCl8ddpnBBr69vc4P1foRCRKWpts5-HaFPYb4po" 
 EXPORT_SPREADSHEET_ID = "1Vo4HUelw9Vvy24BjuQ7XVhWI6F7dYtlwrrzT9bv0CVw"   
 RATING_START_DATE = datetime.date(2025, 12, 25)
 
 class RatingEngine:
-    def __init__(self):
-        self.players = {} 
+    def __init__(self): self.players = {} 
     def get_rating(self, name):
-        if name not in self.players:
-            self.players[name] = {'rating': DEFAULT_RATING, 'rd': DEFAULT_RD, 'vol': DEFAULT_VOL}
+        if name not in self.players: self.players[name] = {'rating': DEFAULT_RATING, 'rd': DEFAULT_RD, 'vol': DEFAULT_VOL}
         return self.players[name]
     def set_seed(self, name, rating, rd=None, vol=None):
         try:
-            r_val = float(rating)
-            rd_val = float(rd) if rd and str(rd).strip() else DEFAULT_RD
-            vol_val = float(vol) if vol and str(vol).strip() else DEFAULT_VOL
+            r_val = float(rating); rd_val = float(rd) if rd and str(rd).strip() else DEFAULT_RD; vol_val = float(vol) if vol and str(vol).strip() else DEFAULT_VOL
             if vol_val <= 0.0001: vol_val = DEFAULT_VOL
             if rd_val < 0: rd_val = DEFAULT_RD
             self.players[name] = {'rating': r_val, 'rd': rd_val, 'vol': vol_val}
         except ValueError: pass
     def update_match(self, p1_name, p2_name, s1, s2):
         if s1 == s2: return 
-        p1_stats = self.get_rating(p1_name)
-        p2_stats = self.get_rating(p2_name)
-        if s1 > s2:
-             res = calculate_match(p1_stats, p2_stats, s1, s2)
-             self.players[p1_name] = res['winner']; self.players[p2_name] = res['loser']
-        else:
-             res = calculate_match(p2_stats, p1_stats, s2, s1)
-             self.players[p2_name] = res['winner']; self.players[p1_name] = res['loser']
+        p1_stats = self.get_rating(p1_name); p2_stats = self.get_rating(p2_name)
+        if s1 > s2: res = calculate_match(p1_stats, p2_stats, s1, s2); self.players[p1_name] = res['winner']; self.players[p2_name] = res['loser']
+        else: res = calculate_match(p2_stats, p1_stats, s2, s1); self.players[p2_name] = res['winner']; self.players[p1_name] = res['loser']
 
 class ThunderData:
     def __init__(self):
@@ -76,48 +144,38 @@ class ThunderData:
         self.divisions_list = set(); self.date_lookup = {}; self.weekly_matches = {} 
         self.player_ids = {}; self.alias_map = {}; self.date_to_week_map = {} 
         self._authenticate()
-        # REMOVED: self.refresh_data() -> This allows the server to boot instantly.
 
     def _authenticate(self):
         try:
             creds_json = os.environ.get("GOOGLE_CREDS_JSON")
-            if creds_json:
-                info = json.loads(creds_json)
-                self.creds = Credentials.from_service_account_info(info, scopes=self.scopes)
+            if creds_json: self.creds = Credentials.from_service_account_info(json.loads(creds_json), scopes=self.scopes)
             else:
                 paths = ["credentials.json", "backend/credentials.json"]
                 found = next((p for p in paths if os.path.exists(p)), None)
-                if found: self.creds = Credentials.from_service_account_file(found, scopes=self.scopes)
-                else: self.creds = None
+                self.creds = Credentials.from_service_account_file(found, scopes=self.scopes) if found else None
             if self.creds:
                 self.client = gspread.authorize(self.creds)
                 try: self.sheet_results = self.client.open_by_key(RESULTS_SPREADSHEET_ID); logger.info("✅ Connected to Master")
                 except: logger.error("❌ Master Sheet Fail")
-                try: self.sheet_export = self.client.open_by_key(EXPORT_SPREADSHEET_ID)
-                except: pass
         except Exception as e: logger.error(f"Auth Error: {e}")
         try:
             try: app = firebase_admin.get_app()
             except ValueError:
                 cred_path = 'firebase_credentials.json'
                 if not os.path.exists(cred_path) and os.path.exists('backend/firebase_credentials.json'): cred_path = 'backend/firebase_credentials.json'
-                cred = credentials.Certificate(cred_path)
-                firebase_admin.initialize_app(cred)
+                firebase_admin.initialize_app(credentials.Certificate(cred_path))
             self.db = firestore.client()
-            logger.info("🔥 Connected to Firebase")
         except: self.db = None
 
     def _clean_name(self, name): 
         if not name: return ""
         clean = " ".join(str(name).split())
-        if clean.lower() in self.alias_map: return self.alias_map[clean.lower()]
-        return clean.title()
+        return self.alias_map.get(clean.lower(), clean.title())
 
     def _get_val(self, row, keys, default=''):
         row_keys_norm = {k.strip().lower(): k for k in row.keys()}
         for k in keys:
-            norm_k = k.strip().lower()
-            if norm_k in row_keys_norm: return row[row_keys_norm[norm_k]]
+            if k.strip().lower() in row_keys_norm: return row[row_keys_norm[k.strip().lower()]]
         return default
 
     def _parse_date(self, date_str):
@@ -134,28 +192,25 @@ class ThunderData:
     def _load_calculated_dates(self):
         self.date_lookup = {}; self.date_to_week_map = {}
         try:
-            ws = self.sheet_results.worksheet("Calculated_Dates")
-            for row in ws.get_all_records():
+            for row in self.sheet_results.worksheet("Calculated_Dates").get_all_records():
                 s = str(row.get('Season','')).strip(); d = str(row.get('Division','')).strip(); w = str(row.get('Week','')).strip()
-                date_val = str(row.get('Date','')); parsed = self._parse_date(date_val)
+                parsed = self._parse_date(str(row.get('Date','')))
                 if parsed: self.date_lookup[f"{s}|{d}|{w}"] = parsed; self.date_to_week_map[f"{s}|{parsed.strftime('%Y-%m-%d')}"] = w
         except: pass
 
     def _load_aliases(self):
         self.alias_map = {}
         try:
-            ws = self.sheet_results.worksheet("Aliases")
-            for row in ws.get_all_records():
+            for row in self.sheet_results.worksheet("Aliases").get_all_records():
                 bad = str(row.get('Bad Name')).strip().lower(); good = str(row.get('Good Name')).strip()
                 if bad and good: self.alias_map[bad] = good
         except: pass
 
     def _load_seed_ratings(self):
         try:
-            ws_origin = self.sheet_results.worksheet("ratings Origin")
-            for row in ws_origin.get_all_records():
-                name = self._clean_name(row.get('Player')); rating = row.get('Rating'); rd = row.get('Deviation'); vol = row.get('Volatility')
-                if name and rating: self.rating_engine.set_seed(name, rating, rd, vol)
+            for row in self.sheet_results.worksheet("ratings Origin").get_all_records():
+                name = self._clean_name(row.get('Player'))
+                if name and row.get('Rating'): self.rating_engine.set_seed(name, row.get('Rating'), row.get('Deviation'), row.get('Volatility'))
         except: pass
 
     def _save_updated_ratings(self):
@@ -215,7 +270,7 @@ class ThunderData:
             all_values = worksheet.get_all_values()
             if not all_values: return []
             raw_headers = all_values[0]; clean_headers = []
-            counts = {'name': 0, 'sets': 0, 'ps': 0, 'pos': 0, 'player': 0}
+            counts = {'name': 0, 'sets': 0, 'ps': 0, 'player': 0}
             for h in raw_headers:
                 h_str = str(h).strip(); h_lower = h_str.lower(); key = None
                 if h_lower == 'name': key = 'name'
@@ -241,9 +296,7 @@ class ThunderData:
             players = sorted([p1, p2])
             date_key = m['date'].strftime("%Y%m%d") if m['date'] else "nodate"
             match_key = f"{date_key}_{players[0]}_{players[1]}"
-            
-            if match_key not in unique_map: 
-                unique_map[match_key] = m
+            if match_key not in unique_map: unique_map[match_key] = m
             else:
                 existing = unique_map[match_key]
                 if m.get('manual_override'): unique_map[match_key] = m
@@ -304,7 +357,11 @@ class ThunderData:
             try:
                 docs = self.db.collection('match_results').stream()
                 for doc in docs:
-                    d = doc.to_dict(); date_val = d.get('date'); parsed_date = self._parse_date(date_val) or datetime.date.today()
+                    d = doc.to_dict()
+                    if d.get('status') == 'pending': continue
+                    if d.get('status') == 'rejected': continue
+                    
+                    date_val = d.get('date'); parsed_date = self._parse_date(date_val) or datetime.date.today()
                     season_name = d.get('season', f"Season: {parsed_date.year}"); home_p = d.get('home_players', []); away_p = d.get('away_players', [])
                     if not home_p or not away_p: continue
                     p1 = self._clean_name(home_p[0]); p2 = self._clean_name(away_p[0])
@@ -337,7 +394,7 @@ class ThunderData:
                     corrections[key] = {'s1': c.get('s1', 0), 's2': c.get('s2', 0), 'c_p1': c_p1}
             except Exception as e: logger.error(f"Error loading corrections: {e}")
 
-        # APPLY CORRECTIONS (INTERCEPT THE DATA)
+        # APPLY CORRECTIONS
         for m in raw_match_queue:
             players = sorted([m['p1'], m['p2']])
             d_str = m['date'].strftime("%d/%m/%Y") if m['date'] else "nodate"
@@ -370,45 +427,140 @@ class ThunderData:
         self._save_updated_ratings(); self._update_master_roster(); self._sync_to_firebase()
 
     # --- ADMIN METHODS ---
+    def admin_get_teams(self):
+        if not self.db: return {}
+        try:
+            docs = self.db.collection('teams').stream()
+            teams = {}
+            for d in docs:
+                data = d.to_dict()
+                teams[d.id] = data.get('players', [])
+            return teams
+        except: return {}
+
+    def admin_update_team(self, team_name, players_list):
+        if not self.db: return False
+        try:
+            self.db.collection('teams').document(team_name).set({'players': players_list}, merge=True)
+            return True
+        except: return False
     
-    def admin_search_history(self, query_text):
-        q_lower = query_text.lower()
+    def admin_get_ranks(self):
+        if not self.db: return {}
+        try:
+            docs = self.db.collection('player_ranks').stream()
+            ranks = {}
+            for d in docs:
+                data = d.to_dict()
+                ranks[data.get('name')] = data.get('rank')
+            return ranks
+        except: return {}
+
+    def admin_set_rank(self, player_name, rank):
+        if not self.db: return False
+        try:
+            safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()
+            self.db.collection('player_ranks').document(safe_id).set({
+                'name': player_name,
+                'rank': int(rank)
+            })
+            return True
+        except: return False
+    
+    def admin_get_pending_approvals(self):
+        if not self.db: return []
+        try:
+            docs = self.db.collection('match_results').where('status', '==', 'pending').stream()
+            res = []
+            for d in docs:
+                data = d.to_dict(); data['id'] = d.id; ts = data.get('timestamp')
+                data['ts_str'] = str(ts) if ts else "Unknown"
+                res.append(data)
+            return sorted(res, key=lambda x: x.get('ts_str', ''), reverse=True)
+        except: return []
+
+    def admin_resolve_approval(self, doc_id, action, s1=None, s2=None):
+        if not self.db: return False
+        try:
+            doc_ref = self.db.collection('match_results').document(doc_id)
+            if action == 'approve':
+                doc_ref.update({'status': 'approved', 'live_home_sets': int(s1) if s1 is not None else 0, 'live_away_sets': int(s2) if s2 is not None else 0})
+                self.refresh_data()
+            elif action == 'reject': doc_ref.update({'status': 'rejected'})
+            return True
+        except: return False
+
+    def admin_get_recent_approved(self):
+        if not self.db: return []
+        try:
+            docs = self.db.collection('match_results').stream()
+            res = []
+            for d in docs:
+                data = d.to_dict(); status = data.get('status', 'approved') 
+                if status == 'approved':
+                    data['id'] = d.id; ts = data.get('timestamp')
+                    data['ts_sort'] = ts.timestamp() if hasattr(ts, 'timestamp') else 0
+                    res.append(data)
+            res.sort(key=lambda x: x.get('ts_sort', 0), reverse=True)
+            return res[:50]
+        except: return []
+
+    def admin_delete_match_result(self, doc_id):
+        if not self.db: return False
+        try:
+            self.db.collection('match_results').document(doc_id).delete()
+            self.refresh_data()
+            return True
+        except: return False
+
+    def admin_search_history(self, query_text, season_filter=None, div_filter=None, week_filter=None, date_filter=None):
+        q_lower = query_text.lower() if query_text else ""
         results = []
         seen = set()
+        
         for p_name, data in self.all_players.items():
-            if q_lower in p_name.lower() or q_lower in str(data.get('combined', {}).get('history', [])).lower():
-                for m in data['combined']['history']:
-                    date = m.get('date', '')
-                    opp = m.get('opponent', '')
-                    if q_lower in p_name.lower() or q_lower in opp.lower() or q_lower in date:
-                        players = sorted([p_name, opp])
-                        match_hash = f"{date}_{players[0]}_{players[1]}"
-                        if match_hash not in seen:
-                            seen.add(match_hash)
-                            score = m.get('score', '0-0')
-                            try: s1, s2 = map(int, score.split('-'))
-                            except: s1, s2 = 0, 0
-                            
-                            results.append({
-                                'id': match_hash,
-                                'date': date,
-                                'division': m.get('division', ''),
-                                'home_players': [p_name],
-                                'away_players': [opp],
-                                'score': score,
-                                's1': s1,
-                                's2': s2
-                            })
-        return results
+            for m in data.get('combined', {}).get('history', []):
+                date = str(m.get('date', ''))
+                opp = str(m.get('opponent', ''))
+                m_season = str(m.get('season', ''))
+                m_div = str(m.get('division', ''))
+                m_week = str(m.get('week', ''))
+
+                if season_filter and season_filter != "All" and season_filter != m_season: continue
+                if div_filter and div_filter != "All" and div_filter != m_div: continue
+                if week_filter and week_filter != "All" and week_filter != m_week: continue
+                if date_filter and date_filter != date: continue
+
+                if q_lower:
+                    if q_lower not in p_name.lower() and q_lower not in opp.lower() and q_lower not in date: continue
+
+                players = sorted([p_name, opp])
+                match_hash = f"{date}_{players[0]}_{players[1]}"
+                
+                if match_hash not in seen:
+                    seen.add(match_hash)
+                    score = m.get('score', '0-0')
+                    try: s1, s2 = map(int, score.split('-'))
+                    except: s1, s2 = 0, 0
+                    
+                    results.append({
+                        'id': match_hash, 'date': date, 'division': m_div, 
+                        'season': m_season, 'week': m_week,
+                        'home_players': [p_name], 'away_players': [opp], 
+                        'score': score, 's1': s1, 's2': s2
+                    })
+                    
+        def sort_key(x):
+            try: return datetime.datetime.strptime(x['date'], "%d/%m/%Y")
+            except: return datetime.datetime(1900, 1, 1)
+            
+        results.sort(key=sort_key, reverse=True)
+        return results[:150]
 
     def admin_update_historical_match(self, p1, p2, date, s1, s2):
         if not self.db: return False
         try:
-            self.db.collection('match_corrections').add({
-                'p1': p1, 'p2': p2, 'date': date,
-                's1': int(s1), 's2': int(s2),
-                'timestamp': firestore.SERVER_TIMESTAMP
-            })
+            self.db.collection('match_corrections').add({'p1': p1, 'p2': p2, 'date': date, 's1': int(s1), 's2': int(s2), 'timestamp': firestore.SERVER_TIMESTAMP})
             self.refresh_data()
             return True
         except: return False
@@ -416,14 +568,8 @@ class ThunderData:
     def user_submit_report(self, p1, p2, date, reporter, problem, suggested_s1, suggested_s2):
         if not self.db: return False
         try:
-            report_data = {
-                'p1': p1, 'p2': p2, 'date': date,
-                'reporter': reporter, 'problem': problem,
-                'suggested_s1': int(suggested_s1), 'suggested_s2': int(suggested_s2),
-                'match_desc': f"{p1} vs {p2} on {date}",
-                'status': 'Pending', 'timestamp': firestore.SERVER_TIMESTAMP
-            }
-            self.db.collection('match_reports').add(report_data); return True
+            self.db.collection('match_reports').add({'p1': p1, 'p2': p2, 'date': date, 'reporter': reporter, 'problem': problem, 'suggested_s1': int(suggested_s1), 'suggested_s2': int(suggested_s2), 'match_desc': f"{p1} vs {p2} on {date}", 'status': 'Pending', 'timestamp': firestore.SERVER_TIMESTAMP})
+            return True
         except: return False
 
     def admin_get_reports(self):
@@ -441,18 +587,10 @@ class ThunderData:
             report_ref = self.db.collection('match_reports').document(report_id)
             report = report_ref.get().to_dict()
             if action == 'approve':
-                self.db.collection('match_corrections').add({
-                    'p1': report['p1'],
-                    'p2': report['p2'],
-                    'date': report['date'],
-                    's1': report['suggested_s1'],
-                    's2': report['suggested_s2'],
-                    'timestamp': firestore.SERVER_TIMESTAMP
-                })
+                self.db.collection('match_corrections').add({'p1': report['p1'], 'p2': report['p2'], 'date': report['date'], 's1': report['suggested_s1'], 's2': report['suggested_s2'], 'timestamp': firestore.SERVER_TIMESTAMP})
                 report_ref.update({'status': 'Approved'})
                 self.refresh_data()
-            elif action == 'reject': 
-                report_ref.update({'status': 'Rejected'})
+            elif action == 'reject': report_ref.update({'status': 'Rejected'})
             return True
         except: return False
 
@@ -460,13 +598,9 @@ class ThunderData:
         if not self.db: return False
         batch = self.db.batch(); count = 0
         home_games = self.db.collection('match_results').where('home_players', 'array_contains', bad_name).stream()
-        for doc in home_games:
-            d = doc.to_dict(); new_home = [good_name if p == bad_name else p for p in d.get('home_players', [])]
-            batch.update(doc.reference, {'home_players': new_home, 'home_team': good_name}); count += 1
+        for doc in home_games: d = doc.to_dict(); new_home = [good_name if p == bad_name else p for p in d.get('home_players', [])]; batch.update(doc.reference, {'home_players': new_home, 'home_team': good_name}); count += 1
         away_games = self.db.collection('match_results').where('away_players', 'array_contains', bad_name).stream()
-        for doc in away_games:
-            d = doc.to_dict(); new_away = [good_name if p == bad_name else p for p in d.get('away_players', [])]
-            batch.update(doc.reference, {'away_players': new_away, 'away_team': good_name}); count += 1
+        for doc in away_games: d = doc.to_dict(); new_away = [good_name if p == bad_name else p for p in d.get('away_players', [])]; batch.update(doc.reference, {'away_players': new_away, 'away_team': good_name}); count += 1
         safe_id_bad = re.sub(r'[^a-zA-Z0-9]', '_', bad_name).lower()
         batch.delete(self.db.collection('players').document(safe_id_bad))
         batch.delete(self.db.collection('player_profiles').document(safe_id_bad))
@@ -477,8 +611,7 @@ class ThunderData:
         self.refresh_data(); return True
 
     def admin_get_merge_suggestions(self):
-        names = list(self.all_players.keys())
-        suggestions = []; seen = set()
+        names = list(self.all_players.keys()); suggestions = []; seen = set()
         for name in names:
             matches = difflib.get_close_matches(name, names, n=3, cutoff=0.85)
             for m in matches:

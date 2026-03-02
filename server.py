@@ -1,16 +1,11 @@
-print("🚀 [BOOT 1] Starting server.py...")
-from flask import Flask, render_template, jsonify, request, send_from_directory
-print("🚀 [BOOT 2] Flask imported successfully.")
-
-print("🚀 [BOOT 3] Importing Backend...")
-from backend.backend import ThunderData
-print("🚀 [BOOT 4] Backend imported successfully.")
-
 import os
 import logging
 import datetime
+from flask import Flask, render_template, jsonify, request, send_from_directory
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
+
+from backend.backend import ThunderData
 
 app = Flask(__name__, static_folder="frontend/static", template_folder="frontend/templates")
 
@@ -19,9 +14,7 @@ logger = logging.getLogger(__name__)
 
 db = None
 try:
-    print("🚀 [BOOT 5] Initializing ThunderData (Connecting to Google/Firebase)...")
     db = ThunderData()
-    print("🚀 [BOOT 6] ThunderData Initialized Successfully!")
 except Exception as e:
     logger.error(f"❌ Failed to start Backend: {e}")
 
@@ -31,14 +24,11 @@ def scheduled_refresh():
         db.refresh_data()
         logger.info("✅ Background Data Sync Complete!")
 
-print("🚀 [BOOT 7] Setting up background scheduler...")
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=scheduled_refresh, trigger="interval", minutes=30, id="scheduled_refresh", next_run_time=datetime.datetime.now())
 scheduler.start()
 atexit.register(lambda: scheduler.shutdown())
-print("🚀 [BOOT 8] Scheduler ready.")
 
-# --- ROUTES ---
 @app.route('/')
 def index(): return render_template('index.html')
 
@@ -110,11 +100,34 @@ def merge_players():
     if not db: return jsonify({"success": False})
     return jsonify({"success": db.admin_merge_players(request.json.get('bad_name'), request.json.get('good_name'))})
 
+# --- APPROVAL ROUTES ---
+@app.route('/api/admin/approvals')
+def get_approvals():
+    return jsonify(db.admin_get_pending_approvals()) if db else jsonify([])
+
+@app.route('/api/admin/resolve_approval', methods=['POST'])
+def resolve_approval():
+    if not db: return jsonify({"success": False})
+    data = request.json
+    success = db.admin_resolve_approval(data.get('id'), data.get('action'), data.get('s1'), data.get('s2'))
+    return jsonify({"success": success})
+
+@app.route('/api/admin/recent_approved')
+def recent_approved():
+    return jsonify(db.admin_get_recent_approved()) if db else jsonify([])
+
+# NEW: Delete a match entirely
+@app.route('/api/admin/delete_recent', methods=['POST'])
+def delete_recent():
+    if not db: return jsonify({"success": False})
+    data = request.json
+    success = db.admin_delete_match_result(data.get('id'))
+    return jsonify({"success": success})
+
 @app.route('/api/refresh')
 def force_refresh():
     if db: db.refresh_data()
     return jsonify({"status": "Refreshed"})
 
 if __name__ == '__main__':
-    print("🚀 [BOOT 9] Starting Flask Server on Port 5001...")
     app.run(debug=True, host='0.0.0.0', port=5001)
