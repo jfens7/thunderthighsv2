@@ -2,161 +2,173 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gold Coast Table Tennis</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GCTTA Live Stats</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://js.stripe.com/v3/"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800;900&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; overflow-x: hidden; }
-        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap');
+        
+        :root { --p-primary: #eab308; --p-secondary: #0ea5e9; --p-bg: #0f172a; --p-panel: #1e293b; }
+        
+        body { font-family: 'Inter', sans-serif; background-color: var(--p-bg); color: #f8fafc; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
+        
+        /* Premium UI Elements */
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); }
+        .nav-item.active { color: var(--p-primary); }
+        .nav-item.active i { transform: translateY(-2px); color: var(--p-primary); text-shadow: 0 0 10px rgba(234, 179, 8, 0.5); }
+        .input-premium { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; transition: all 0.2s; }
+        .input-premium:focus { border-color: var(--p-primary); box-shadow: 0 0 0 2px rgba(234,179,8,0.2); }
+        
+        /* Animations */
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        /* Stars Background */
-        #starContainer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; overflow: hidden; }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+        /* Background Stars */
+        #starContainer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
         .star { position: absolute; background: white; border-radius: 50%; opacity: 0; animation: twinkle var(--duration) ease-in-out infinite; animation-delay: var(--delay); }
-        .s-small { width: 1px; height: 1px; } .s-medium { width: 2px; height: 2px; } .s-large { width: 3px; height: 3px; box-shadow: 0 0 4px rgba(255, 255, 255, 0.8); }
+        .s-small { width: 1px; height: 1px; }
+        .s-medium { width: 2px; height: 2px; }
+        .s-large { width: 3px; height: 3px; box-shadow: 0 0 4px rgba(255, 255, 255, 0.8); }
         @keyframes twinkle { 0%, 100% { opacity: 0; transform: scale(0.5); } 50% { opacity: 0.8; transform: scale(1.2); } }
-        ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #1e293b; } ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; } ::-webkit-scrollbar-thumb:hover { background: #64748b; }
-        .mobile-nav-item.active { color: #eab308; } .mobile-nav-item.active i { transform: scale(1.2); transition: transform 0.2s; }
-        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+
+        /* =========================================
+           ✨ METALLIC GOLD SHINE ANIMATION ✨
+           ========================================= */
+        @keyframes shine-metallic {
+            0% { background-position: 200% center; }
+            100% { background-position: -200% center; }
+        }
+
+        .shining-gold-text {
+            background: linear-gradient(
+                110deg,
+                #b8860b 10%,   
+                #eab308 30%,   
+                #ffffe0 48%,   
+                #ffffff 50%,   
+                #ffffe0 52%,   
+                #eab308 70%,   
+                #b8860b 90%    
+            );
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent; 
+            animation: shine-metallic 4s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+            will-change: background-position;
+            filter: drop-shadow(0px 2px 12px rgba(234, 179, 8, 0.4));
+        }
     </style>
 </head>
-<body class="min-h-screen flex flex-col relative">
+<body class="min-h-screen pb-24 lg:pb-6 relative flex flex-col">
     <div id="starContainer"></div>
 
-    <div id="matchNotification" class="fixed top-[-100px] left-0 w-full bg-gradient-to-r from-red-600 to-red-500 z-[100] shadow-2xl transition-all duration-500 flex items-center justify-between px-6 py-3">
-        <div class="flex items-center gap-4">
-            <div class="bg-white/20 p-2 rounded-full"><i class="fa-solid fa-bolt text-white animate-pulse"></i></div>
-            <div>
-                <div class="text-[10px] font-black uppercase text-red-900 tracking-widest">LIVE ACTION</div>
-                <div id="notifText" class="text-sm font-medium text-white drop-shadow-md"></div>
-            </div>
-        </div>
-        <button onclick="document.getElementById('matchNotification').style.top = '-100px'" class="text-white/80 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
-    </div>
-
-    <nav class="fixed top-0 w-full z-50 bg-slate-900/90 backdrop-blur-md border-b border-white/10 hidden md:block">
-        <div class="max-w-7xl mx-auto px-6 h-20 flex justify-between items-center">
-            <div class="flex items-center gap-8">
-                <div class="flex items-center gap-3 cursor-pointer" onclick="window.switchTab('home')">
-                    <img src="{{ url_for('static', filename='logo.png') }}" alt="GCTTA Logo" class="h-10 drop-shadow-lg hover:scale-105 transition-transform">
-                    <div>
-                        <div class="font-black text-xl tracking-tighter text-white">GOLD COAST <span class="text-yellow-500">TABLE TENNIS</span></div>
-                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">Official Match Centre</div>
-                    </div>
-                </div>
-                <div class="flex gap-1 bg-black/20 p-1 rounded-lg border border-white/5 items-center">
-                    <button id="nav-home" onclick="window.switchTab('home')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all active">Dashboard</button>
-                    
-                    <button id="nav-live-center" onclick="window.switchTab('live-center')" class="hidden px-5 py-2 rounded-md text-sm font-bold text-white bg-red-600 hover:bg-red-500 transition-all shadow-[0_0_15px_rgba(220,38,38,0.5)] animate-pulse border border-red-400">
-                        <i class="fa-solid fa-circle text-[8px] align-middle mr-2 animate-ping"></i>LIVE MATCHES
-                    </button>
-
-                    <button id="nav-week" onclick="window.switchTab('week')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Standings</button>
-                    <button id="nav-sheets" onclick="window.switchTab('sheets')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Match Centre</button>
-                    <button id="nav-global" onclick="window.switchTab('global')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Stats</button>
+    <nav class="glass-panel sticky top-0 z-50 mt-2 mx-2 rounded-2xl border border-white/5">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+            
+            <div class="flex items-center gap-3 cursor-pointer group shrink-0" onclick="window.switchTab('home')">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="w-10 h-10 md:w-12 md:h-12 drop-shadow-[0_0_10px_rgba(234,179,8,0.5)] group-hover:scale-105 transition-transform duration-300">
+                <div class="flex flex-col leading-none shining-gold-text uppercase font-black tracking-tighter">
+                    <span class="text-[12px] md:text-[16px] leading-tight">Gold Coast Table Tennis</span>
+                    <span class="text-[16px] md:text-[22px] tracking-widest leading-none mt-[-2px]">Stats</span>
                 </div>
             </div>
+            
+            <div class="flex gap-1 bg-black/20 p-1 rounded-lg border border-white/5 items-center hidden lg:flex">
+                <button id="nav-home" onclick="window.switchTab('home')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all active">Dashboard</button>
+                <button id="nav-live-center" onclick="window.switchTab('live-center')" class="hidden px-5 py-2 rounded-md text-sm font-bold text-white bg-red-600 hover:bg-red-500 transition-all shadow-[0_0_15px_rgba(220,38,38,0.5)] animate-pulse border border-red-400">
+                    <i class="fa-solid fa-circle text-[8px] align-middle mr-2 animate-ping"></i>LIVE MATCHES
+                </button>
+                <button id="nav-week" onclick="window.switchTab('week')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Standings</button>
+                <button id="nav-sheets" onclick="window.switchTab('sheets')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Match Centre</button>
+                <button id="nav-global" onclick="window.switchTab('global')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Stats</button>
+            </div>
 
-            <div class="flex items-center gap-4">
-                <div class="relative w-72 group">
-                    <input type="text" id="playerSearch" placeholder="Search for a player..." class="w-full bg-black/40 border border-white/10 text-white text-sm rounded-xl px-5 py-2.5 pl-11 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all group-hover:bg-black/60 shadow-inner placeholder-slate-500" autocomplete="off">
-                    <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-hover:text-yellow-500 transition-colors"></i>
-                    <div id="suggestions-list" class="absolute top-full left-0 w-full bg-slate-800 rounded-xl shadow-2xl overflow-hidden hidden z-50 mt-2 border border-white/10 max-h-60 overflow-y-auto"></div>
-                </div>
+            <div class="flex items-center gap-3 shrink-0">
+                <button onclick="openDonateModal()" class="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white text-[11px] md:text-xs uppercase tracking-widest font-black px-4 py-2 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.4)] transition-transform hover:scale-105 flex items-center gap-2">
+                    <i class="fa-brands fa-apple-pay text-2xl leading-none -mt-0.5"></i> DONATE
+                </button>
                 
-                <a href="/admin" class="w-10 h-10 rounded-xl bg-black/40 border border-white/10 flex items-center justify-center text-slate-500 hover:text-yellow-500 hover:border-yellow-500/50 transition-all" title="Admin Panel">
-                    <i class="fa-solid fa-lock"></i>
-                </a>
+                <div class="relative w-48 md:w-64 group hidden sm:block">
+                    <input type="text" id="playerSearch" placeholder="Search for a player..." class="w-full bg-black/40 border border-white/10 text-white text-sm rounded-xl px-5 py-2 pl-11 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all group-hover:bg-black/60 shadow-inner placeholder-slate-500" autocomplete="off">
+                    <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-hover:text-yellow-500 transition-colors"></i>
+                    <div id="suggestions-list" class="absolute border border-white/10 border-top-none z-[99] top-full left-0 right-0 rounded-b-lg bg-slate-800 max-h-[50vh] overflow-y-auto shadow-2xl hidden"></div>
+                </div>
             </div>
         </div>
     </nav>
 
-    <div class="md:hidden fixed top-0 w-full z-50 bg-slate-900/95 backdrop-blur-md border-b border-white/10 h-16 flex justify-between items-center px-4">
-        <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="h-8" onclick="window.switchTab('home')">
-        <div class="text-lg font-black text-white">GCTTA <span class="text-yellow-500">LIVE</span></div>
-        <div class="flex items-center gap-4">
-            <a href="/admin" class="text-slate-400 hover:text-white"><i class="fa-solid fa-lock"></i></a>
-            <button onclick="document.getElementById('mobileSearchModal').classList.remove('hidden')" class="w-8 h-8 flex items-center justify-center text-slate-300"><i class="fa-solid fa-magnifying-glass"></i></button>
-        </div>
-    </div>
-
-    <main class="flex-grow relative pt-32 md:pt-32 pb-24 md:pb-12 w-full max-w-7xl mx-auto flex flex-col items-center">
+    <main class="max-w-7xl mx-auto py-6 flex flex-col items-center relative z-10 w-full flex-grow">
         {% include 'Components/home.html' %}
-        
         {% include 'Components/live.html' %}
-
         {% include 'Components/standings.html' %}
-
         {% include 'Components/results.html' %}
-
         {% include 'Components/global.html' %}
-
         {% include 'Components/profile.html' %}
     </main>
 
-    <footer class="w-full bg-slate-900 border-t border-white/5 py-8 mt-auto mb-16 md:mb-0">
-        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4 text-center md:text-left">
-            <div>
-                <div class="text-white font-bold text-sm">Gold Coast Table Tennis Association</div>
-                <div class="text-slate-500 text-xs mt-1">© 2026 All Rights Reserved.</div>
-            </div>
-            
-            <div class="flex flex-col items-center md:items-end">
-                <div class="text-slate-400 text-xs font-medium">Created by <span class="text-yellow-500 font-bold">Jakob Fensom</span> & <span class="text-yellow-500 font-bold">Jesse Wilson</span></div>
-                <div class="mt-2">
-                    <a href="/admin" class="text-[10px] uppercase font-bold text-slate-600 hover:text-slate-300 transition-colors flex items-center gap-1">
-                        <i class="fa-solid fa-lock text-[8px]"></i> Admin Access
-                    </a>
-                </div>
-            </div>
+    <footer class="w-full max-w-4xl mx-auto px-4 pt-8 pb-12 text-center relative z-10">
+        <div class="border-t border-white/10 pt-6 flex flex-col items-center gap-3">
+            <p class="text-xs text-slate-500 font-medium">
+                &copy; 2026 Gold Coast Table Tennis Stats. <br class="md:hidden">
+                Created by Jakob Fensom and Jesse Wilson.
+            </p>
+            <a href="/login" class="text-[10px] uppercase tracking-widest text-slate-600 hover:text-sky-400 transition-colors font-bold flex items-center gap-1.5 mt-1">
+                <i class="fa-solid fa-lock"></i> Admin Login
+            </a>
         </div>
     </footer>
 
-    <nav class="md:hidden fixed bottom-0 w-full bg-slate-900/95 backdrop-blur-lg border-t border-white/10 z-50 pb-safe">
-        <div class="flex justify-around items-center h-16">
-            <button id="b-nav-home" onclick="window.switchTab('home')" class="mobile-nav-item active flex flex-col items-center gap-1 text-slate-500 w-full"><i class="fa-solid fa-house text-lg"></i><span class="text-[10px] font-bold">Home</span></button>
-            <button id="b-nav-week" onclick="window.switchTab('week')" class="mobile-nav-item flex flex-col items-center gap-1 text-slate-500 w-full"><i class="fa-solid fa-trophy text-lg"></i><span class="text-[10px] font-bold">Rank</span></button>
-            
-            <button id="b-nav-live-center" onclick="window.switchTab('live-center')" class="mobile-nav-item flex flex-col items-center gap-1 text-slate-500 w-full hidden relative">
-                <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-bounce">LIVE</div>
-                <i class="fa-solid fa-tower-broadcast text-lg text-red-500"></i><span class="text-[10px] font-bold text-red-400">Live</span>
+    <div class="lg:hidden fixed bottom-0 left-0 right-0 z-50 px-2 pb-2">
+        <div class="glass-panel rounded-2xl flex justify-around items-center p-2 border border-white/10 shadow-2xl bg-slate-900/95">
+            <button id="b-nav-home" onclick="window.switchTab('home')" class="nav-item active flex flex-col items-center gap-1 p-2 w-1/5 transition-all duration-300 text-slate-400">
+                <i class="fa-solid fa-house text-xl"></i>
+                <span class="text-[10px] font-medium">Home</span>
             </button>
-
-            <button id="b-nav-sheets" onclick="window.switchTab('sheets')" class="mobile-nav-item flex flex-col items-center gap-1 text-slate-500 w-full"><i class="fa-solid fa-clipboard-list text-lg"></i><span class="text-[10px] font-bold">Matches</span></button>
-            <button id="b-nav-global" onclick="window.switchTab('global')" class="mobile-nav-item flex flex-col items-center gap-1 text-slate-500 w-full"><i class="fa-solid fa-globe text-lg"></i><span class="text-[10px] font-bold">Stats</span></button>
-        </div>
-    </nav>
-
-    <div id="matchDetailsModal" class="fixed inset-0 z-[100] hidden bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-slate-900 rounded-2xl w-full max-w-lg border border-white/10 shadow-2xl relative overflow-hidden">
-            <div class="bg-gradient-to-r from-slate-800 to-slate-900 p-6 border-b border-white/5">
-                <button onclick="closeMatchDetails()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/20 flex items-center justify-center text-slate-400 hover:text-white hover:bg-red-500/20 transition-all"><i class="fa-solid fa-xmark"></i></button>
-                <div class="text-center">
-                    <div class="text-[10px] font-black uppercase text-yellow-500 tracking-widest mb-2" id="md-division">DIVISION 1</div>
-                    <div class="text-2xl font-black text-white" id="md-score">3 - 1</div>
-                    <div class="flex justify-center items-center gap-4 mt-2">
-                        <div class="text-slate-300 font-bold" id="md-p1">Jakob</div>
-                        <span class="text-slate-600 text-xs">vs</span>
-                        <div class="text-slate-300 font-bold" id="md-p2">John</div>
-                    </div>
+            <button id="b-nav-week" onclick="window.switchTab('week')" class="nav-item flex flex-col items-center gap-1 p-2 w-1/5 transition-all duration-300 text-slate-400">
+                <i class="fa-solid fa-trophy text-xl"></i>
+                <span class="text-[10px] font-medium">Ranks</span>
+            </button>
+            <button id="b-nav-live-center" onclick="window.switchTab('live-center')" class="nav-item flex flex-col items-center gap-1 p-2 w-1/5 transition-all duration-300 relative text-slate-400 hidden">
+                <div class="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
                 </div>
-            </div>
-            
-            <div class="p-6">
-                <div class="mb-4">
-                    <div class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Game History</div>
-                    <div id="md-history" class="flex flex-wrap gap-2 justify-center">
-                        </div>
-                </div>
-                <div class="grid grid-cols-2 gap-3 mt-6">
-                    <div class="bg-black/20 p-3 rounded text-center"><div class="text-xs text-slate-500 uppercase">Season</div><div class="text-white font-bold" id="md-season">...</div></div>
-                    <div class="bg-black/20 p-3 rounded text-center"><div class="text-xs text-slate-500 uppercase">Date</div><div class="text-white font-bold" id="md-date">...</div></div>
-                </div>
-            </div>
+                <i class="fa-solid fa-satellite-dish text-xl"></i>
+                <span class="text-[10px] font-medium">Live</span>
+            </button>
+            <button id="b-nav-sheets" onclick="window.switchTab('sheets')" class="nav-item flex flex-col items-center gap-1 p-2 w-1/5 transition-all duration-300 text-slate-400">
+                <i class="fa-solid fa-calendar-week text-xl"></i>
+                <span class="text-[10px] font-medium">Matches</span>
+            </button>
+            <button id="b-nav-global" onclick="window.switchTab('global')" class="nav-item flex flex-col items-center gap-1 p-2 w-1/5 transition-all duration-300 text-slate-400">
+                <i class="fa-solid fa-globe text-xl"></i>
+                <span class="text-[10px] font-medium">Stats</span>
+            </button>
         </div>
     </div>
 
+    <div id="matchNotification" class="fixed -top-24 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ease-out pointer-events-none">
+        <div class="bg-slate-900 border-2 border-green-500 rounded-full px-6 py-3 shadow-2xl flex items-center gap-3">
+            <span class="relative flex h-3 w-3">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+            </span>
+            <span class="text-green-400 font-bold text-sm">New Match Started:</span>
+            <span id="notifText" class="text-white text-sm"></span>
+        </div>
+    </div>
+
+    {% include 'Components/modals.html' %}
     {% include 'Components/scripts.html' %}
 </body>
 </html>

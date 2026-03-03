@@ -1,14 +1,95 @@
-<div id="reportModal" class="fixed inset-0 flex items-center justify-center hidden z-50 modal-bg px-4">
-    <div class="glass-panel rounded-2xl p-6 md:p-8 w-full max-w-lg relative">
+<div id="donateModal" class="fixed inset-0 flex items-center justify-center hidden z-[120] bg-black/90 backdrop-blur-sm px-4">
+    <div class="bg-slate-900 border border-white/10 rounded-2xl p-6 md:p-8 w-full max-w-md relative shadow-2xl">
+        <button onclick="closeDonateModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+        <h3 class="text-2xl font-black text-white mb-2"><i class="fa-solid fa-burger text-yellow-500 mr-2"></i> Support the Project</h3>
+        
+        <p class="text-sm text-slate-400 mb-6">For the price of a Maccas cheeseburger, you can help support the upgrades, updates, and maintenance of this project! (Server costs are $10/mo and maintenance is $12/mo).</p>
+        
+        <div id="donate-step-1">
+            <div class="grid grid-cols-3 gap-3 mb-4">
+                <button onclick="setDonationAmount(5)" class="donate-amt-btn bg-black/40 border border-white/10 p-3 rounded-lg text-white font-bold hover:border-yellow-500 transition focus:outline-none">$5</button>
+                <button onclick="setDonationAmount(10)" class="donate-amt-btn bg-black/40 border border-white/10 p-3 rounded-lg text-white font-bold hover:border-yellow-500 transition focus:outline-none">$10</button>
+                <button onclick="setDonationAmount(20)" class="donate-amt-btn bg-black/40 border border-white/10 p-3 rounded-lg text-white font-bold hover:border-yellow-500 transition focus:outline-none">$20</button>
+            </div>
+            <div class="relative mb-6">
+                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                <input type="number" id="custom-donate-amount" placeholder="Custom Amount (Min $5)" class="w-full bg-black/40 border border-white/10 p-3 pl-8 rounded-lg text-white font-bold outline-none focus:border-yellow-500 transition" oninput="clearDonateButtons()">
+            </div>
+            <button onclick="proceedToPayment()" id="proceed-pay-btn" class="w-full py-4 bg-yellow-500 hover:bg-yellow-400 text-slate-900 font-black rounded-xl transition-colors flex justify-center items-center gap-2">
+                Continue to Checkout <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        </div>
+
+        <div id="donate-step-2" class="hidden">
+            <div id="payment-element" class="bg-white p-4 rounded-xl mb-4"></div>
+            <button onclick="submitStripePayment()" id="final-pay-btn" class="w-full py-4 bg-green-500 hover:bg-green-400 text-slate-900 font-black rounded-xl transition-colors flex justify-center items-center gap-2"><i class="fa-solid fa-lock"></i> Pay Now</button>
+            <div id="payment-message" class="text-center mt-3 text-sm hidden font-bold"></div>
+            <button onclick="resetDonateModal()" class="w-full text-center text-slate-500 mt-4 text-sm hover:text-white">Back</button>
+        </div>
+    </div>
+</div>
+
+<div id="reportModal" class="fixed inset-0 flex items-center justify-center hidden z-[110] bg-black/90 backdrop-blur-sm px-4">
+    <div class="bg-slate-900 border border-white/10 rounded-2xl p-6 md:p-8 w-full max-w-lg relative shadow-2xl">
         <button onclick="closeReportModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
-        <h3 class="text-2xl font-bold text-white mb-6">Report Issue</h3>
-        <label class="block text-slate-400 text-xs uppercase font-bold mb-2">Your Name</label>
-        <input id="repName" type="text" class="input-premium w-full p-3 rounded-lg mb-4">
-        <label class="block text-slate-400 text-xs uppercase font-bold mb-2">Match Details</label>
-        <input id="repMatch" type="text" class="input-premium w-full p-3 rounded-lg mb-4 font-mono text-sm opacity-50 cursor-not-allowed" readonly>
-        <label class="block text-slate-400 text-xs uppercase font-bold mb-2">Description</label>
-        <textarea id="repDesc" class="input-premium w-full p-3 rounded-lg mb-6 h-24" placeholder="What is incorrect?"></textarea>
-        <button onclick="submitReport()" class="w-full py-3 bg-yellow-500 hover:bg-yellow-400 text-slate-900 font-bold rounded-xl transition-colors">Submit Report</button>
+        <h3 class="text-2xl font-bold text-white mb-2 text-red-400"><i class="fa-solid fa-triangle-exclamation mr-2"></i> Report Issue</h3>
+        <p class="text-xs text-slate-400 mb-6" id="report-match-desc"></p>
+
+        <input type="hidden" id="rep-p1">
+        <input type="hidden" id="rep-p2">
+        <input type="hidden" id="rep-date">
+
+        <div class="space-y-4">
+            <div>
+                <label class="text-xs font-bold text-slate-500 uppercase">Your Name (Reporter)</label>
+                <input type="text" id="repName" placeholder="e.g. John Doe" class="w-full mt-1 bg-black/40 border border-white/10 rounded p-3 text-white outline-none focus:border-red-500 transition">
+            </div>
+            <div>
+                <label class="text-xs font-bold text-slate-500 uppercase">What's wrong?</label>
+                <textarea id="repDesc" class="w-full mt-1 bg-black/40 border border-white/10 rounded p-3 text-white outline-none resize-none h-32 focus:border-red-500 transition" placeholder="e.g., Score should be 3-1, not 3-0"></textarea>
+            </div>
+            <div class="flex gap-4">
+                <div class="flex-1">
+                    <label class="text-xs font-bold text-slate-500 uppercase truncate block" id="lbl-rep-p1">P1 Sets</label>
+                    <input type="number" id="rep-s1" class="w-full mt-1 bg-black/40 border border-white/10 rounded p-3 text-white text-center font-mono outline-none focus:border-red-500">
+                </div>
+                <div class="flex-1">
+                    <label class="text-xs font-bold text-slate-500 uppercase truncate block" id="lbl-rep-p2">P2 Sets</label>
+                    <input type="number" id="rep-s2" class="w-full mt-1 bg-black/40 border border-white/10 rounded p-3 text-white text-center font-mono outline-none focus:border-red-500">
+                </div>
+            </div>
+            <button onclick="submitReport()" class="w-full bg-red-600 hover:bg-red-500 py-3 rounded-lg font-bold text-white transition shadow-lg mt-2">Submit Correction</button>
+        </div>
+    </div>
+</div>
+
+<div id="feedbackModal" class="hidden fixed inset-0 z-[120] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 p-6 md:p-8 rounded-2xl max-w-md w-full relative border border-white/10 shadow-2xl">
+        <button onclick="document.getElementById('feedbackModal').classList.add('hidden')" class="absolute top-4 right-4 text-slate-500 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+        <h3 class="text-xl font-bold text-white mb-4"><i class="fa-solid fa-bullhorn text-sky-400 mr-2"></i> Submit Feedback</h3>
+        <div class="space-y-4">
+            <div>
+                <label class="text-xs font-bold text-slate-500 uppercase">Your Name</label>
+                <input type="text" id="fb-name" placeholder="e.g. John Doe" class="w-full mt-1 bg-black/40 border border-white/10 rounded-lg p-3 text-white outline-none focus:border-sky-500 transition">
+            </div>
+            <div>
+                <label class="text-xs font-bold text-slate-500 uppercase">Nature of Request</label>
+                <select id="fb-type" class="w-full mt-1 bg-black/40 border border-white/10 rounded-lg p-3 text-white outline-none focus:border-sky-500 transition">
+                    <option value="Bug">Report a Bug / Issue</option>
+                    <option value="Suggestion">Request a Feature</option>
+                    <option value="Complaint">Complaint</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs font-bold text-slate-500 uppercase">What were you doing?</label>
+                <input type="text" id="fb-context" placeholder="e.g. Searching for stats, checking standings..." class="w-full mt-1 bg-black/40 border border-white/10 rounded-lg p-3 text-white outline-none focus:border-sky-500 transition">
+            </div>
+            <div>
+                <label class="text-xs font-bold text-slate-500 uppercase">Description</label>
+                <textarea id="fb-msg" placeholder="Tell us exactly what happened or what you want..." class="w-full mt-1 bg-black/40 border border-white/10 rounded-lg p-3 h-24 text-white outline-none resize-none focus:border-sky-500 transition"></textarea>
+            </div>
+            <button onclick="submitFeedback()" class="w-full bg-sky-600 hover:bg-sky-500 py-3 rounded-lg font-bold text-white transition shadow-lg mt-2">Send Report</button>
+        </div>
     </div>
 </div>
 

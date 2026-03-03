@@ -25,92 +25,67 @@ except ImportError:
     except: SkyEngine = None
 
 # ==========================================
-# GLICKO-2 RATING ENGINE (RATINGS CENTRAL STYLE)
+# GLICKO-2 RATING ENGINE
 # ==========================================
 DEFAULT_RATING = 1500.0
 DEFAULT_RD = 350.0
 DEFAULT_VOL = 0.06
-TAU = 0.5        # System constant (constrains volatility over time)
-SCALE = 173.7178 # Glicko-2 scaling factor
+TAU = 0.5        
+SCALE = 173.7178 
 
 def _glicko2_core(mu, phi, vol, opponent_mu, opponent_phi, score):
-    # Step 3 & 4
     def g(p): return 1.0 / math.sqrt(1.0 + 3.0 * p**2 / (math.pi**2))
     def E(m, mj, pj): return 1.0 / (1.0 + math.exp(-g(pj) * (m - mj)))
-    
     g_j = g(opponent_phi)
     E_j = E(mu, opponent_mu, opponent_phi)
-    
-    # Estimated variance
     v = 1.0 / (g_j**2 * E_j * (1.0 - E_j))
-    
-    # Estimated improvement
     delta = v * g_j * (score - E_j)
-    
-    # Step 5: Illinois algorithm to update Volatility
     a = math.log(vol**2)
     def f(x):
         ex = math.exp(x)
         num = ex * (delta**2 - phi**2 - v - ex)
         den = 2.0 * (phi**2 + v + ex)**2
         return (num / den) - ((x - a) / TAU**2)
-    
     A = a
-    if delta**2 > phi**2 + v:
-        B = math.log(delta**2 - phi**2 - v)
+    if delta**2 > phi**2 + v: B = math.log(delta**2 - phi**2 - v)
     else:
         k = 1
         while f(a - k * TAU) < 0: k += 1
         B = a - k * TAU
-        
     fA, fB = f(A), f(B)
-    
-    for _ in range(100): # Cap iterations to prevent infinite loop
+    for _ in range(100): 
         if abs(B - A) <= 0.000001: break
         C = A + (A - B) * fA / (fB - fA)
         fC = f(C)
-        if fC * fB <= 0:
-            A, fA = B, fB
-        else:
-            fA /= 2.0
+        if fC * fB <= 0: A, fA = B, fB
+        else: fA /= 2.0
         B, fB = C, fC
-        
     new_vol = math.exp(A / 2.0)
-    
-    # Step 6: Update Rating Deviation to pre-rating period
     phi_star = math.sqrt(phi**2 + new_vol**2)
-    
-    # Step 7: Update Rating and RD
     new_phi = 1.0 / math.sqrt(1.0 / phi_star**2 + 1.0 / v)
     new_mu = mu + new_phi**2 * g_j * (score - E_j)
-    
     return new_mu, new_phi, new_vol
 
 def calculate_match(w, l, s1, s2):
-    # Step 2: Convert to Glicko-2 scale
     mu_w, phi_w, vol_w = (w['rating'] - 1500) / SCALE, w['rd'] / SCALE, w['vol']
     mu_l, phi_l, vol_l = (l['rating'] - 1500) / SCALE, l['rd'] / SCALE, l['vol']
     
-    # Process Winner (Score = 1.0)
-    new_mu_w, new_phi_w, new_vol_w = _glicko2_core(mu_w, phi_w, vol_w, mu_l, phi_l, 1.0)
+    total_sets = s1 + s2
+    if total_sets == 0: return {'winner': w, 'loser': l}
+    w_score = 0.75 + 0.25 * ((s1 - s2) / total_sets)
+    l_score = 1.0 - w_score
+
+    new_mu_w, new_phi_w, new_vol_w = _glicko2_core(mu_w, phi_w, vol_w, mu_l, phi_l, w_score)
+    new_mu_l, new_phi_l, new_vol_l = _glicko2_core(mu_l, phi_l, vol_l, mu_w, phi_w, l_score)
     
-    # Process Loser (Score = 0.0)
-    new_mu_l, new_phi_l, new_vol_l = _glicko2_core(mu_l, phi_l, vol_l, mu_w, phi_w, 0.0)
-    
-    # Step 8: Convert back to original scale
     w['rating'] = new_mu_w * SCALE + 1500
-    w['rd'] = new_phi_w * SCALE
+    w['rd'] = max(30.0, new_phi_w * SCALE)
     w['vol'] = new_vol_w
-    
     l['rating'] = new_mu_l * SCALE + 1500
-    l['rd'] = new_phi_l * SCALE
+    l['rd'] = max(30.0, new_phi_l * SCALE)
     l['vol'] = new_vol_l
-    
     return {'winner': w, 'loser': l}
 
-# ==========================================
-# SYSTEM DATA HANDLER
-# ==========================================
 RESULTS_SPREADSHEET_ID = "1tpxuUCl8ddpnBBr69vc4P1foRCRKWpts5-HaFPYb4po" 
 EXPORT_SPREADSHEET_ID = "1Vo4HUelw9Vvy24BjuQ7XVhWI6F7dYtlwrrzT9bv0CVw"   
 RATING_START_DATE = datetime.date(2025, 12, 25)
@@ -138,7 +113,6 @@ class ThunderData:
         self.scopes = ["https://www.googleapis.com/auth/spreadsheets"]
         self.client = None
         self.sheet_results = None; self.sheet_export = None; self.db = None 
-        self.sky_engine = SkyEngine() if SkyEngine else None
         self.rating_engine = RatingEngine()
         self.all_players = {}; self.season_stats = {}; self.seasons_list = ["Career"] 
         self.divisions_list = set(); self.date_lookup = {}; self.weekly_matches = {} 
@@ -165,7 +139,13 @@ class ThunderData:
                 if not os.path.exists(cred_path) and os.path.exists('backend/firebase_credentials.json'): cred_path = 'backend/firebase_credentials.json'
                 firebase_admin.initialize_app(credentials.Certificate(cred_path))
             self.db = firestore.client()
+            self._ensure_config_exists()
         except: self.db = None
+        
+    def _ensure_config_exists(self):
+        if not self.db: return
+        doc_ref = self.db.collection('system_config').document('main')
+        if not doc_ref.get().exists: doc_ref.set({'tournament_mode_active': False})
 
     def _clean_name(self, name): 
         if not name: return ""
@@ -180,8 +160,6 @@ class ThunderData:
 
     def _parse_date(self, date_str):
         if not date_str: return None
-        if isinstance(date_str, datetime.date): return date_str
-        if isinstance(date_str, datetime.datetime): return date_str.date()
         for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%Y/%m/%d"):
             try: return datetime.datetime.strptime(str(date_str).strip(), fmt).date()
             except ValueError: continue
@@ -208,10 +186,35 @@ class ThunderData:
 
     def _load_seed_ratings(self):
         try:
-            for row in self.sheet_results.worksheet("ratings Origin").get_all_records():
-                name = self._clean_name(row.get('Player'))
-                if name and row.get('Rating'): self.rating_engine.set_seed(name, row.get('Rating'), row.get('Deviation'), row.get('Volatility'))
-        except: pass
+            ws = self.sheet_results.worksheet("Ratings base")
+            rows = ws.get_all_values()
+            if not rows: return
+            
+            headers = [str(h).lower().strip() for h in rows[0]]
+            p_idx = headers.index('player') if 'player' in headers else 0
+            peterman_idx = 1 
+            r_idx = headers.index('rating') if 'rating' in headers else 2
+            d_idx = headers.index('deviation') if 'deviation' in headers else 3
+            v_idx = headers.index('volatility') if 'volatility' in headers else 4
+            
+            for row in rows[1:]:
+                if len(row) <= p_idx: continue
+                name = self._clean_name(row[p_idx])
+                if not name: continue
+                
+                peterman_id = str(row[peterman_idx]).strip() if len(row) > peterman_idx else ""
+                rating = row[r_idx] if len(row) > r_idx else ""
+                dev = row[d_idx] if len(row) > d_idx else ""
+                vol = row[v_idx] if len(row) > v_idx else ""
+                
+                if rating:
+                    self.rating_engine.set_seed(name, rating, dev, vol)
+                
+                if name not in self.all_players:
+                    self.all_players[name] = {'regular': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'fillin': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'combined': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}}
+                self.all_players[name]['peterman_id'] = peterman_id
+        except Exception as e:
+            logger.error(f"Error loading seed ratings: {e}")
 
     def _save_updated_ratings(self):
         if not self.sheet_results: return
@@ -289,20 +292,31 @@ class ThunderData:
         except: return []
 
     def _deduplicate_matches(self, matches):
-        unique_map = {}
+        final_matches = []
+        groups = {}
         for m in matches:
             p1 = m['p1'].lower().strip(); p2 = m['p2'].lower().strip()
             if not p1 or not p2: continue
             players = sorted([p1, p2])
             date_key = m['date'].strftime("%Y%m%d") if m['date'] else "nodate"
             match_key = f"{date_key}_{players[0]}_{players[1]}"
-            if match_key not in unique_map: unique_map[match_key] = m
-            else:
-                existing = unique_map[match_key]
-                if m.get('manual_override'): unique_map[match_key] = m
-                elif existing.get('manual_override'): continue
-                elif m.get('rich_stats') and not existing.get('rich_stats'): unique_map[match_key] = m
-        return list(unique_map.values())
+            if match_key not in groups: groups[match_key] = []
+            groups[match_key].append(m)
+            
+        for key, group in groups.items():
+            if len(group) == 1:
+                final_matches.append(group[0])
+                continue
+                
+            firebase_m = [m for m in group if m.get('rich_stats') is not None]
+            sheet_m = [m for m in group if m.get('rich_stats') is None]
+            merged = []
+            for fm in firebase_m:
+                merged.append(fm)
+                if sheet_m: sheet_m.pop(0) 
+            for sm in sheet_m: merged.append(sm)
+            final_matches.extend(merged)
+        return final_matches
 
     def _update_player_stats(self, stat_dict, player_name, p1_sets, p2_sets, is_p1, opponent, is_fillin, division, date_str, week_num, season_name, details="", rich_stats=None):
         if stat_dict is None: return 
@@ -323,14 +337,28 @@ class ThunderData:
         if self.sheet_results: self._load_calculated_dates(); self._load_aliases(); self._load_seed_ratings()
         raw_match_queue = [] 
         
-        # 1. LOAD FROM GOOGLE SHEETS
+        # --- DEBUG LOGGING ---
+        logger.info("==========================================")
+        logger.info("🔍 DEBUG: STARTING SEASON EXTRACTION")
+        
         if self.sheet_results:
             for worksheet in self.sheet_results.worksheets():
                 title = worksheet.title
-                if "Season:" not in title: continue
-                season_name = title.replace("Season:", "").strip(); self.seasons_list.append(season_name)
+                
+                # Check for word "season" case-insensitive
+                if "season" not in title.lower(): 
+                    logger.debug(f"⏭️ SKIPPED SHEET (No 'season' in title): '{title}'")
+                    continue
+                    
+                # Flexible extraction: strips "season : " or "Season: " out
+                season_name = re.sub(r'(?i)^season\s*:\s*', '', title).strip()
+                logger.info(f"✅ SHEET MATCH: '{title}' -> Extracted as: '{season_name}'")
+                
+                if season_name not in self.seasons_list: 
+                    self.seasons_list.append(season_name)
                 if season_name not in self.season_stats: self.season_stats[season_name] = {}
                 if season_name not in self.weekly_matches: self.weekly_matches[season_name] = {}
+                
                 try:
                     records = self._get_safe_records(worksheet)
                     for row in records:
@@ -352,17 +380,23 @@ class ThunderData:
                         raw_match_queue.append({'p1': p1, 'p2': p2, 's1': s1, 's2': s2, 'date': parsed_date, 'season': season_name, 'week': week_num, 'div': div, 'p1_fill': p1_fill, 'p2_fill': p2_fill, 'game_history': '', 'rich_stats': None, 'manual_override': False})
                 except: pass
                 
-        # 2. LOAD FROM FIREBASE (iPad)
         if self.db:
             try:
                 docs = self.db.collection('match_results').stream()
                 for doc in docs:
                     d = doc.to_dict()
-                    if d.get('status') == 'pending': continue
-                    if d.get('status') == 'rejected': continue
-                    
+                    if d.get('status') == 'pending' or d.get('status') == 'rejected': continue
                     date_val = d.get('date'); parsed_date = self._parse_date(date_val) or datetime.date.today()
-                    season_name = d.get('season', f"Season: {parsed_date.year}"); home_p = d.get('home_players', []); away_p = d.get('away_players', [])
+                    
+                    raw_season = str(d.get('season', f"Season: {parsed_date.year}"))
+                    season_name = re.sub(r'(?i)^season\s*:\s*', '', raw_season).strip()
+                    
+                    if season_name not in self.seasons_list and season_name != "Unknown":
+                        self.seasons_list.append(season_name)
+                    if season_name not in self.season_stats: self.season_stats[season_name] = {}
+                    if season_name not in self.weekly_matches: self.weekly_matches[season_name] = {}
+
+                    home_p = d.get('home_players', []); away_p = d.get('away_players', [])
                     if not home_p or not away_p: continue
                     p1 = self._clean_name(home_p[0]); p2 = self._clean_name(away_p[0])
                     s1 = d.get('live_home_sets', 0); s2 = d.get('live_away_sets', 0)
@@ -376,38 +410,32 @@ class ThunderData:
                         s1=t1; s2=t2
                     week_val = d.get('week', 'Unknown')
                     if str(week_val) == "Unknown" and parsed_date: key = f"{season_name}|{parsed_date.strftime('%Y-%m-%d')}"; week_val = self.date_to_week_map.get(key, "Unknown")
-                    raw_match_queue.append({'p1': p1, 'p2': p2, 's1': s1, 's2': s2, 'date': parsed_date, 'season': season_name, 'week': week_val, 'div': d.get('division', 'Unknown'), 'p1_fill': False, 'p2_fill': False, 'game_history': d.get('game_scores_history', ''), 'rich_stats': {'duration': d.get('match_duration')}, 'manual_override': d.get('manual_override', False)})
+                    rich = d.get('richStats', {})
+                    rich['total_duration'] = d.get('total_duration', '00:00'); rich['play_duration'] = d.get('play_duration', '00:00'); rich['set_scores'] = d.get('set_scores', [])
+                    raw_match_queue.append({'p1': p1, 'p2': p2, 's1': s1, 's2': s2, 'date': parsed_date, 'season': season_name, 'week': week_val, 'div': d.get('division', 'Unknown'), 'p1_fill': False, 'p2_fill': False, 'game_history': d.get('game_scores_history', ''), 'rich_stats': rich, 'manual_override': d.get('manual_override', False)})
             except: pass
 
-        # 3. LOAD CORRECTIONS AND OVERRIDE
+        logger.info(f"📊 FINAL LOADED SEASONS LIST: {self.seasons_list}")
+        logger.info("==========================================")
+
         corrections = {}
         if self.db:
             try:
                 c_docs = self.db.collection('match_corrections').stream()
                 for doc in c_docs:
-                    c = doc.to_dict()
-                    c_p1 = self._clean_name(c.get('p1', ''))
-                    c_p2 = self._clean_name(c.get('p2', ''))
-                    d_str = str(c.get('date', ''))
-                    players = sorted([c_p1, c_p2])
-                    key = f"{d_str}_{players[0]}_{players[1]}"
+                    c = doc.to_dict(); c_p1 = self._clean_name(c.get('p1', '')); c_p2 = self._clean_name(c.get('p2', '')); d_str = str(c.get('date', ''))
+                    players = sorted([c_p1, c_p2]); key = f"{d_str}_{players[0]}_{players[1]}"
                     corrections[key] = {'s1': c.get('s1', 0), 's2': c.get('s2', 0), 'c_p1': c_p1}
             except Exception as e: logger.error(f"Error loading corrections: {e}")
 
-        # APPLY CORRECTIONS
         for m in raw_match_queue:
-            players = sorted([m['p1'], m['p2']])
-            d_str = m['date'].strftime("%d/%m/%Y") if m['date'] else "nodate"
-            key = f"{d_str}_{players[0]}_{players[1]}"
+            players = sorted([m['p1'], m['p2']]); d_str = m['date'].strftime("%d/%m/%Y") if m['date'] else "nodate"; key = f"{d_str}_{players[0]}_{players[1]}"
             if key in corrections:
                 c = corrections[key]
-                if m['p1'] == c['c_p1']:
-                    m['s1'] = c['s1']; m['s2'] = c['s2']
-                else:
-                    m['s1'] = c['s2']; m['s2'] = c['s1']
+                if m['p1'] == c['c_p1']: m['s1'] = c['s1']; m['s2'] = c['s2']
+                else: m['s1'] = c['s2']; m['s2'] = c['s1']
                 m['manual_override'] = True
 
-        # 4. CALCULATE STATS & SAVE
         cleaned_matches = self._deduplicate_matches(raw_match_queue); cleaned_matches.sort(key=lambda x: x['date'])
         player_set = set()
         for m in cleaned_matches:
@@ -426,45 +454,87 @@ class ThunderData:
         logger.info(f"👤 Total Unique Players Loaded: {len(player_set)}")
         self._save_updated_ratings(); self._update_master_roster(); self._sync_to_firebase()
 
-    # --- ADMIN METHODS ---
+    def get_matches_by_week(self, season, week): 
+        return self.weekly_matches.get(season, {}).get(str(week), [])
+
+    def get_all_players(self): return self.all_players
+    def get_seasons(self): return self.seasons_list
+    def get_divisions(self): return sorted(list(self.divisions_list))
+    
+    def get_roster_with_meta(self):
+        roster = []
+        for name, data in self.all_players.items():
+            rat = self.rating_engine.get_rating(name)
+            c = data['combined']; m = c['matches']
+            divs = {}; 
+            for h in c['history']: divs[h['division']] = divs.get(h['division'], 0) + 1
+            main_div = max(divs, key=divs.get) if divs else "New"
+            roster.append({"name": name, "label": f"{name} ({main_div} • {int(rat['rating'])} • {m} games)", "rating": int(rat['rating'])})
+        return sorted(roster, key=lambda x: x['name'])
+
+    def get_division_rankings(self, season, division, max_week=None):
+        if season not in self.season_stats: return []
+        ranking_list = []
+        for player_name, stats in self.season_stats[season].items():
+            rat = self.rating_engine.get_rating(player_name)
+            reg_hist = [m for m in stats['regular']['history'] if m['division'] == division]
+            fill_hist = [m for m in stats['fillin']['history'] if m['division'] == division]
+            if not reg_hist and not fill_hist: continue 
+            def calc_summary(history):
+                wins = sum(1 for m in history if m['result'] == "Win")
+                return {'wins': wins, 'losses': len(history) - wins, 'matches': len(history)}
+            ranking_list.append({'name': player_name, 'rating_val': int(rat['rating']), 'sigma': int(rat['rd']), 'regular': calc_summary(reg_hist), 'fillin': calc_summary(fill_hist)})
+        return ranking_list
+        
+    def get_player_stats(self, player_name, season="Career", division="All", week="All", start_date=None, end_date=None):
+        data = self.all_players if season == "Career" else self.season_stats.get(season, {})
+        if player_name not in data: return None
+        raw = data[player_name]; rat = self.rating_engine.get_rating(player_name)
+        def format_bucket(stats):
+            hist = stats['history']
+            if division != "All": hist = [m for m in hist if m.get('division') == division]
+            wins = sum(1 for m in hist if m['result'] == "Win")
+            win_rate = round((wins / len(hist)) * 100, 1) if hist else 0
+            disp_hist = list(hist); disp_hist.reverse()
+            return {'matches': len(hist), 'wins': wins, 'losses': len(hist)-wins, 'win_rate': f"{win_rate}%", 'match_history': disp_hist}
+        peterman_id = self.all_players.get(player_name, {}).get('peterman_id', '')
+        return {'name': player_name, 'rating': int(rat['rating']), 'combined': format_bucket(raw['combined']), 'peterman_id': peterman_id}
+
+    def get_system_config(self):
+        if not self.db: return {"tournament_mode_active": False}
+        try: doc = self.db.collection('system_config').document('main').get(); return doc.to_dict() if doc.exists else {"tournament_mode_active": False}
+        except: return {"tournament_mode_active": False}
+        
+    def set_system_config(self, key, value):
+        if not self.db: return False
+        try: self.db.collection('system_config').document('main').set({key: value}, merge=True); return True
+        except: return False
+
     def admin_get_teams(self):
         if not self.db: return {}
-        try:
-            docs = self.db.collection('teams').stream()
-            teams = {}
-            for d in docs:
-                data = d.to_dict()
-                teams[d.id] = data.get('players', [])
-            return teams
+        try: docs = self.db.collection('teams').stream(); return {d.id: d.to_dict().get('players', []) for d in docs}
         except: return {}
 
     def admin_update_team(self, team_name, players_list):
         if not self.db: return False
+        try: self.db.collection('teams').document(team_name).set({'players': players_list}, merge=True); return True
+        except: return False
+
+    def user_submit_feedback(self, category, text, contact, context="Not provided"):
+        if not self.db: return False
         try:
-            self.db.collection('teams').document(team_name).set({'players': players_list}, merge=True)
+            self.db.collection('feedback').add({'type': category, 'message': text, 'contact': contact, 'context': context, 'timestamp': firestore.SERVER_TIMESTAMP, 'status': 'New'})
             return True
         except: return False
-    
+
     def admin_get_ranks(self):
         if not self.db: return {}
-        try:
-            docs = self.db.collection('player_ranks').stream()
-            ranks = {}
-            for d in docs:
-                data = d.to_dict()
-                ranks[data.get('name')] = data.get('rank')
-            return ranks
+        try: docs = self.db.collection('player_ranks').stream(); return {d.to_dict().get('name'): d.to_dict().get('rank') for d in docs}
         except: return {}
 
     def admin_set_rank(self, player_name, rank):
         if not self.db: return False
-        try:
-            safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()
-            self.db.collection('player_ranks').document(safe_id).set({
-                'name': player_name,
-                'rank': int(rank)
-            })
-            return True
+        try: safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower(); self.db.collection('player_ranks').document(safe_id).set({'name': player_name, 'rank': int(rank)}); return True
         except: return False
     
     def admin_get_pending_approvals(self):
@@ -472,10 +542,7 @@ class ThunderData:
         try:
             docs = self.db.collection('match_results').where('status', '==', 'pending').stream()
             res = []
-            for d in docs:
-                data = d.to_dict(); data['id'] = d.id; ts = data.get('timestamp')
-                data['ts_str'] = str(ts) if ts else "Unknown"
-                res.append(data)
+            for d in docs: data = d.to_dict(); data['id'] = d.id; ts = data.get('timestamp'); data['ts_str'] = str(ts) if ts else "Unknown"; res.append(data)
             return sorted(res, key=lambda x: x.get('ts_str', ''), reverse=True)
         except: return []
 
@@ -483,9 +550,7 @@ class ThunderData:
         if not self.db: return False
         try:
             doc_ref = self.db.collection('match_results').document(doc_id)
-            if action == 'approve':
-                doc_ref.update({'status': 'approved', 'live_home_sets': int(s1) if s1 is not None else 0, 'live_away_sets': int(s2) if s2 is not None else 0})
-                self.refresh_data()
+            if action == 'approve': doc_ref.update({'status': 'approved', 'live_home_sets': int(s1) if s1 is not None else 0, 'live_away_sets': int(s2) if s2 is not None else 0}); self.refresh_data()
             elif action == 'reject': doc_ref.update({'status': 'rejected'})
             return True
         except: return False
@@ -493,103 +558,62 @@ class ThunderData:
     def admin_get_recent_approved(self):
         if not self.db: return []
         try:
-            docs = self.db.collection('match_results').stream()
-            res = []
+            docs = self.db.collection('match_results').stream(); res = []
             for d in docs:
-                data = d.to_dict(); status = data.get('status', 'approved') 
-                if status == 'approved':
-                    data['id'] = d.id; ts = data.get('timestamp')
-                    data['ts_sort'] = ts.timestamp() if hasattr(ts, 'timestamp') else 0
-                    res.append(data)
+                data = d.to_dict()
+                if data.get('status', 'approved') == 'approved': data['id'] = d.id; ts = data.get('timestamp'); data['ts_sort'] = ts.timestamp() if hasattr(ts, 'timestamp') else 0; res.append(data)
             res.sort(key=lambda x: x.get('ts_sort', 0), reverse=True)
             return res[:50]
         except: return []
 
     def admin_delete_match_result(self, doc_id):
         if not self.db: return False
-        try:
-            self.db.collection('match_results').document(doc_id).delete()
-            self.refresh_data()
-            return True
+        try: self.db.collection('match_results').document(doc_id).delete(); self.refresh_data(); return True
         except: return False
 
     def admin_search_history(self, query_text, season_filter=None, div_filter=None, week_filter=None, date_filter=None):
         q_lower = query_text.lower() if query_text else ""
-        results = []
-        seen = set()
-        
+        results = []; seen = set()
         for p_name, data in self.all_players.items():
             for m in data.get('combined', {}).get('history', []):
-                date = str(m.get('date', ''))
-                opp = str(m.get('opponent', ''))
-                m_season = str(m.get('season', ''))
-                m_div = str(m.get('division', ''))
-                m_week = str(m.get('week', ''))
-
+                date = str(m.get('date', '')); opp = str(m.get('opponent', '')); m_season = str(m.get('season', '')); m_div = str(m.get('division', '')); m_week = str(m.get('week', ''))
                 if season_filter and season_filter != "All" and season_filter != m_season: continue
                 if div_filter and div_filter != "All" and div_filter != m_div: continue
                 if week_filter and week_filter != "All" and week_filter != m_week: continue
                 if date_filter and date_filter != date: continue
-
-                if q_lower:
-                    if q_lower not in p_name.lower() and q_lower not in opp.lower() and q_lower not in date: continue
-
-                players = sorted([p_name, opp])
-                match_hash = f"{date}_{players[0]}_{players[1]}"
-                
+                if q_lower and q_lower not in p_name.lower() and q_lower not in opp.lower() and q_lower not in date: continue
+                players = sorted([p_name, opp]); match_hash = f"{date}_{m_season}_{m_week}_{players[0]}_{players[1]}_{m.get('score', '0-0')}"
                 if match_hash not in seen:
-                    seen.add(match_hash)
-                    score = m.get('score', '0-0')
+                    seen.add(match_hash); score = m.get('score', '0-0')
                     try: s1, s2 = map(int, score.split('-'))
                     except: s1, s2 = 0, 0
-                    
-                    results.append({
-                        'id': match_hash, 'date': date, 'division': m_div, 
-                        'season': m_season, 'week': m_week,
-                        'home_players': [p_name], 'away_players': [opp], 
-                        'score': score, 's1': s1, 's2': s2
-                    })
-                    
+                    results.append({'id': match_hash, 'date': date, 'division': m_div, 'season': m_season, 'week': m_week, 'home_players': [p_name], 'away_players': [opp], 'score': score, 's1': s1, 's2': s2})
         def sort_key(x):
             try: return datetime.datetime.strptime(x['date'], "%d/%m/%Y")
             except: return datetime.datetime(1900, 1, 1)
-            
         results.sort(key=sort_key, reverse=True)
         return results[:150]
 
     def admin_update_historical_match(self, p1, p2, date, s1, s2):
         if not self.db: return False
-        try:
-            self.db.collection('match_corrections').add({'p1': p1, 'p2': p2, 'date': date, 's1': int(s1), 's2': int(s2), 'timestamp': firestore.SERVER_TIMESTAMP})
-            self.refresh_data()
-            return True
+        try: self.db.collection('match_corrections').add({'p1': p1, 'p2': p2, 'date': date, 's1': int(s1), 's2': int(s2), 'timestamp': firestore.SERVER_TIMESTAMP}); self.refresh_data(); return True
         except: return False
 
     def user_submit_report(self, p1, p2, date, reporter, problem, suggested_s1, suggested_s2):
         if not self.db: return False
-        try:
-            self.db.collection('match_reports').add({'p1': p1, 'p2': p2, 'date': date, 'reporter': reporter, 'problem': problem, 'suggested_s1': int(suggested_s1), 'suggested_s2': int(suggested_s2), 'match_desc': f"{p1} vs {p2} on {date}", 'status': 'Pending', 'timestamp': firestore.SERVER_TIMESTAMP})
-            return True
+        try: self.db.collection('match_reports').add({'p1': p1, 'p2': p2, 'date': date, 'reporter': reporter, 'problem': problem, 'suggested_s1': int(suggested_s1), 'suggested_s2': int(suggested_s2), 'match_desc': f"{p1} vs {p2} on {date}", 'status': 'Pending', 'timestamp': firestore.SERVER_TIMESTAMP}); return True
         except: return False
 
     def admin_get_reports(self):
         if not self.db: return []
-        try:
-            docs = self.db.collection('match_reports').where('status', '==', 'Pending').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
-            reports = []
-            for d in docs: data = d.to_dict(); data['id'] = d.id; reports.append(data)
-            return reports
+        try: docs = self.db.collection('match_reports').where('status', '==', 'Pending').order_by('timestamp', direction=firestore.Query.DESCENDING).stream(); return [{'id': d.id, **d.to_dict()} for d in docs]
         except: return []
 
     def admin_resolve_report(self, report_id, action):
         if not self.db: return False
         try:
-            report_ref = self.db.collection('match_reports').document(report_id)
-            report = report_ref.get().to_dict()
-            if action == 'approve':
-                self.db.collection('match_corrections').add({'p1': report['p1'], 'p2': report['p2'], 'date': report['date'], 's1': report['suggested_s1'], 's2': report['suggested_s2'], 'timestamp': firestore.SERVER_TIMESTAMP})
-                report_ref.update({'status': 'Approved'})
-                self.refresh_data()
+            report_ref = self.db.collection('match_reports').document(report_id); report = report_ref.get().to_dict()
+            if action == 'approve': self.db.collection('match_corrections').add({'p1': report['p1'], 'p2': report['p2'], 'date': report['date'], 's1': report['suggested_s1'], 's2': report['suggested_s2'], 'timestamp': firestore.SERVER_TIMESTAMP}); report_ref.update({'status': 'Approved'}); self.refresh_data()
             elif action == 'reject': report_ref.update({'status': 'Rejected'})
             return True
         except: return False
@@ -625,45 +649,41 @@ class ThunderData:
                     seen.add(pair)
         return suggestions
 
-    def get_all_players(self): return self.all_players
-    def get_matches_by_week(self, season, week): return self.weekly_matches.get(season, {}).get(str(week), [])
-    def get_seasons(self): return self.seasons_list
-    def get_divisions(self): return sorted(list(self.divisions_list))
-    
-    def get_roster_with_meta(self):
-        roster = []
-        for name, data in self.all_players.items():
-            rat = self.rating_engine.get_rating(name)
-            c = data['combined']; m = c['matches']
-            divs = {}; 
-            for h in c['history']: divs[h['division']] = divs.get(h['division'], 0) + 1
-            main_div = max(divs, key=divs.get) if divs else "New"
-            roster.append({"name": name, "label": f"{name} ({main_div} • {int(rat['rating'])} • {m} games)"})
-        return sorted(roster, key=lambda x: x['name'])
-        
-    def get_division_rankings(self, season, division, max_week=None):
-        if season not in self.season_stats: return []
-        ranking_list = []
-        for player_name, stats in self.season_stats[season].items():
-            rat = self.rating_engine.get_rating(player_name)
-            reg_hist = [m for m in stats['regular']['history'] if m['division'] == division]
-            fill_hist = [m for m in stats['fillin']['history'] if m['division'] == division]
-            if not reg_hist and not fill_hist: continue 
-            def calc_summary(history):
-                wins = sum(1 for m in history if m['result'] == "Win")
-                return {'wins': wins, 'losses': len(history) - wins, 'matches': len(history)}
-            ranking_list.append({'name': player_name, 'rating_val': int(rat['rating']), 'sigma': int(rat['rd']), 'regular': calc_summary(reg_hist), 'fillin': calc_summary(fill_hist)})
-        return ranking_list
-        
-    def get_player_stats(self, player_name, season="Career", division="All", week="All", start_date=None, end_date=None):
-        data = self.all_players if season == "Career" else self.season_stats.get(season, {})
-        if player_name not in data: return None
-        raw = data[player_name]; rat = self.rating_engine.get_rating(player_name)
-        def format_bucket(stats):
-            hist = stats['history']
-            if division != "All": hist = [m for m in hist if m.get('division') == division]
-            wins = sum(1 for m in hist if m['result'] == "Win")
-            win_rate = round((wins / len(hist)) * 100, 1) if hist else 0
-            disp_hist = list(hist); disp_hist.reverse()
-            return {'matches': len(hist), 'wins': wins, 'losses': len(hist)-wins, 'win_rate': f"{win_rate}%", 'match_history': disp_hist}
-        return {'name': player_name, 'rating': int(rat['rating']), 'combined': format_bucket(raw['combined'])}
+    def admin_generate_balanced_teams(self, players, team_size):
+        pool = []
+        for p in players:
+            name = p.get('name'); rating_data = self.rating_engine.get_rating(name)
+            pool.append({'name': name, 'rank': int(p.get('rank', 3)), 'lock': p.get('lock', ''), 'rating': int(rating_data['rating'])})
+        rank1 = sorted([p for p in pool if p['rank'] == 1], key=lambda x: x['rating'], reverse=True)
+        rank2 = sorted([p for p in pool if p['rank'] == 2], key=lambda x: x['rating']) 
+        rank3 = sorted([p for p in pool if p['rank'] == 3], key=lambda x: x['rating'], reverse=True)
+        teams = []
+        num_teams = len(rank1) if len(rank1) > 0 else (len(pool) // team_size)
+        for i in range(num_teams):
+            r1_player = rank1[i] if i < len(rank1) else None
+            t_players = [r1_player] if r1_player else []
+            t_rating = r1_player['rating'] if r1_player else 0
+            if r1_player and r1_player['lock']:
+                locked_player = next((p for p in pool if p['name'] == r1_player['lock']), None)
+                if locked_player:
+                    t_players.append(locked_player); t_rating += locked_player['rating']
+                    if locked_player in rank2: rank2.remove(locked_player)
+                    if locked_player in rank3: rank3.remove(locked_player)
+            teams.append({'id': i+1, 'name': f"Team {i+1}", 'players': t_players, 'total_rating': t_rating})
+        teams.sort(key=lambda x: x['total_rating'], reverse=True) 
+        for r2_player in rank2:
+            eligible_teams = [t for t in teams if len(t['players']) < 2]
+            if eligible_teams:
+                eligible_teams.sort(key=lambda x: x['total_rating'])
+                chosen_team = eligible_teams[0]; chosen_team['players'].append(r2_player); chosen_team['total_rating'] += r2_player['rating']
+                if r2_player['lock']:
+                    locked_p3 = next((p for p in rank3 if p['name'] == r2_player['lock']), None)
+                    if locked_p3: chosen_team['players'].append(locked_p3); chosen_team['total_rating'] += locked_p3['rating']; rank3.remove(locked_p3)
+        if team_size == 3:
+            for r3_player in rank3:
+                eligible_teams = [t for t in teams if len(t['players']) < 3]
+                if eligible_teams:
+                    eligible_teams.sort(key=lambda x: x['total_rating'])
+                    chosen_team = eligible_teams[0]; chosen_team['players'].append(r3_player); chosen_team['total_rating'] += r3_player['rating']
+        for t in teams: t['average_rating'] = int(t['total_rating'] / len(t['players'])) if len(t['players']) > 0 else 0
+        return teams
