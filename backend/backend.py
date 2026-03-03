@@ -27,7 +27,7 @@ except ImportError:
 # ==========================================
 # GLICKO-2 RATING ENGINE
 # ==========================================
-DEFAULT_RATING = 1500.0
+DEFAULT_RATING = 1000.0
 DEFAULT_RD = 350.0
 DEFAULT_VOL = 0.06
 TAU = 0.5        
