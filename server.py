@@ -18,7 +18,8 @@ app = Flask(__name__, static_folder="frontend/static", template_folder="frontend
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'gctta-super-secret-session-key')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASS', 'TTgctta67-') # Master Password Updated
 
-stripe.api_key = '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'
+# Tells Stripe to use the key you will set in Render
+stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
