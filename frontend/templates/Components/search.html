@@ -1,0 +1,33 @@
+<div id="tab-search" class="w-full max-w-4xl px-4 hidden relative z-10 mx-auto mt-10 md:mt-20 animate-fade-in">
+    <div class="text-center mb-10">
+        <div class="inline-block relative mb-6">
+            <div class="absolute inset-0 bg-sky-500 blur-3xl opacity-20 rounded-full"></div>
+            <i class="fa-solid fa-magnifying-glass text-6xl text-sky-400 relative z-10 drop-shadow-[0_0_15px_rgba(56,189,248,0.5)]"></i>
+        </div>
+        <h2 class="text-4xl md:text-5xl font-black text-white mb-4 tracking-tight drop-shadow-lg">PLAYER SEARCH</h2>
+        <p class="text-slate-400 text-sm md:text-base max-w-md mx-auto leading-relaxed">Search the database to view career stats, real-time ratings, and full match histories.</p>
+    </div>
+    
+    <div class="relative max-w-2xl mx-auto group">
+        <input type="text" id="bigPlayerSearch" placeholder="Type a player's name..." autocomplete="off" class="w-full bg-slate-900/80 backdrop-blur-xl border border-white/10 text-white text-lg md:text-xl font-bold rounded-2xl px-6 py-5 pl-14 shadow-[0_10px_40px_rgba(0,0,0,0.5)] focus:border-sky-500 focus:ring-4 focus:ring-sky-500/20 outline-none transition-all placeholder-slate-600">
+        <i class="fa-solid fa-user absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 text-xl group-focus-within:text-sky-500 transition-colors duration-300"></i>
+        
+        <div id="big-suggestions-list" class="absolute z-50 left-0 right-0 top-[110%] bg-slate-800/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl max-h-[50vh] overflow-y-auto hidden">
+            </div>
+    </div>
+
+    <div class="mt-16 grid grid-cols-3 gap-4 max-w-xl mx-auto opacity-70">
+        <div class="text-center bg-black/20 p-4 rounded-xl border border-white/5">
+            <i class="fa-solid fa-bolt text-yellow-500 text-xl mb-2"></i>
+            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Instant Ratings</div>
+        </div>
+        <div class="text-center bg-black/20 p-4 rounded-xl border border-white/5">
+            <i class="fa-solid fa-chart-pie text-sky-500 text-xl mb-2"></i>
+            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Deep Analytics</div>
+        </div>
+        <div class="text-center bg-black/20 p-4 rounded-xl border border-white/5">
+            <i class="fa-solid fa-clock-rotate-left text-purple-500 text-xl mb-2"></i>
+            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Full History</div>
+        </div>
+    </div>
+</div>

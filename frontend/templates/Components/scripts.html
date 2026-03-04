@@ -260,7 +260,7 @@
     window.switchTab = function(tabId, pushHistory = true) {
         if(pushHistory) { history.pushState({ page: 'fixtures', tab: tabId }, "", "#" + tabId); }
         
-        ['home', 'week', 'sheets', 'global', 'live-center', 'rules'].forEach(t => { 
+        ['home', 'week', 'sheets', 'search', 'live-center', 'rules'].forEach(t => { 
             const el = document.getElementById(`tab-${t}`); 
             if(el) el.classList.add('hidden'); 
             const nav = document.getElementById(`nav-${t}`); 
@@ -281,11 +281,21 @@
             if(targetNav) targetNav.classList.add('active'); 
             const targetBNav = document.getElementById(`b-nav-${tabId}`); 
             if(targetBNav) targetBNav.classList.add('active'); 
+            
+            if(tabId === 'search') {
+                const searchInput = document.getElementById('bigPlayerSearch');
+                if(searchInput) setTimeout(() => searchInput.focus(), 100);
+            }
         } 
         window.scrollTo({ top: 0, behavior: 'smooth' }); 
     };
 
-    window.allPlayersRaw = []; let currentSeason = "Career", currentDivision = "All";
+    window.closeProfile = function() {
+        window.switchTab('search');
+    }
+
+    window.allPlayersRaw = []; window.currentProfileData = null; window.currentProfileName = "";
+    let currentSeason = "Career", currentDivision = "All";
     
     function generateStars() { const container = document.getElementById('starContainer'); if(!container) return; container.innerHTML = ''; const starCount = 60; for (let i = 0; i < starCount; i++) { const star = document.createElement('div'); const sizeClass = Math.random() < 0.6 ? 's-small' : (Math.random() < 0.9 ? 's-medium' : 's-large'); star.className = `star ${sizeClass}`; star.style.top = `${Math.random() * 100}%`; star.style.left = `${Math.random() * 100}%`; star.style.setProperty('--duration', `${2 + Math.random() * 3}s`); star.style.setProperty('--delay', `${Math.random() * 2}s`); container.appendChild(star); } }
     
@@ -363,15 +373,12 @@
             });
         }
 
-        // --- UPDATED: SMARTER, BULLETPROOF LOAD CONDITION ---
         const loadInitialData = async () => {
             try {
                 const pRes = await fetch('/api/players'); window.allPlayersRaw = await pRes.json(); setupMainSearch(); 
                 const [sRes, dRes] = await Promise.all([fetch('/api/seasons'), fetch('/api/divisions')]);
                 const seasons = await sRes.json(); const divisions = await dRes.json();
                 
-                // FIXED: It will only wait if there are 2 or fewer seasons (meaning it is still booting). 
-                // Once it hits 3+ seasons (like your 8 seasons), it instantly loads.
                 if (seasons.length <= 2) {
                     console.log(`Server syncing... Found ${seasons.length} seasons so far. Retrying in 2 seconds...`);
                     setTimeout(loadInitialData, 2000);
@@ -384,8 +391,8 @@
                 const sSelect = document.getElementById('seasonSelect'); if (sSelect) { sSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; sSelect.appendChild(opt); }); sSelect.value = latestSeason; }
                 const pDivSelect = document.getElementById('profileDivisionSelect'); if (pDivSelect) { pDivSelect.innerHTML = '<option value="All">All Divisions</option>'; divisions.forEach(d => { let opt = document.createElement('option'); opt.value = d; opt.innerText = d; pDivSelect.appendChild(opt); }); }
                 
-                const refreshProfile = () => { const pName = document.getElementById('playerName').innerText; if(pName && pName !== "Loading...") loadStats(pName); };
-                document.getElementById('seasonSelect')?.addEventListener('change', refreshProfile); document.getElementById('profileDivisionSelect')?.addEventListener('change', refreshProfile);
+                document.getElementById('seasonSelect')?.addEventListener('change', () => loadStats(window.currentProfileName)); 
+                document.getElementById('profileDivisionSelect')?.addEventListener('change', () => loadStats(window.currentProfileName));
                 
                 const boardDivSelect = document.getElementById('boardDiv'); const boardSeasonSelect = document.getElementById('boardSeason');
                 if(boardDivSelect) { boardDivSelect.innerHTML = ''; divisions.forEach(d => { let opt = document.createElement('option'); opt.value = d; opt.innerText = d; boardDivSelect.appendChild(opt); }); }
@@ -402,23 +409,38 @@
     };
 
     function setupMainSearch() {
-        const input = document.getElementById('playerSearch'); const list = document.getElementById('suggestions-list'); if (!input || !list) return;
-        input.addEventListener('input', () => {
-            const val = input.value.toLowerCase().trim(); list.innerHTML = ''; if (val.length < 2) { list.classList.add('hidden'); return; }
-            if (!window.allPlayersRaw) return;
-            const filtered = window.allPlayersRaw.filter(p => p.toLowerCase().includes(val)).slice(0, 8);
-            list.classList.remove('hidden');
-            if (filtered.length > 0) { filtered.forEach(player => { const div = document.createElement('div'); div.className = 'p-3 hover:bg-slate-700 cursor-pointer text-white border-b border-white/5 transition-colors flex justify-between items-center bg-slate-800'; div.innerHTML = `<span class="font-bold">${player}</span><i class="fa-solid fa-chevron-right text-xs text-slate-500"></i>`; div.onclick = () => { input.value = player; list.classList.add('hidden'); loadStats(player); }; list.appendChild(div); }); } else { list.innerHTML = `<div class="p-4 text-slate-500 text-center text-sm bg-slate-800">No player found</div>`; }
-        });
-        document.addEventListener('click', (e) => { if (!input.contains(e.target) && !list.contains(e.target)) list.classList.add('hidden'); });
+        const attachSearch = (inputId, listId) => {
+            const input = document.getElementById(inputId); const list = document.getElementById(listId); if (!input || !list) return;
+            input.addEventListener('input', () => {
+                const val = input.value.toLowerCase().trim(); list.innerHTML = ''; if (val.length < 2) { list.classList.add('hidden'); return; }
+                if (!window.allPlayersRaw) return;
+                const filtered = window.allPlayersRaw.filter(p => p.toLowerCase().includes(val)).slice(0, 8);
+                list.classList.remove('hidden');
+                if (filtered.length > 0) { 
+                    filtered.forEach(player => { 
+                        const div = document.createElement('div'); 
+                        div.className = 'p-4 hover:bg-sky-600/30 cursor-pointer text-white border-b border-white/5 transition-colors flex justify-between items-center bg-slate-800 md:bg-transparent'; 
+                        div.innerHTML = `<span class="font-bold text-lg">${player}</span><i class="fa-solid fa-chevron-right text-xs text-sky-500"></i>`; 
+                        div.onclick = () => { 
+                            input.value = ''; 
+                            list.classList.add('hidden'); 
+                            loadStats(player); 
+                        }; 
+                        list.appendChild(div); 
+                    }); 
+                } else { list.innerHTML = `<div class="p-4 text-slate-500 text-center text-sm">No player found</div>`; }
+            });
+            document.addEventListener('click', (e) => { if (!input.contains(e.target) && !list.contains(e.target)) list.classList.add('hidden'); });
+        };
+        
+        attachSearch('playerSearch', 'suggestions-list');
+        attachSearch('bigPlayerSearch', 'big-suggestions-list');
     }
 
     window.currentLoadedMatches = [];
-    window.currentPlayerName = "";
 
     window.renderHistory = function(matches, playerName, showAll = false) { 
         window.currentLoadedMatches = matches;
-        window.currentPlayerName = playerName;
         
         const historyDiv = document.getElementById('matchHistory'); 
         historyDiv.innerHTML = ""; 
@@ -442,7 +464,7 @@
         } 
         
         if (!matches || matches.length === 0) { 
-            if (historyDiv.innerHTML === "") historyDiv.innerHTML = '<div class="p-6 text-center text-slate-500">No matches found.</div>'; 
+            if (historyDiv.innerHTML === "") historyDiv.innerHTML = '<div class="p-6 text-center text-slate-500">No matches found for these filters.</div>'; 
             return; 
         } 
         
@@ -452,9 +474,11 @@
         matchesToShow.forEach(match => { 
             const row = document.createElement('div'); 
             const hasRichStats = match.rich_stats && match.rich_stats.total_duration; 
-            const hoverClass = hasRichStats ? "hover:border-blue-500 cursor-pointer" : "hover:bg-white/10 cursor-pointer"; 
-            const richBadge = hasRichStats ? `<span class="bg-blue-600/30 text-blue-400 text-[8px] px-1.5 py-0.5 rounded ml-2 uppercase font-bold">Deep Dive</span>` : ""; 
+            const hoverClass = hasRichStats ? "hover:border-sky-500 cursor-pointer" : "hover:bg-white/5 cursor-pointer"; 
             
+            const richBadge = hasRichStats ? `<span class="bg-sky-600/30 text-sky-400 text-[8px] px-1.5 py-0.5 rounded uppercase font-bold shrink-0 shadow-sm border border-sky-500/30 ml-2">Deep Dive</span>` : ""; 
+            const typeBadge = match.type === 'Fill-in' ? `<span class="bg-purple-900/40 text-purple-400 border border-purple-500/30 text-[8px] px-1.5 py-0.5 rounded ml-2 uppercase font-bold shrink-0">Fill-in</span>` : "";
+
             row.className = `flex justify-between items-center p-4 border-b border-white/5 last:border-0 transition-colors ${hoverClass}`; 
             
             if(hasRichStats) { 
@@ -468,23 +492,21 @@
             const resultIcon = match.result === "Win" ? "W" : "L"; 
             
             row.innerHTML = `
-            <div class="flex flex-col">
-                <div class="flex items-center gap-3 mb-1">
-                    <span class="${resultColor} font-black text-xl w-6">${resultIcon}</span>
-                    <div class="flex items-center">
-                        <span class="text-slate-500 mr-2 text-xs">VS</span>
-                        <span class="text-white font-bold">${match.opponent}</span>
-                        ${richBadge}
-                    </div>
+            <div class="flex flex-col flex-1 min-w-0 pr-2">
+                <div class="flex items-center mb-1 w-full">
+                    <span class="${resultColor} font-black text-xl w-6 shrink-0">${resultIcon}</span>
+                    <span class="text-slate-500 mr-2 text-xs shrink-0 hidden md:inline">VS</span>
+                    <span class="text-white font-bold truncate">${match.opponent}</span>
+                    <div class="flex items-center">${typeBadge}${richBadge}</div>
                 </div>
-                <div class="text-[9px] text-slate-500 font-mono ml-9 tracking-widest uppercase">ID: ${match.match_id || 'N/A'}</div>
+                <div class="text-[9px] text-slate-500 font-mono ml-6 md:ml-9 tracking-widest uppercase truncate">ID: ${match.match_id || 'N/A'}</div>
             </div>
-            <div class="text-right flex items-center gap-3">
-                <div>
-                    <div class="font-mono text-slate-300 font-bold bg-slate-800 px-2 py-1 rounded inline-block text-sm mb-1">${match.score}</div>
-                    <div class="text-[10px] text-slate-600 font-bold uppercase tracking-wider">${match.date}</div>
+            <div class="text-right flex items-center gap-3 shrink-0">
+                <div class="flex flex-col items-end">
+                    <div class="font-mono text-slate-300 font-bold bg-black/40 px-3 py-1 rounded inline-block text-sm mb-1 border border-white/5 shadow-inner">${match.score}</div>
+                    <div class="text-[9px] text-slate-600 font-bold uppercase tracking-wider">${match.date}</div>
                 </div>
-                ${!hasRichStats ? `<button onclick="event.stopPropagation(); window.openReportModal('${playerName}', '${match.opponent}', '${match.date}', '${match.match_id || ''}')" class="text-slate-500 hover:text-red-400 transition ml-2" title="Report Error"><i class="fa-solid fa-triangle-exclamation"></i></button>` : ''}
+                ${!hasRichStats ? `<button onclick="event.stopPropagation(); window.openReportModal('${playerName}', '${match.opponent}', '${match.date}', '${match.match_id || ''}')" class="text-slate-500 hover:text-red-400 transition ml-1 md:ml-2" title="Report Error"><i class="fa-solid fa-triangle-exclamation"></i></button>` : ''}
             </div>`; 
             
             historyDiv.appendChild(row); 
@@ -492,16 +514,58 @@
 
         if (!showAll && matches.length > 5) {
             const btnDiv = document.createElement('div');
-            btnDiv.className = "pt-4 pb-2";
-            btnDiv.innerHTML = `<button onclick="renderHistory(window.currentLoadedMatches, window.currentPlayerName, true)" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl border border-white/5 transition shadow-lg text-sm">See all ${matches.length} matches</button>`;
+            btnDiv.className = "pt-4 pb-2 px-2";
+            btnDiv.innerHTML = `<button onclick="renderHistory(window.currentLoadedMatches, window.currentProfileName, true)" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl border border-white/5 transition shadow-lg text-sm">See all ${matches.length} matches</button>`;
             historyDiv.appendChild(btnDiv);
         }
     }
 
+    window.renderProfile = function() {
+        if (!window.currentProfileData) return;
+        
+        const data = window.currentProfileData;
+        const playerName = window.currentProfileName;
+        
+        // Handle Fill-in Toggle Visuals & Logic
+        const includeFillIns = document.getElementById('profileFillinToggle').checked;
+        const toggleBg = document.getElementById('toggleBg');
+        const toggleDot = document.getElementById('toggleDot');
+        
+        if (includeFillIns) {
+            toggleBg.classList.remove('bg-slate-700'); toggleBg.classList.add('bg-sky-500');
+            toggleDot.classList.add('translate-x-4');
+        } else {
+            toggleBg.classList.add('bg-slate-700'); toggleBg.classList.remove('bg-sky-500');
+            toggleDot.classList.remove('translate-x-4');
+        }
+        
+        // Filter History locally so we don't hit the API again
+        let history = data.combined?.match_history || [];
+        if (!includeFillIns) {
+            history = history.filter(m => m.type === 'Regular');
+        }
+        
+        // Recalculate Top Stats
+        const matches = history.length;
+        const wins = history.filter(m => m.result === 'Win').length;
+        const losses = matches - wins;
+        const winRate = matches > 0 ? Math.round((wins / matches) * 100) + '%' : '0%';
+        
+        document.getElementById('matchesPlayed').innerText = matches;
+        document.getElementById('wins').innerText = wins;
+        document.getElementById('losses').innerText = losses;
+        document.getElementById('winRate').innerText = winRate;
+        
+        // Re-Render List
+        renderHistory(history, playerName);
+    };
+
     window.loadStats = async function(player) { 
+        if(!player) return;
+        window.currentProfileName = player;
         window.switchTab('statsContainer', true); 
+        
         document.getElementById('playerName').innerText = player; 
-        document.getElementById('playerSearch').value = ""; 
         
         let pc = document.getElementById('petermanContainer');
         if (pc) pc.innerHTML = '';
@@ -510,6 +574,7 @@
         const selectedSeason = seasonSelect ? seasonSelect.value : currentSeason; 
         const divSelect = document.getElementById('profileDivisionSelect'); 
         const selectedDiv = divSelect ? divSelect.value : "All"; 
+        
         const histDiv = document.getElementById('matchHistory'); 
         histDiv.innerHTML = '<div class="p-8 text-center text-slate-500"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><br>Loading history...</div>'; 
         
@@ -518,31 +583,25 @@
             const data = await res.json(); 
             if (data.error) { alert("Player not found."); return; } 
             
+            window.currentProfileData = data;
             document.getElementById('playerRatingBadge').innerText = `Rating: ${data.rating}`; 
-            document.getElementById('matchesPlayed').innerText = data.combined?.matches || 0; 
-            document.getElementById('wins').innerText = data.combined?.wins || 0; 
-            document.getElementById('losses').innerText = data.combined?.losses || 0; 
-            document.getElementById("winRate").innerText = data.combined?.win_rate || "0%"; 
             
             if (!pc) {
                 pc = document.createElement('div');
                 pc.id = 'petermanContainer';
-                pc.className = 'mt-3 flex justify-center w-full';
+                pc.className = 'mt-3 md:mt-4 flex justify-center md:justify-start w-full';
                 const pNameEl = document.getElementById('playerName');
                 if (pNameEl && pNameEl.parentElement) {
                     pNameEl.parentElement.appendChild(pc);
                 }
             }
             if (data.peterman_id) {
-                pc.innerHTML = `<a href="https://petermanratings.com/profile.php?profile-id=${data.peterman_id}" target="_blank" title="Peterman Ratings" class="bg-indigo-950/40 border border-indigo-500/20 text-indigo-300/70 hover:text-indigo-200 hover:bg-indigo-900/60 transition px-2 py-1 rounded text-[9px] font-medium flex items-center justify-center gap-1.5 w-max mx-auto opacity-60 hover:opacity-100 grayscale hover:grayscale-0">
-                    <img src="/static/peterman.png" class="h-2.5 w-auto opacity-70" alt="Peterman">
-                    Peterman Rating
-                </a>`;
+                pc.innerHTML = `<a href="https://petermanratings.com/profile.php?profile-id=${data.peterman_id}" target="_blank" title="Peterman Ratings" class="bg-indigo-950/40 border border-indigo-500/20 text-indigo-300/70 hover:text-indigo-200 hover:bg-indigo-900/60 transition px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center gap-2 w-max mx-auto md:mx-0 opacity-60 hover:opacity-100 grayscale hover:grayscale-0"><img src="/static/peterman.png" class="h-3 w-auto opacity-70" alt="Peterman"> View Peterman Rating</a>`;
             } else {
                 pc.innerHTML = '';
             }
 
-            renderHistory(data.combined?.match_history || [], player); 
+            renderProfile(); 
         } catch (err) { console.error("Error loading stats:", err); } 
     };
 

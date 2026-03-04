@@ -16,8 +16,8 @@
         
         /* Premium UI Elements */
         .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); }
-        .nav-item.active { color: var(--p-primary); }
-        .nav-item.active i { transform: translateY(-2px); color: var(--p-primary); text-shadow: 0 0 10px rgba(234, 179, 8, 0.5); }
+        .nav-item.active { color: var(--p-secondary); }
+        .nav-item.active i { transform: translateY(-2px); color: var(--p-secondary); text-shadow: 0 0 10px rgba(14, 165, 233, 0.5); }
         .input-premium { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; transition: all 0.2s; }
         .input-premium:focus { border-color: var(--p-primary); box-shadow: 0 0 0 2px rgba(234,179,8,0.2); }
         
@@ -39,25 +39,14 @@
         .s-large { width: 3px; height: 3px; box-shadow: 0 0 4px rgba(255, 255, 255, 0.8); }
         @keyframes twinkle { 0%, 100% { opacity: 0; transform: scale(0.5); } 50% { opacity: 0.8; transform: scale(1.2); } }
 
-        /* =========================================
-           ✨ METALLIC GOLD SHINE ANIMATION ✨
-           ========================================= */
+        /* METALLIC GOLD SHINE ANIMATION */
         @keyframes shine-metallic {
             0% { background-position: 200% center; }
             100% { background-position: -200% center; }
         }
 
         .shining-gold-text {
-            background: linear-gradient(
-                110deg,
-                #b8860b 10%,   
-                #eab308 30%,   
-                #ffffe0 48%,   
-                #ffffff 50%,   
-                #ffffe0 52%,   
-                #eab308 70%,   
-                #b8860b 90%    
-            );
+            background: linear-gradient(110deg, #b8860b 10%, #eab308 30%, #ffffe0 48%, #ffffff 50%, #ffffe0 52%, #eab308 70%, #b8860b 90%);
             background-size: 200% auto;
             -webkit-background-clip: text;
             background-clip: text;
@@ -90,8 +79,7 @@
                 </button>
                 <button id="nav-week" onclick="window.switchTab('week')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Standings</button>
                 <button id="nav-sheets" onclick="window.switchTab('sheets')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Match Centre</button>
-                <button id="nav-notices" onclick="window.switchTab('notices')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Notices</button>
-                <button id="nav-global" onclick="window.switchTab('global')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Stats</button>
+                <button id="nav-search" onclick="window.switchTab('search')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Player Search</button>
             </div>
 
             <div class="flex items-center gap-3 shrink-0">
@@ -99,9 +87,9 @@
                     <i class="fa-brands fa-apple-pay text-2xl leading-none -mt-0.5"></i> DONATE
                 </button>
                 
-                <div class="relative w-48 md:w-64 group">
-                    <input type="text" id="playerSearch" placeholder="Search for a player..." class="w-full bg-black/40 border border-white/10 text-white text-sm rounded-xl px-5 py-2 pl-11 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all group-hover:bg-black/60 shadow-inner placeholder-slate-500" autocomplete="off">
-                    <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-hover:text-yellow-500 transition-colors"></i>
+                <div class="relative w-48 md:w-64 group hidden md:block">
+                    <input type="text" id="playerSearch" placeholder="Search for a player..." class="w-full bg-black/40 border border-white/10 text-white text-sm rounded-xl px-5 py-2 pl-11 focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all group-hover:bg-black/60 shadow-inner placeholder-slate-500" autocomplete="off">
+                    <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-hover:text-sky-500 transition-colors"></i>
                     <div id="suggestions-list" class="absolute border border-white/10 border-top-none z-[99] top-full left-0 right-0 rounded-b-lg bg-slate-800 max-h-[50vh] overflow-y-auto shadow-2xl hidden"></div>
                 </div>
             </div>
@@ -113,8 +101,8 @@
         {% include 'Components/live.html' %}
         {% include 'Components/standings.html' %}
         {% include 'Components/results.html' %}
-        {% include 'Components/global.html' %}
-        {% include 'Components/notices.html' %}
+        
+        {% include 'Components/search.html' %}
         {% include 'Components/profile.html' %}
     </main>
 
@@ -152,13 +140,9 @@
                 <i class="fa-solid fa-calendar-week text-xl"></i>
                 <span class="text-[10px] font-medium">Matches</span>
             </button>
-            <button id="b-nav-notices" onclick="window.switchTab('notices')" class="nav-item flex flex-col items-center gap-1 p-2 flex-1 transition-all duration-300 text-slate-400">
-                <i class="fa-solid fa-clipboard-list text-xl"></i>
-                <span class="text-[10px] font-medium">Notices</span>
-            </button>
-            <button id="b-nav-global" onclick="window.switchTab('global')" class="nav-item flex flex-col items-center gap-1 p-2 flex-1 transition-all duration-300 text-slate-400">
-                <i class="fa-solid fa-globe text-xl"></i>
-                <span class="text-[10px] font-medium">Stats</span>
+            <button id="b-nav-search" onclick="window.switchTab('search')" class="nav-item flex flex-col items-center gap-1 p-2 flex-1 transition-all duration-300 text-slate-400">
+                <i class="fa-solid fa-magnifying-glass text-xl"></i>
+                <span class="text-[10px] font-medium">Search</span>
             </button>
         </div>
     </div>
