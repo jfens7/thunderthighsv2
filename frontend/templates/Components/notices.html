@@ -1,0 +1,46 @@
+<div id="tab-notices" class="w-full max-w-4xl px-4 animate-fade-in hidden relative z-10 mx-auto">
+    <div class="text-center mb-8 mt-6 md:mt-12">
+        <h2 class="text-4xl md:text-5xl font-black text-white mb-4 tracking-tight drop-shadow-lg mt-6">NOTICEBOARD</h2>
+        <p class="text-slate-200 max-w-xl mx-auto text-base md:text-lg leading-relaxed font-light drop-shadow-md">Updates, bug fixes, and upcoming GCTTA events.</p>
+    </div>
+
+    <div id="public-notices-container" class="max-w-3xl mx-auto space-y-4 mb-20">
+        <div class="text-center py-10 text-slate-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i> Loading notices...</div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const res = await fetch('/api/notices');
+        const notices = await res.json();
+        const container = document.getElementById('public-notices-container');
+        
+        if (!notices || notices.length === 0) {
+            container.innerHTML = '<div class="glass-panel rounded-2xl p-8 text-center text-slate-400 italic">No new announcements right now. Check back later!</div>';
+            return;
+        }
+
+        container.innerHTML = notices.map(n => {
+            let borderColor = 'border-slate-500';
+            let badgeClass = 'bg-slate-700 text-slate-300';
+            
+            if(n.type === 'Update') { borderColor = 'border-sky-500'; badgeClass = 'bg-sky-500/20 text-sky-400'; }
+            else if(n.type === 'Event') { borderColor = 'border-yellow-500'; badgeClass = 'bg-yellow-500/20 text-yellow-400'; }
+            else if(n.type === 'Alert') { borderColor = 'border-red-500'; badgeClass = 'bg-red-500/20 text-red-400'; }
+
+            return `
+            <div class="glass-panel rounded-2xl p-6 border-l-4 ${borderColor} transition-transform hover:-translate-y-1 duration-300">
+                <div class="flex justify-between items-start mb-2 gap-4">
+                    <h3 class="text-xl font-bold text-white leading-tight">${n.title}</h3>
+                    <span class="text-[10px] uppercase font-bold px-2 py-1 rounded shrink-0 ${badgeClass}">${n.type}</span>
+                </div>
+                <p class="text-[11px] font-bold text-slate-500 tracking-widest uppercase mb-3"><i class="fa-regular fa-clock mr-1"></i> Posted: ${n.date_str}</p>
+                <p class="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">${n.message}</p>
+            </div>`;
+        }).join('');
+    } catch (err) {
+        document.getElementById('public-notices-container').innerHTML = '<div class="text-red-400 text-center">Failed to load notices.</div>';
+    }
+});
+</script>

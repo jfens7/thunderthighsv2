@@ -560,7 +560,6 @@ class ThunderData:
         self._update_master_roster()
         self._sync_to_firebase()
 
-    # --- RESTORED REQUIRED GETTERS ---
     def get_matches_by_week(self, season, week): return self.weekly_matches.get(season, {}).get(str(week), [])
     def get_all_players(self): return self.all_players
     def get_seasons(self): return self.seasons_list
@@ -911,3 +910,40 @@ class ThunderData:
             sorted_donors = sorted(donors.items(), key=lambda item: item[1], reverse=True)[:limit]
             return [{'name': name, 'amount': amount} for name, amount in sorted_donors]
         except: return []
+
+    def get_notices(self):
+        if not self.db: return []
+        try:
+            docs = self.db.collection('notices').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
+            res = []
+            for d in docs:
+                data = d.to_dict()
+                data['id'] = d.id
+                ts = data.get('timestamp')
+                data['date_str'] = ts.strftime('%B %Y') if ts else 'Recent'
+                res.append(data)
+            return res
+        except Exception as e:
+            return []
+
+    def admin_add_notice(self, title, message, notice_type, admin_email="Unknown"):
+        if not self.db: return False
+        try:
+            self.db.collection('notices').add({
+                'title': title,
+                'message': message,
+                'type': notice_type,
+                'timestamp': firestore.SERVER_TIMESTAMP,
+                'author': admin_email
+            })
+            self._log_audit(admin_email, 'ADD_NOTICE', f"Posted notice: {title}", {})
+            return True
+        except Exception as e: return False
+
+    def admin_delete_notice(self, notice_id, admin_email="Unknown"):
+        if not self.db: return False
+        try:
+            self.db.collection('notices').document(notice_id).delete()
+            self._log_audit(admin_email, 'DELETE_NOTICE', f"Deleted notice ID: {notice_id}", {})
+            return True
+        except Exception as e: return False

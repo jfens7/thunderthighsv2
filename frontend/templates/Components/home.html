@@ -1,32 +1,97 @@
-<div id="tab-home" class="w-full max-w-4xl px-4 animate-fade-in block relative z-10">
+<div id="tab-home" class="w-full max-w-6xl px-4 animate-fade-in block relative z-10 mx-auto">
     <div class="text-center mb-8 mt-6 md:mt-12">
         <div class="inline-block relative">
-            <div class="absolute inset-0 bg-yellow-500 blur-3xl opacity-20 rounded-full"></div><img src="https://img.icons8.com/color/144/table-tennis.png" alt="Icon" class="w-24 h-24 md:w-32 md:h-32 relative z-10 drop-shadow-2xl opacity-90 hover:scale-110 transition-transform duration-500">
+            <div class="absolute inset-0 bg-yellow-500 blur-3xl opacity-20 rounded-full"></div>
+            <img src="https://img.icons8.com/color/144/table-tennis.png" alt="Icon" class="w-24 h-24 md:w-32 md:h-32 relative z-10 drop-shadow-2xl opacity-90 hover:scale-110 transition-transform duration-500">
         </div>
         <h2 class="text-4xl md:text-5xl font-black text-white mb-4 tracking-tight drop-shadow-lg mt-6">GCTTA STATS</h2>
         <p class="text-slate-200 max-w-xl mx-auto text-base md:text-lg leading-relaxed font-light drop-shadow-md">Track your performance, view division standings, and analyze match history.</p>
     </div>
 
-    <div class="max-w-3xl mx-auto mb-10 bg-blue-900/30 border border-blue-500/40 rounded-2xl p-6 md:p-8 text-center shadow-2xl relative overflow-hidden group">
-        <div class="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-sky-600/10 opacity-50"></div>
-        <i class="fa-solid fa-laptop-code text-3xl text-sky-400 mb-3 relative z-10 animate-pulse"></i>
-        <h3 class="text-xl font-black text-white mb-2 relative z-10">We're Upgrading!</h3>
-        <p class="text-sm md:text-base text-slate-300 mb-6 relative z-10 max-w-2xl mx-auto leading-relaxed">
-            We are currently working on new and exciting features for the platform! Because of this, you might encounter a bug or two. If you spot an issue, have a feature request, or want to file a complaint, please let us know below.
-        </p>
-        <button onclick="document.getElementById('feedbackModal').classList.remove('hidden')" class="relative z-10 bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 px-8 rounded-xl transition shadow-lg flex items-center justify-center gap-2 mx-auto">
-            <i class="fa-solid fa-bullhorn"></i> Submit Feedback
-        </button>
-    </div>
+    <div class="flex flex-col lg:flex-row gap-6 items-start justify-center mb-20">
+        
+        <div class="w-full lg:w-2/3 flex flex-col gap-6">
+            <div class="bg-blue-900/30 border border-blue-500/40 rounded-2xl p-6 md:p-8 text-center shadow-2xl relative overflow-hidden group">
+                <div class="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-sky-600/10 opacity-50"></div>
+                <i class="fa-solid fa-laptop-code text-3xl text-sky-400 mb-3 relative z-10 animate-pulse"></i>
+                <h3 class="text-xl font-black text-white mb-2 relative z-10">We're Upgrading!</h3>
+                <p class="text-sm md:text-base text-slate-300 mb-6 relative z-10 max-w-2xl mx-auto leading-relaxed">
+                    We are currently working on new and exciting features for the platform! Because of this, you might encounter a bug or two. If you spot an issue, have a feature request, or want to file a complaint, please let us know below.
+                </p>
+                <button onclick="document.getElementById('feedbackModal').classList.remove('hidden')" class="relative z-10 bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 px-8 rounded-xl transition shadow-lg flex items-center justify-center gap-2 mx-auto">
+                    <i class="fa-solid fa-bullhorn"></i> Submit Feedback
+                </button>
+            </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 max-w-3xl mx-auto mb-20">
-        <a href="https://www.goldcoasttabletennis.org.au/gctta-fixtures" target="_blank" class="glass-panel p-6 rounded-2xl hover:border-yellow-500/50 transition-all group flex items-center gap-5 cursor-pointer hover:bg-slate-900/80">
-            <div class="w-14 h-14 bg-sky-500/20 rounded-xl flex items-center justify-center text-sky-400 group-hover:bg-sky-500 group-hover:text-white transition-colors border border-sky-500/30"><i class="fa-solid fa-globe text-2xl"></i></div>
-            <div class="text-left"><div class="font-bold text-white text-lg">GCTTA Fixtures Page</div><div class="text-sm text-slate-300 group-hover:text-sky-300">View draws & schedules</div></div>
-        </a>
-        <a href="https://www.facebook.com/GoldCoastTableTennis" target="_blank" class="glass-panel p-6 rounded-2xl hover:border-blue-500/50 transition-all group flex items-center gap-5 cursor-pointer hover:bg-slate-900/80">
-            <div class="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-colors border border-blue-500/30"><i class="fa-brands fa-facebook text-2xl"></i></div>
-            <div class="text-left"><div class="font-bold text-white text-lg">Facebook Community</div><div class="text-sm text-slate-300 group-hover:text-blue-300">Latest news & updates</div></div>
-        </a>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <a href="https://www.goldcoasttabletennis.org.au/gctta-fixtures" target="_blank" class="glass-panel p-6 rounded-2xl hover:border-yellow-500/50 transition-all group flex items-center gap-5 cursor-pointer hover:bg-slate-900/80">
+                    <div class="w-14 h-14 bg-sky-500/20 rounded-xl flex items-center justify-center text-sky-400 group-hover:bg-sky-500 group-hover:text-white transition-colors border border-sky-500/30"><i class="fa-solid fa-globe text-2xl"></i></div>
+                    <div class="text-left"><div class="font-bold text-white text-lg">GCTTA Fixtures Page</div><div class="text-sm text-slate-300 group-hover:text-sky-300">View draws & schedules</div></div>
+                </a>
+                <a href="https://www.facebook.com/GoldCoastTableTennis" target="_blank" class="glass-panel p-6 rounded-2xl hover:border-blue-500/50 transition-all group flex items-center gap-5 cursor-pointer hover:bg-slate-900/80">
+                    <div class="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-colors border border-blue-500/30"><i class="fa-brands fa-facebook text-2xl"></i></div>
+                    <div class="text-left"><div class="font-bold text-white text-lg">Facebook Community</div><div class="text-sm text-slate-300 group-hover:text-blue-300">Latest news & updates</div></div>
+                </a>
+            </div>
+        </div>
+
+        <div class="w-full lg:w-1/3 glass-panel border border-yellow-500/30 rounded-2xl p-6 relative overflow-hidden group shadow-2xl bg-slate-900/60">
+            <div class="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
+                <i class="fa-solid fa-crown text-3xl text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]"></i>
+                <div>
+                    <h3 class="text-xl font-black text-white leading-tight">Honor Board</h3>
+                    <p class="text-[11px] text-slate-400 uppercase tracking-widest font-bold">Top Donators This Month</p>
+                </div>
+            </div>
+            <div id="honor-board-list" class="space-y-3">
+                <div class="text-center text-slate-400 text-sm py-4 animate-pulse"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading top supporters...</div>
+            </div>
+        </div>
+
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const res = await fetch('/api/top_donors');
+        const donors = await res.json();
+        const container = document.getElementById('honor-board-list');
+        
+        if (!donors || donors.length === 0) {
+            container.innerHTML = '<div class="text-center text-slate-400 text-sm italic py-4">No donations yet this month. Be the first to support the stats engine!</div>';
+            return;
+        }
+
+        container.innerHTML = donors.map((d, index) => {
+            let rankIcon = '';
+            let bgClass = 'bg-slate-800/50';
+            
+            if (index === 0) {
+                rankIcon = '<i class="fa-solid fa-trophy text-yellow-400 text-xl drop-shadow-[0_0_5px_rgba(250,204,21,0.8)]"></i>';
+                bgClass = 'bg-gradient-to-r from-yellow-500/20 to-slate-800/50 border-l-2 border-yellow-500';
+            } else if (index === 1) {
+                rankIcon = '<i class="fa-solid fa-medal text-slate-300 text-xl drop-shadow-[0_0_5px_rgba(203,213,225,0.8)]"></i>';
+                bgClass = 'bg-slate-800/80 border-l-2 border-slate-300';
+            } else if (index === 2) {
+                rankIcon = '<i class="fa-solid fa-medal text-amber-600 text-xl drop-shadow-[0_0_5px_rgba(217,119,6,0.8)]"></i>';
+                bgClass = 'bg-slate-800/80 border-l-2 border-amber-600';
+            } else {
+                rankIcon = `<span class="text-slate-500 font-black w-6 text-center">#${index+1}</span>`;
+            }
+            
+            return `
+            <div class="flex justify-between items-center ${bgClass} p-3 rounded-xl border border-white/5 shadow-sm transition-transform hover:scale-[1.01]">
+                <div class="flex items-center gap-4">
+                    <div class="w-8 flex justify-center">${rankIcon}</div>
+                    <span class="text-white font-bold text-sm truncate max-w-[120px]">${d.name}</span>
+                </div>
+                <span class="text-green-400 font-black tracking-widest text-sm">$${parseFloat(d.amount).toFixed(2)}</span>
+            </div>`;
+        }).join('');
+    } catch (err) {
+        console.error("Failed to load honor board", err);
+        document.getElementById('honor-board-list').innerHTML = '<div class="text-red-400 text-sm text-center">Failed to load top donators.</div>';
+    }
+});
+</script>
