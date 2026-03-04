@@ -14,11 +14,8 @@ from backend.backend import ThunderData
 
 app = Flask(__name__, static_folder="frontend/static", template_folder="frontend/templates")
 
-# --- SECURITY & STRIPE CONFIGURATION ---
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'gctta-super-secret-session-key')
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASS', 'TTgctta67-') # Master Password Updated
-
-# Tells Stripe to use the key you will set in Render
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASS', 'TTgctta67-')
 stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -26,34 +23,49 @@ logger = logging.getLogger(__name__)
 
 db = None
 try:
+    logger.info("Initializing ThunderData backend...")
     db = ThunderData()
+    if __name__ != '__main__':
+        logger.info("🌐 Render Deployment Detected: Forcing initial data sync before accepting web traffic...")
+        db.refresh_data()
+        logger.info("✅ Initial Render sync complete.")
 except Exception as e:
-    logger.error(f"❌ Failed to start Backend: {e}")
+    logger.error(f"❌ FATAL: Failed to start Backend: {str(e)}", exc_info=True)
 
 def scheduled_refresh():
     if db:
-        logger.info("⏰ Background Data Sync Started...")
-        db.refresh_data()
-        logger.info("✅ Background Data Sync Complete!")
+        try:
+            logger.info("⏰ Background Data Sync Started...")
+            db.refresh_data()
+            logger.info("✅ Background Data Sync Complete!")
+        except Exception as e:
+            logger.error(f"🚨 ERROR in scheduled_refresh: {str(e)}", exc_info=True)
 
 scheduler = BackgroundScheduler()
-scheduler.add_job(func=scheduled_refresh, trigger="interval", minutes=30, id="scheduled_refresh", next_run_time=datetime.datetime.now())
-scheduler.start()
-atexit.register(lambda: scheduler.shutdown())
 
-# --- ADMIN AUTHENTICATION DECORATOR ---
+try:
+    if __name__ == '__main__':
+        first_run = datetime.datetime.now()
+        logger.info("💻 Local environment detected: Background scheduler starting immediately.")
+    else:
+        first_run = datetime.datetime.now() + datetime.timedelta(minutes=30)
+        logger.info("🌐 Render environment detected: Background scheduler delayed by 30 mins.")
+
+    scheduler.add_job(func=scheduled_refresh, trigger="interval", hours=12, id="scheduled_refresh", next_run_time=first_run)
+    scheduler.start()
+    atexit.register(lambda: scheduler.shutdown())
+except Exception as e:
+    logger.error(f"❌ ERROR starting BackgroundScheduler: {str(e)}", exc_info=True)
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not session.get('admin_logged_in'):
-            return jsonify({'error': 'Unauthorized. Please log in.'}), 401
+        if not session.get('admin_logged_in'): return jsonify({'error': 'Unauthorized. Please log in.'}), 401
         return f(*args, **kwargs)
     return decorated_function
 
-# --- PUBLIC ROUTES ---
 @app.route('/')
-def index(): 
-    return render_template('index.html')
+def index(): return render_template('index.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -71,14 +83,11 @@ def logout():
     session.pop('admin_logged_in', None)
     return redirect(url_for('index'))
 
-# --- PROTECTED ADMIN PAGE ---
 @app.route('/admin')
 def admin(): 
-    if not session.get('admin_logged_in'):
-        return redirect(url_for('login'))
+    if not session.get('admin_logged_in'): return redirect(url_for('login'))
     return render_template('admin.html')
 
-# --- PUBLIC API ROUTES ---
 @app.route('/api/players')
 def get_players(): return jsonify(list(db.get_all_players().keys())) if db else jsonify([])
 
@@ -113,56 +122,15 @@ def get_week_results(season, week): return jsonify(db.get_matches_by_week(season
 def submit_report():
     if not db: return jsonify({"success": False})
     d = request.json
-    if db.user_submit_report(d.get('p1'), d.get('p2'), d.get('date'), d.get('reporter'), d.get('problem'), d.get('suggested_home'), d.get('suggested_away')): return jsonify({"success": True})
+    # NEW: Captures Match ID from the user
+    if db.user_submit_report(d.get('p1'), d.get('p2'), d.get('date'), d.get('reporter'), d.get('problem'), d.get('suggested_home'), d.get('suggested_away'), d.get('match_id', '')): return jsonify({"success": True})
     return jsonify({"success": False}), 500
 
 @app.route('/api/feedback', methods=['POST'])
 def handle_feedback():
     if not db: return jsonify({"success": False}), 500
-    
     data = request.json
-    f_type = data.get('type', 'Feedback')
-    f_contact = data.get('contact', 'Anonymous')
-    f_context = data.get('context', 'Not provided')
-    f_message = data.get('message', '')
-
-    db.user_submit_feedback(f_type, f_message, f_contact, f_context)
-
-    try:
-        SENDER_EMAIL = os.environ.get('MAIL_USER', 'goldcoasttabletennis@gmail.com')
-        SENDER_PASS = os.environ.get('MAIL_PASS', '') 
-        RECEIVER_EMAIL = 'goldcoasttabletennis@gmail.com'
-
-        if SENDER_PASS:
-            msg = MIMEMultipart()
-            msg['From'] = f"GCTTA Live System <{SENDER_EMAIL}>"
-            msg['To'] = RECEIVER_EMAIL
-            msg['Subject'] = f"New {f_type} Report from {f_contact}"
-            
-            body = f"""
-NEW GCTTA LIVE REPORT
-
-Type: {f_type}
-From: {f_contact}
-Context (What were they doing?): {f_context}
-
-Message / Description:
-{f_message}
-            """
-            msg.attach(MIMEText(body, 'plain'))
-            
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()
-            server.login(SENDER_EMAIL, SENDER_PASS)
-            server.send_message(msg)
-            server.quit()
-            logger.info(f"✅ Feedback email successfully sent to {RECEIVER_EMAIL}")
-        else:
-            logger.warning("⚠️ MAIL_PASS not set. Feedback saved to DB, but email skipped.")
-            
-    except Exception as e:
-        logger.error(f"❌ Failed to send feedback email: {e}")
-
+    db.user_submit_feedback(data.get('type', 'Feedback'), data.get('message', ''), data.get('contact', 'Anonymous'), data.get('context', 'Not provided'))
     return jsonify({"success": True})
 
 @app.route('/api/create-payment-intent', methods=['POST'])
@@ -170,17 +138,10 @@ def create_payment():
     try:
         data = request.json
         amount = int(float(data.get('amount', 5.00)) * 100) 
-        
-        intent = stripe.PaymentIntent.create(
-            amount=amount,
-            currency='aud',
-            automatic_payment_methods={'enabled': True},
-        )
+        intent = stripe.PaymentIntent.create(amount=amount, currency='aud', automatic_payment_methods={'enabled': True})
         return jsonify({'clientSecret': intent.client_secret})
-    except Exception as e:
-        return jsonify(error=str(e)), 403
+    except Exception as e: return jsonify(error=str(e)), 403
 
-# --- PROTECTED ADMIN API ROUTES ---
 @app.route('/api/admin/reports')
 @login_required
 def get_reports(): return jsonify(db.admin_get_reports()) if db else jsonify([])
@@ -223,8 +184,7 @@ def merge_players():
 
 @app.route('/api/admin/approvals')
 @login_required
-def get_approvals():
-    return jsonify(db.admin_get_pending_approvals()) if db else jsonify([])
+def get_approvals(): return jsonify(db.admin_get_pending_approvals()) if db else jsonify([])
 
 @app.route('/api/admin/resolve_approval', methods=['POST'])
 @login_required
@@ -236,26 +196,31 @@ def resolve_approval():
 
 @app.route('/api/admin/recent_approved')
 @login_required
-def recent_approved():
-    return jsonify(db.admin_get_recent_approved()) if db else jsonify([])
+def recent_approved(): return jsonify(db.admin_get_recent_approved()) if db else jsonify([])
 
 @app.route('/api/admin/delete_recent', methods=['POST'])
 @login_required
 def delete_recent():
     if not db: return jsonify({"success": False})
-    data = request.json
-    success = db.admin_delete_match_result(data.get('id'))
+    success = db.admin_delete_match_result(request.json.get('id'))
     return jsonify({"success": success})
 
 @app.route('/api/admin/ranks', methods=['GET', 'POST'])
 @login_required
 def manage_ranks():
-    if request.method == 'GET':
-        return jsonify(db.admin_get_ranks()) if db else jsonify({})
+    if request.method == 'GET': return jsonify(db.admin_get_ranks()) if db else jsonify({})
     else:
         data = request.json
         success = db.admin_set_rank(data.get('name'), data.get('rank'))
         return jsonify({"success": success})
+
+@app.route('/api/admin/override_rating', methods=['POST'])
+@login_required
+def override_rating():
+    if not db: return jsonify({"success": False})
+    data = request.json
+    success = db.admin_override_rating(data.get('name'), data.get('rating'))
+    return jsonify({"success": success})
 
 @app.route('/api/refresh')
 @login_required

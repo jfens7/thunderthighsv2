@@ -12,6 +12,7 @@ import random
 import string
 import difflib
 import math
+import hashlib
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -24,9 +25,6 @@ except ImportError:
     try: from backend.sky_engine import SkyEngine
     except: SkyEngine = None
 
-# ==========================================
-# GLICKO-2 RATING ENGINE
-# ==========================================
 DEFAULT_RATING = 1000.0
 DEFAULT_RD = 350.0
 DEFAULT_VOL = 0.06
@@ -69,15 +67,12 @@ def _glicko2_core(mu, phi, vol, opponent_mu, opponent_phi, score):
 def calculate_match(w, l, s1, s2):
     mu_w, phi_w, vol_w = (w['rating'] - 1500) / SCALE, w['rd'] / SCALE, w['vol']
     mu_l, phi_l, vol_l = (l['rating'] - 1500) / SCALE, l['rd'] / SCALE, l['vol']
-    
     total_sets = s1 + s2
     if total_sets == 0: return {'winner': w, 'loser': l}
     w_score = 0.75 + 0.25 * ((s1 - s2) / total_sets)
     l_score = 1.0 - w_score
-
     new_mu_w, new_phi_w, new_vol_w = _glicko2_core(mu_w, phi_w, vol_w, mu_l, phi_l, w_score)
     new_mu_l, new_phi_l, new_vol_l = _glicko2_core(mu_l, phi_l, vol_l, mu_w, phi_w, l_score)
-    
     w['rating'] = new_mu_w * SCALE + 1500
     w['rd'] = max(30.0, new_phi_w * SCALE)
     w['vol'] = new_vol_w
@@ -112,7 +107,7 @@ class ThunderData:
     def __init__(self):
         self.scopes = ["https://www.googleapis.com/auth/spreadsheets"]
         self.client = None
-        self.sheet_results = None; self.sheet_export = None; self.db = None 
+        self.sheet_results = None; self.db = None 
         self.rating_engine = RatingEngine()
         self.all_players = {}; self.season_stats = {}; self.seasons_list = ["Career"] 
         self.divisions_list = set(); self.date_lookup = {}; self.weekly_matches = {} 
@@ -189,32 +184,25 @@ class ThunderData:
             ws = self.sheet_results.worksheet("Ratings base")
             rows = ws.get_all_values()
             if not rows: return
-            
             headers = [str(h).lower().strip() for h in rows[0]]
             p_idx = headers.index('player') if 'player' in headers else 0
             peterman_idx = 1 
             r_idx = headers.index('rating') if 'rating' in headers else 2
             d_idx = headers.index('deviation') if 'deviation' in headers else 3
             v_idx = headers.index('volatility') if 'volatility' in headers else 4
-            
             for row in rows[1:]:
                 if len(row) <= p_idx: continue
                 name = self._clean_name(row[p_idx])
                 if not name: continue
-                
                 peterman_id = str(row[peterman_idx]).strip() if len(row) > peterman_idx else ""
                 rating = row[r_idx] if len(row) > r_idx else ""
                 dev = row[d_idx] if len(row) > d_idx else ""
                 vol = row[v_idx] if len(row) > v_idx else ""
-                
-                if rating:
-                    self.rating_engine.set_seed(name, rating, dev, vol)
-                
+                if rating: self.rating_engine.set_seed(name, rating, dev, vol)
                 if name not in self.all_players:
                     self.all_players[name] = {'regular': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'fillin': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'combined': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}}
                 self.all_players[name]['peterman_id'] = peterman_id
-        except Exception as e:
-            logger.error(f"Error loading seed ratings: {e}")
+        except: pass
 
     def _save_updated_ratings(self):
         if not self.sheet_results: return
@@ -307,7 +295,6 @@ class ThunderData:
             if len(group) == 1:
                 final_matches.append(group[0])
                 continue
-                
             firebase_m = [m for m in group if m.get('rich_stats') is not None]
             sheet_m = [m for m in group if m.get('rich_stats') is None]
             merged = []
@@ -318,7 +305,7 @@ class ThunderData:
             final_matches.extend(merged)
         return final_matches
 
-    def _update_player_stats(self, stat_dict, player_name, p1_sets, p2_sets, is_p1, opponent, is_fillin, division, date_str, week_num, season_name, details="", rich_stats=None):
+    def _update_player_stats(self, stat_dict, player_name, p1_sets, p2_sets, is_p1, opponent, is_fillin, division, date_str, week_num, season_name, details="", rich_stats=None, match_id=""):
         if stat_dict is None: return 
         if player_name not in stat_dict: stat_dict[player_name] = {'regular': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'fillin': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'combined': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}}
         buckets = [stat_dict[player_name]['combined']]; 
@@ -329,7 +316,7 @@ class ThunderData:
             stats['matches'] += 1; stats['sets_won'] += my_sets; stats['sets_lost'] += op_sets
             if result == "Win": stats['wins'] += 1
             else: stats['losses'] += 1
-            stats['history'].append({'season': season_name, 'week': week_num, 'date': date_str, 'opponent': opponent, 'result': result, 'score': f"{my_sets}-{op_sets}", 'type': 'Fill-in' if is_fillin else 'Regular', 'division': division, 'details': details, 'rich_stats': rich_stats})
+            stats['history'].append({'season': season_name, 'week': week_num, 'date': date_str, 'opponent': opponent, 'result': result, 'score': f"{my_sets}-{op_sets}", 'type': 'Fill-in' if is_fillin else 'Regular', 'division': division, 'details': details, 'rich_stats': rich_stats, 'match_id': match_id})
 
     def refresh_data(self):
         logger.info("⚡️ Fetching and Processing Data...")
@@ -337,28 +324,14 @@ class ThunderData:
         if self.sheet_results: self._load_calculated_dates(); self._load_aliases(); self._load_seed_ratings()
         raw_match_queue = [] 
         
-        # --- DEBUG LOGGING ---
-        logger.info("==========================================")
-        logger.info("🔍 DEBUG: STARTING SEASON EXTRACTION")
-        
         if self.sheet_results:
             for worksheet in self.sheet_results.worksheets():
                 title = worksheet.title
-                
-                # Check for word "season" case-insensitive
-                if "season" not in title.lower(): 
-                    logger.debug(f"⏭️ SKIPPED SHEET (No 'season' in title): '{title}'")
-                    continue
-                    
-                # Flexible extraction: strips "season : " or "Season: " out
+                if "season" not in title.lower(): continue
                 season_name = re.sub(r'(?i)^season\s*:\s*', '', title).strip()
-                logger.info(f"✅ SHEET MATCH: '{title}' -> Extracted as: '{season_name}'")
-                
-                if season_name not in self.seasons_list: 
-                    self.seasons_list.append(season_name)
+                if season_name not in self.seasons_list: self.seasons_list.append(season_name)
                 if season_name not in self.season_stats: self.season_stats[season_name] = {}
                 if season_name not in self.weekly_matches: self.weekly_matches[season_name] = {}
-                
                 try:
                     records = self._get_safe_records(worksheet)
                     for row in records:
@@ -387,15 +360,11 @@ class ThunderData:
                     d = doc.to_dict()
                     if d.get('status') == 'pending' or d.get('status') == 'rejected': continue
                     date_val = d.get('date'); parsed_date = self._parse_date(date_val) or datetime.date.today()
-                    
                     raw_season = str(d.get('season', f"Season: {parsed_date.year}"))
                     season_name = re.sub(r'(?i)^season\s*:\s*', '', raw_season).strip()
-                    
-                    if season_name not in self.seasons_list and season_name != "Unknown":
-                        self.seasons_list.append(season_name)
+                    if season_name not in self.seasons_list and season_name != "Unknown": self.seasons_list.append(season_name)
                     if season_name not in self.season_stats: self.season_stats[season_name] = {}
                     if season_name not in self.weekly_matches: self.weekly_matches[season_name] = {}
-
                     home_p = d.get('home_players', []); away_p = d.get('away_players', [])
                     if not home_p or not away_p: continue
                     p1 = self._clean_name(home_p[0]); p2 = self._clean_name(away_p[0])
@@ -416,7 +385,6 @@ class ThunderData:
             except: pass
 
         logger.info(f"📊 FINAL LOADED SEASONS LIST: {self.seasons_list}")
-        logger.info("==========================================")
 
         corrections = {}
         if self.db:
@@ -439,11 +407,18 @@ class ThunderData:
         cleaned_matches = self._deduplicate_matches(raw_match_queue); cleaned_matches.sort(key=lambda x: x['date'])
         player_set = set()
         for m in cleaned_matches:
+            players = sorted([m['p1'], m['p2']])
+            d_str = m['date'].strftime("%d/%m/%Y") if m['date'] else "nodate"
+            
+            # --- NEW: GENERATE UNIQUE MATCH ID ---
+            raw_id_string = f"{d_str}_{players[0]}_{players[1]}_{m['s1']}_{m['s2']}"
+            match_id = hashlib.md5(raw_id_string.encode()).hexdigest()[:6].upper()
+            
             if m['date'] > RATING_START_DATE: self.rating_engine.update_match(m['p1'], m['p2'], m['s1'], m['s2'])
-            d_str = m['date'].strftime("%d/%m/%Y")
+            
             for p, sets_for, sets_against, is_p1, opp, fill in [(m['p1'], m['s1'], m['s2'], True, m['p2'], m['p1_fill']), (m['p2'], m['s1'], m['s2'], False, m['p1'], m['p2_fill'])]:
-                self._update_player_stats(self.season_stats.get(m['season'], {}), p, sets_for, sets_against, is_p1, opp, fill, m['div'], d_str, m['week'], m['season'], m.get('game_history', ''), m.get('rich_stats'))
-                self._update_player_stats(self.all_players, p, sets_for, sets_against, is_p1, opp, fill, m['div'], d_str, m['week'], m['season'], m.get('game_history', ''), m.get('rich_stats'))
+                self._update_player_stats(self.season_stats.get(m['season'], {}), p, sets_for, sets_against, is_p1, opp, fill, m['div'], d_str, m['week'], m['season'], m.get('game_history', ''), m.get('rich_stats'), match_id)
+                self._update_player_stats(self.all_players, p, sets_for, sets_against, is_p1, opp, fill, m['div'], d_str, m['week'], m['season'], m.get('game_history', ''), m.get('rich_stats'), match_id)
                 player_set.add(p)
             if str(m['week']) != "Unknown":
                 if m['season'] not in self.weekly_matches: self.weekly_matches[m['season']] = {}
@@ -451,12 +426,20 @@ class ThunderData:
                 if wk not in self.weekly_matches[m['season']]: self.weekly_matches[m['season']][wk] = []
                 self.weekly_matches[m['season']][wk].append({'p1': m['p1'], 'p2': m['p2'], 'score': f"{m['s1']}-{m['s2']}", 'division': m['div'], 'date': d_str})
         
+        if self.db:
+            try:
+                overrides = self.db.collection('rating_overrides').stream()
+                for doc in overrides:
+                    d = doc.to_dict()
+                    p_name = d.get('name')
+                    if p_name in self.rating_engine.players:
+                        self.rating_engine.players[p_name]['rating'] = float(d.get('rating', 1500))
+            except Exception as e: logger.error(f"Error applying overrides: {e}")
+
         logger.info(f"👤 Total Unique Players Loaded: {len(player_set)}")
         self._save_updated_ratings(); self._update_master_roster(); self._sync_to_firebase()
 
-    def get_matches_by_week(self, season, week): 
-        return self.weekly_matches.get(season, {}).get(str(week), [])
-
+    def get_matches_by_week(self, season, week): return self.weekly_matches.get(season, {}).get(str(week), [])
     def get_all_players(self): return self.all_players
     def get_seasons(self): return self.seasons_list
     def get_divisions(self): return sorted(list(self.divisions_list))
@@ -536,6 +519,90 @@ class ThunderData:
         if not self.db: return False
         try: safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower(); self.db.collection('player_ranks').document(safe_id).set({'name': player_name, 'rank': int(rank)}); return True
         except: return False
+        
+    def admin_override_rating(self, player_name, new_rating):
+        if not self.db: return False
+        try:
+            safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()
+            self.db.collection('rating_overrides').document(safe_id).set({
+                'name': player_name,
+                'rating': float(new_rating),
+                'timestamp': firestore.SERVER_TIMESTAMP
+            })
+            return True
+        except Exception as e:
+            logger.error(f"Error overriding rating: {e}")
+            return False
+            
+    def admin_get_reports(self):
+        if not self.db: 
+            return []
+        try: 
+            reports = []
+            m_docs = self.db.collection('match_reports').where('status', '==', 'Pending').stream()
+            for d in m_docs:
+                data = d.to_dict()
+                reports.append({
+                    'id': d.id,
+                    'type': 'MATCH_ERROR',
+                    'reporter': data.get('reporter', 'Unknown'),
+                    'date': data.get('date', 'Unknown Date'),
+                    'title': f"{data.get('p1', '')} vs {data.get('p2', '')}",
+                    'problem': data.get('problem', ''),
+                    'suggested_s1': data.get('suggested_s1', ''),
+                    'suggested_s2': data.get('suggested_s2', ''),
+                    'match_id': data.get('match_id', ''),
+                    'timestamp': data.get('timestamp')
+                })
+            f_docs = self.db.collection('feedback').where('status', '==', 'New').stream()
+            for d in f_docs:
+                data = d.to_dict()
+                ts = data.get('timestamp')
+                date_str = ts.strftime('%d/%m/%Y') if hasattr(ts, 'strftime') else 'Recent'
+                reports.append({
+                    'id': d.id,
+                    'type': 'FEEDBACK',
+                    'reporter': data.get('contact', 'Anonymous'),
+                    'date': date_str,
+                    'title': f"Feedback: {data.get('type', 'General')}",
+                    'problem': f"Context: {data.get('context', '')}\n\nMessage: {data.get('message', '')}",
+                    'suggested_s1': '',
+                    'suggested_s2': '',
+                    'match_id': '',
+                    'timestamp': ts
+                })
+            def safe_ts(x):
+                ts = x.get('timestamp')
+                if hasattr(ts, 'timestamp'): return ts.timestamp()
+                if isinstance(ts, (int, float)): return ts
+                return 0
+            reports.sort(key=safe_ts, reverse=True)
+            return reports
+        except Exception as e: 
+            logger.error(f"Error in admin_get_reports: {str(e)}")
+            return []
+
+    def admin_resolve_report(self, report_id, action):
+        if not self.db: return False
+        try:
+            report_ref = self.db.collection('match_reports').document(report_id)
+            doc = report_ref.get()
+            if doc.exists:
+                report = doc.to_dict()
+                if action == 'approve': 
+                    self.db.collection('match_corrections').add({'p1': report['p1'], 'p2': report['p2'], 'date': report['date'], 's1': report['suggested_s1'], 's2': report['suggested_s2'], 'timestamp': firestore.SERVER_TIMESTAMP})
+                    report_ref.update({'status': 'Approved'})
+                    self.refresh_data()
+                elif action == 'reject': 
+                    report_ref.update({'status': 'Rejected'})
+                return True
+            feed_ref = self.db.collection('feedback').document(report_id)
+            if feed_ref.get().exists:
+                if action == 'approve': feed_ref.update({'status': 'Resolved'})
+                elif action == 'reject': feed_ref.update({'status': 'Dismissed'})
+                return True
+            return False
+        except: return False
     
     def admin_get_pending_approvals(self):
         if not self.db: return []
@@ -577,17 +644,19 @@ class ThunderData:
         for p_name, data in self.all_players.items():
             for m in data.get('combined', {}).get('history', []):
                 date = str(m.get('date', '')); opp = str(m.get('opponent', '')); m_season = str(m.get('season', '')); m_div = str(m.get('division', '')); m_week = str(m.get('week', ''))
+                match_id = str(m.get('match_id', ''))
                 if season_filter and season_filter != "All" and season_filter != m_season: continue
                 if div_filter and div_filter != "All" and div_filter != m_div: continue
                 if week_filter and week_filter != "All" and week_filter != m_week: continue
                 if date_filter and date_filter != date: continue
-                if q_lower and q_lower not in p_name.lower() and q_lower not in opp.lower() and q_lower not in date: continue
+                # NEW: Allows searching by Match ID now
+                if q_lower and q_lower not in p_name.lower() and q_lower not in opp.lower() and q_lower not in date and q_lower not in match_id.lower(): continue
                 players = sorted([p_name, opp]); match_hash = f"{date}_{m_season}_{m_week}_{players[0]}_{players[1]}_{m.get('score', '0-0')}"
                 if match_hash not in seen:
                     seen.add(match_hash); score = m.get('score', '0-0')
                     try: s1, s2 = map(int, score.split('-'))
                     except: s1, s2 = 0, 0
-                    results.append({'id': match_hash, 'date': date, 'division': m_div, 'season': m_season, 'week': m_week, 'home_players': [p_name], 'away_players': [opp], 'score': score, 's1': s1, 's2': s2})
+                    results.append({'id': match_hash, 'date': date, 'division': m_div, 'season': m_season, 'week': m_week, 'home_players': [p_name], 'away_players': [opp], 'score': score, 's1': s1, 's2': s2, 'match_id': match_id})
         def sort_key(x):
             try: return datetime.datetime.strptime(x['date'], "%d/%m/%Y")
             except: return datetime.datetime(1900, 1, 1)
@@ -599,23 +668,9 @@ class ThunderData:
         try: self.db.collection('match_corrections').add({'p1': p1, 'p2': p2, 'date': date, 's1': int(s1), 's2': int(s2), 'timestamp': firestore.SERVER_TIMESTAMP}); self.refresh_data(); return True
         except: return False
 
-    def user_submit_report(self, p1, p2, date, reporter, problem, suggested_s1, suggested_s2):
+    def user_submit_report(self, p1, p2, date, reporter, problem, suggested_s1, suggested_s2, match_id=""):
         if not self.db: return False
-        try: self.db.collection('match_reports').add({'p1': p1, 'p2': p2, 'date': date, 'reporter': reporter, 'problem': problem, 'suggested_s1': int(suggested_s1), 'suggested_s2': int(suggested_s2), 'match_desc': f"{p1} vs {p2} on {date}", 'status': 'Pending', 'timestamp': firestore.SERVER_TIMESTAMP}); return True
-        except: return False
-
-    def admin_get_reports(self):
-        if not self.db: return []
-        try: docs = self.db.collection('match_reports').where('status', '==', 'Pending').order_by('timestamp', direction=firestore.Query.DESCENDING).stream(); return [{'id': d.id, **d.to_dict()} for d in docs]
-        except: return []
-
-    def admin_resolve_report(self, report_id, action):
-        if not self.db: return False
-        try:
-            report_ref = self.db.collection('match_reports').document(report_id); report = report_ref.get().to_dict()
-            if action == 'approve': self.db.collection('match_corrections').add({'p1': report['p1'], 'p2': report['p2'], 'date': report['date'], 's1': report['suggested_s1'], 's2': report['suggested_s2'], 'timestamp': firestore.SERVER_TIMESTAMP}); report_ref.update({'status': 'Approved'}); self.refresh_data()
-            elif action == 'reject': report_ref.update({'status': 'Rejected'})
-            return True
+        try: self.db.collection('match_reports').add({'match_id': match_id, 'p1': p1, 'p2': p2, 'date': date, 'reporter': reporter, 'problem': problem, 'suggested_s1': int(suggested_s1), 'suggested_s2': int(suggested_s2), 'match_desc': f"{p1} vs {p2} on {date}", 'status': 'Pending', 'timestamp': firestore.SERVER_TIMESTAMP}); return True
         except: return False
 
     def admin_merge_players(self, bad_name, good_name):
