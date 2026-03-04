@@ -165,7 +165,6 @@
 </script>
 
 <script>
-    // --- SMART BACK BUTTON LOGIC ---
     window.addEventListener('popstate', function(event) {
         const reportModal = document.getElementById('reportModal');
         const donateModal = document.getElementById('donateModal');
@@ -182,7 +181,6 @@
         if (event.state && event.state.tab) { switchTab(event.state.tab, false); }
     });
 
-    // --- STRIPE CUSTOM CHECKOUT ---
     const stripe = Stripe('pk_live_51Rhn5VG4Ru5FkAsRleeExo35C9xNnvZbComyNHWRzTGZltHbNLLpbCuylszKl5ZCvpQOR3SHfSsQrwJUKbm6BnjS00y4HINZj8');
     let elements;
 
@@ -209,7 +207,6 @@
 
     window.proceedToPayment = async function() {
         const amt = document.getElementById('custom-donate-amount').value;
-        // CHANGED VALIDATION TO $5
         if(!amt || amt < 5) return alert("Please enter a valid amount (Minimum $5).");
         
         const btn = document.getElementById('proceed-pay-btn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...'; btn.disabled = true;
@@ -230,7 +227,6 @@
         if (error) { const msg = document.getElementById('payment-message'); msg.classList.remove('hidden'); msg.innerText = error.message; msg.classList.add('text-red-500'); btn.innerHTML = '<i class="fa-solid fa-lock"></i> Pay Now'; btn.disabled = false; }
     }
 
-    // --- LANDING PAGE LOGIC ---
     window.checkTournamentStatus = async function() {
         try {
             const res = await fetch('/api/config');
@@ -253,7 +249,6 @@
         }, 500);
     }
 
-    // --- TAB SWITCHER ---
     window.switchTab = function(tabId, pushHistory = true) {
         if(pushHistory) { history.pushState({ page: 'fixtures', tab: tabId }, "", "#" + tabId); }
         
@@ -282,7 +277,6 @@
         window.scrollTo({ top: 0, behavior: 'smooth' }); 
     };
 
-    // --- DATA LOADERS ---
     window.allPlayersRaw = []; let currentSeason = "Career", currentDivision = "All";
     
     function generateStars() { const container = document.getElementById('starContainer'); if(!container) return; container.innerHTML = ''; const starCount = 60; for (let i = 0; i < starCount; i++) { const star = document.createElement('div'); const sizeClass = Math.random() < 0.6 ? 's-small' : (Math.random() < 0.9 ? 's-medium' : 's-large'); star.className = `star ${sizeClass}`; star.style.top = `${Math.random() * 100}%`; star.style.left = `${Math.random() * 100}%`; star.style.setProperty('--duration', `${2 + Math.random() * 3}s`); star.style.setProperty('--delay', `${Math.random() * 2}s`); container.appendChild(star); } }
@@ -297,28 +291,40 @@
             enterFixturesMode();
         }
 
-        try {
-            const pRes = await fetch('/api/players'); window.allPlayersRaw = await pRes.json(); setupMainSearch(); 
-            const [sRes, dRes] = await Promise.all([fetch('/api/seasons'), fetch('/api/divisions')]);
-            const seasons = await sRes.json(); const divisions = await dRes.json();
-            
-            const latestSeason = seasons.length > 1 ? seasons[1] : "Career";
-            currentSeason = latestSeason;
+        // --- UPDATED: BULLETPROOF SERVER BOOT WAIT ---
+        const loadInitialData = async () => {
+            try {
+                const pRes = await fetch('/api/players'); window.allPlayersRaw = await pRes.json(); setupMainSearch(); 
+                const [sRes, dRes] = await Promise.all([fetch('/api/seasons'), fetch('/api/divisions')]);
+                const seasons = await sRes.json(); const divisions = await dRes.json();
+                
+                // CRITICAL FIX: Ensure at least 4 seasons OR 100 players are loaded before continuing!
+                if (seasons.length <= 3 || window.allPlayersRaw.length < 100) {
+                    console.log("Server is still downloading massive data... Retrying in 2 seconds...");
+                    setTimeout(loadInitialData, 2000);
+                    return;
+                }
 
-            const sSelect = document.getElementById('seasonSelect'); if (sSelect) { sSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; sSelect.appendChild(opt); }); sSelect.value = latestSeason; }
-            const pDivSelect = document.getElementById('profileDivisionSelect'); if (pDivSelect) { pDivSelect.innerHTML = '<option value="All">All Divisions</option>'; divisions.forEach(d => { let opt = document.createElement('option'); opt.value = d; opt.innerText = d; pDivSelect.appendChild(opt); }); }
-            
-            const refreshProfile = () => { const pName = document.getElementById('playerName').innerText; if(pName && pName !== "Loading...") loadStats(pName); };
-            document.getElementById('seasonSelect')?.addEventListener('change', refreshProfile); document.getElementById('profileDivisionSelect')?.addEventListener('change', refreshProfile);
-            
-            const boardDivSelect = document.getElementById('boardDiv'); const boardSeasonSelect = document.getElementById('boardSeason');
-            if(boardDivSelect) { boardDivSelect.innerHTML = ''; divisions.forEach(d => { let opt = document.createElement('option'); opt.value = d; opt.innerText = d; boardDivSelect.appendChild(opt); }); }
-            if(boardSeasonSelect) { boardSeasonSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; boardSeasonSelect.appendChild(opt); }); boardSeasonSelect.value = latestSeason; }
-            
-            const resultSeasonSelect = document.getElementById('resultsSeason'); if(resultSeasonSelect) { resultSeasonSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; resultSeasonSelect.appendChild(opt); }); resultSeasonSelect.value = latestSeason; }
-            
-            loadDivisionLeaderboard(); loadResults();
-        } catch(e) { console.error("Init Error", e); }
+                const latestSeason = seasons.includes("Summer 2026") ? "Summer 2026" : (seasons[1] || "Career");
+                currentSeason = latestSeason;
+
+                const sSelect = document.getElementById('seasonSelect'); if (sSelect) { sSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; sSelect.appendChild(opt); }); sSelect.value = latestSeason; }
+                const pDivSelect = document.getElementById('profileDivisionSelect'); if (pDivSelect) { pDivSelect.innerHTML = '<option value="All">All Divisions</option>'; divisions.forEach(d => { let opt = document.createElement('option'); opt.value = d; opt.innerText = d; pDivSelect.appendChild(opt); }); }
+                
+                const refreshProfile = () => { const pName = document.getElementById('playerName').innerText; if(pName && pName !== "Loading...") loadStats(pName); };
+                document.getElementById('seasonSelect')?.addEventListener('change', refreshProfile); document.getElementById('profileDivisionSelect')?.addEventListener('change', refreshProfile);
+                
+                const boardDivSelect = document.getElementById('boardDiv'); const boardSeasonSelect = document.getElementById('boardSeason');
+                if(boardDivSelect) { boardDivSelect.innerHTML = ''; divisions.forEach(d => { let opt = document.createElement('option'); opt.value = d; opt.innerText = d; boardDivSelect.appendChild(opt); }); }
+                if(boardSeasonSelect) { boardSeasonSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; boardSeasonSelect.appendChild(opt); }); boardSeasonSelect.value = latestSeason; }
+                
+                const resultSeasonSelect = document.getElementById('resultsSeason'); if(resultSeasonSelect) { resultSeasonSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; resultSeasonSelect.appendChild(opt); }); resultSeasonSelect.value = latestSeason; }
+                
+                loadDivisionLeaderboard(); loadResults();
+            } catch(e) { console.error("Init Error", e); }
+        };
+
+        loadInitialData(); // Start the smart load
     };
 
     function setupMainSearch() {
@@ -394,13 +400,14 @@
                         ${richBadge}
                     </div>
                 </div>
+                <div class="text-[9px] text-slate-500 font-mono ml-9 tracking-widest uppercase">ID: ${match.match_id || 'N/A'}</div>
             </div>
             <div class="text-right flex items-center gap-3">
                 <div>
                     <div class="font-mono text-slate-300 font-bold bg-slate-800 px-2 py-1 rounded inline-block text-sm mb-1">${match.score}</div>
                     <div class="text-[10px] text-slate-600 font-bold uppercase tracking-wider">${match.date}</div>
                 </div>
-                ${!hasRichStats ? `<button onclick="event.stopPropagation(); window.openReportModal('${playerName}', '${match.opponent}', '${match.date}')" class="text-slate-500 hover:text-red-400 transition ml-2" title="Report Error"><i class="fa-solid fa-triangle-exclamation"></i></button>` : ''}
+                ${!hasRichStats ? `<button onclick="event.stopPropagation(); window.openReportModal('${playerName}', '${match.opponent}', '${match.date}', '${match.match_id || ''}')" class="text-slate-500 hover:text-red-400 transition ml-2" title="Report Error"><i class="fa-solid fa-triangle-exclamation"></i></button>` : ''}
             </div>`; 
             
             historyDiv.appendChild(row); 
@@ -498,11 +505,57 @@
     }
 
     window.closeMatchDetails = function() { document.getElementById('matchDetailsModal').classList.add('hidden'); }
-    window.openReportFromDetails = function() { if(window.activeDetailsMatch) { closeMatchDetails(); window.openReportModal(window.activeDetailsMatch.p1, window.activeDetailsMatch.p2, window.activeDetailsMatch.date); } }
+    window.openReportFromDetails = function() { if(window.activeDetailsMatch) { closeMatchDetails(); window.openReportModal(window.activeDetailsMatch.p1, window.activeDetailsMatch.p2, window.activeDetailsMatch.date, ""); } }
     
-    window.openReportModal = function(p1, p2, date) { history.pushState({ modal: 'reportModal' }, "", "#report"); document.getElementById('rep-p1').value = p1; document.getElementById('rep-p2').value = p2; document.getElementById('rep-date').value = date; document.getElementById('report-match-desc').innerText = `${p1} vs ${p2} on ${date}`; document.getElementById('lbl-rep-p1').innerText = p1 + " Sets"; document.getElementById('lbl-rep-p2').innerText = p2 + " Sets"; document.getElementById('rep-s1').value = ''; document.getElementById('rep-s2').value = ''; document.getElementById('reportModal').classList.remove('hidden'); }
+    window.openReportModal = function(p1, p2, date, matchId) { 
+        history.pushState({ modal: 'reportModal' }, "", "#report"); 
+        document.getElementById('rep-p1').value = p1; 
+        document.getElementById('rep-p2').value = p2; 
+        document.getElementById('rep-date').value = date; 
+        
+        let desc = `${p1} vs ${p2} on ${date}`;
+        if (matchId) desc += ` (ID: ${matchId})`;
+        
+        document.getElementById('report-match-desc').innerText = desc; 
+        document.getElementById('report-match-desc').dataset.matchId = matchId || "";
+        
+        document.getElementById('lbl-rep-p1').innerText = p1 + " Sets"; 
+        document.getElementById('lbl-rep-p2').innerText = p2 + " Sets"; 
+        document.getElementById('rep-s1').value = ''; 
+        document.getElementById('rep-s2').value = ''; 
+        document.getElementById('reportModal').classList.remove('hidden'); 
+    }
     window.closeReportModal = function() { document.getElementById('reportModal').classList.add('hidden'); }
-    window.submitReport = async function() { const p1 = document.getElementById('rep-p1').value; const p2 = document.getElementById('rep-p2').value; const date = document.getElementById('rep-date').value; const name = document.getElementById('repName').value; const prob = document.getElementById('repDesc').value; const h = document.getElementById('rep-s1').value; const a = document.getElementById('rep-s2').value; if(!name || !prob || h==="" || a==="") return alert("Please fill all fields."); try { const res = await fetch('/api/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ p1: p1, p2: p2, date: date, reporter: name, problem: prob, suggested_home: h, suggested_away: a }) }); const d = await res.json(); if(d.success) { alert("Report Submitted!"); closeReportModal(); } else { alert("Error submitting report."); } } catch(e) {} }
+
+    window.submitReport = async function() { 
+        const p1 = document.getElementById('rep-p1').value; 
+        const p2 = document.getElementById('rep-p2').value; 
+        const date = document.getElementById('rep-date').value; 
+        const name = document.getElementById('repName').value; 
+        const prob = document.getElementById('repDesc').value; 
+        const h = document.getElementById('rep-s1').value; 
+        const a = document.getElementById('rep-s2').value; 
+        const matchId = document.getElementById('report-match-desc').dataset.matchId || "";
+        
+        if(!name || !prob || h==="" || a==="") return alert("Please fill all fields."); 
+        
+        try { 
+            const res = await fetch('/api/report', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ match_id: matchId, p1: p1, p2: p2, date: date, reporter: name, problem: prob, suggested_home: h, suggested_away: a }) 
+            }); 
+            
+            if(res.status === 200) { 
+                alert("✅ SUCCESS (Code 200): Match report securely saved to database and sent to Admin Inbox!"); 
+                closeReportModal(); 
+            } else { 
+                alert(`❌ ERROR (Code ${res.status}): Failed to save report to database.`); 
+            } 
+        } catch(e) {
+            alert("❌ NETWORK ERROR: Could not connect to the server.");
+        } 
+    }
 
     window.submitFeedback = async function() { 
         const type = document.getElementById('fb-type').value; 
@@ -518,15 +571,18 @@
                 headers: {'Content-Type': 'application/json'}, 
                 body: JSON.stringify({ type: type, contact: name, context: context, message: msg }) 
             }); 
-            if(res.ok) { 
-                alert("Report sent directly to the admins! Thank you."); 
+            
+            if(res.status === 200) { 
+                alert("✅ SUCCESS (Code 200): Your feedback has been securely saved to the Database and sent to the Admin Inbox."); 
                 document.getElementById('fb-msg').value = ''; 
                 document.getElementById('fb-context').value = ''; 
                 document.getElementById('feedbackModal').classList.add('hidden'); 
             } else {
-                alert("Error sending report. Please try again.");
+                alert(`❌ ERROR (Code ${res.status}): Failed to save to database. Please try again.`);
             }
-        } catch(e) { console.error("Error sending feedback."); } 
+        } catch(e) { 
+            alert("❌ NETWORK ERROR: Could not connect to the server.");
+        } 
     }
 
     window.loadDivisionLeaderboard = async function() { const season = document.getElementById('boardSeason')?.value || currentSeason; const div = document.getElementById('boardDiv')?.value || "Division 1"; const week = document.getElementById('boardWeek')?.value || "Latest"; const sortMode = document.getElementById('boardSort')?.value || "wins"; const showFillIns = document.getElementById('toggleShowFillIns')?.checked; const combineFillIns = document.querySelector('input[name="fiMode"]:checked')?.value === 'combine'; const container = document.getElementById('leaderboardContent'); if(!container) return; container.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-4xl text-yellow-500"></i></div>'; try { const res = await fetch(`/api/rankings/${encodeURIComponent(season)}/${encodeURIComponent(div)}?week=${week}`); let data = await res.json(); if (!data || data.length === 0) { container.innerHTML = '<div class="text-center text-slate-500 py-10">No standings data found.</div>'; return; } data.sort((a, b) => { const aStats = showFillIns ? (combineFillIns ? a.regular : a.fillin) : a.regular; const bStats = showFillIns ? (combineFillIns ? b.regular : b.fillin) : b.regular; if(!aStats) return 1; if(!bStats) return -1; if (sortMode === 'rating') return b.rating_val - a.rating_val; if (sortMode === 'wins') return bStats.wins - aStats.wins; if (sortMode === 'percent') { const aPct = aStats.matches > 0 ? aStats.wins / aStats.matches : 0; const bPct = bStats.matches > 0 ? bStats.wins / bStats.matches : 0; return bPct - aPct; } return aStats.losses - bStats.losses; }); let html = ""; data.forEach((p, index) => { const stats = showFillIns ? (combineFillIns ? p.regular : p.fillin) : p.regular; if(!stats || stats.matches === 0) return; const winPct = Math.round((stats.wins / stats.matches) * 100); html += `<div class="grid grid-cols-7 gap-2 items-center p-3 bg-black/20 rounded-lg border border-white/5 hover:bg-white/5 transition-colors"><div class="col-span-2 flex items-center gap-3"><div class="text-slate-500 font-mono text-xs w-4">${index + 1}</div><div class="font-bold text-white truncate cursor-pointer hover:text-yellow-400" onclick="loadStats('${p.name}')">${p.name}</div></div><div class="text-center font-mono text-yellow-500 font-bold">${p.rating_val}</div><div class="text-center text-slate-300">${stats.matches}</div><div class="text-center text-green-400 font-bold">${stats.wins}</div><div class="text-center text-red-400">${stats.losses}</div><div class="text-center text-slate-300 font-mono">${winPct}%</div></div>`; }); container.innerHTML = html; } catch (e) { console.error(e); container.innerHTML = '<div class="text-center text-red-400 py-10">Error loading data.</div>'; } };

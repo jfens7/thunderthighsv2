@@ -2,36 +2,216 @@
     console.log("✅ Admin UI Script Loaded");
 
     window.switchAdminTab = function(tabId) {
-        // 1. Hide all Tabs
         ['pending', 'live', 'approved', 'migration'].forEach(t => {
             const section = document.getElementById(`admin-${t}`);
             if (section) section.classList.add('hidden');
-            
             const btn = document.getElementById(`tab-btn-${t}`);
             if (btn) btn.className = "px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer";
         });
         
-        // 2. Show Target Tab
         const targetSection = document.getElementById(`admin-${tabId}`);
         if (targetSection) targetSection.classList.remove('hidden');
-        
         const targetBtn = document.getElementById(`tab-btn-${tabId}`);
         if (targetBtn) targetBtn.className = "px-6 py-4 font-bold text-sm text-yellow-500 border-b-2 border-yellow-500 transition-all flex items-center gap-2 cursor-pointer";
 
-        // 3. Toggle Dashboard Stats (Hide on Migration Tab)
         const dashboard = document.getElementById('admin-dashboard-stats');
         if (dashboard) {
-            if (tabId === 'migration') {
-                dashboard.style.display = 'none';
-            } else {
-                dashboard.style.display = 'grid'; // Restore grid layout
-            }
+            if (tabId === 'migration') dashboard.style.display = 'none';
+            else dashboard.style.display = 'grid'; 
         }
+
+        if (tabId === 'pending') window.loadPendingReports();
     };
 
     window.refreshMigration = function() {
         const list = document.getElementById("migration-list");
         if(list) list.innerHTML = '<div class="text-center text-slate-500 py-10 animate-pulse">Refreshing data...</div>';
+    };
+
+    // --- NEW: SEGREGATED INBOX LOGIC ---
+    window.loadPendingReports = async function() {
+        const mList = document.getElementById('matchReportsList');
+        const fList = document.getElementById('feedbackList');
+        if(!mList || !fList) return;
+        
+        try {
+            const res = await fetch('/api/admin/reports');
+            const reports = await res.json();
+            
+            let mHtml = ""; let fHtml = "";
+            
+            reports.forEach(r => {
+                if (r.type === 'FEEDBACK') {
+                    fHtml += `
+                    <div class="bg-slate-800 p-4 rounded-lg border border-blue-500/20 shadow-lg mb-3">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <span class="text-xs font-bold text-blue-400 bg-blue-900/30 px-2 py-1 rounded border border-blue-500/20 mr-2">${r.title}</span>
+                                <span class="text-xs text-slate-400 font-mono">${r.date}</span>
+                            </div>
+                            <div class="text-xs text-slate-500">From: <span class="text-slate-300 font-bold">${r.reporter}</span></div>
+                        </div>
+                        <div class="bg-black/30 border border-white/5 rounded p-3 mb-3 whitespace-pre-wrap text-sm text-slate-300">${r.problem}</div>
+                        <div class="flex gap-2 border-t border-white/5 pt-3">
+                            <button onclick="window.resolveReport('${r.id}', 'approve')" class="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors shadow-lg"><i class="fa-solid fa-check mr-1"></i> Mark Resolved</button>
+                            <button onclick="window.resolveReport('${r.id}', 'reject')" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors shadow-lg"><i class="fa-solid fa-trash mr-1"></i> Dismiss</button>
+                        </div>
+                    </div>`;
+                } else {
+                    mHtml += `
+                    <div class="bg-slate-800 p-4 rounded-lg border border-yellow-500/20 shadow-lg mb-3">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <span class="text-xs font-bold text-yellow-500 bg-yellow-900/30 px-2 py-1 rounded border border-yellow-500/20 mr-2">SCORE ERROR</span>
+                                <span class="text-xs text-slate-400 font-mono">${r.date}</span>
+                            </div>
+                            <div class="text-xs text-slate-500 flex items-center gap-2">
+                                <span class="bg-slate-700 text-white px-2 py-0.5 rounded font-mono">ID: ${r.match_id || 'N/A'}</span>
+                                <span>Reported by: <span class="text-slate-300 font-bold">${r.reporter}</span></span>
+                            </div>
+                        </div>
+                        <div class="text-lg font-bold text-white mb-2">${r.title}</div>
+                        <div class="bg-red-900/20 border border-red-500/20 rounded p-3 mb-3 whitespace-pre-wrap text-sm text-red-200">${r.problem}</div>
+                        <div class="flex items-center gap-4 mb-3">
+                            <div class="text-sm text-slate-400">Suggested Fix:</div>
+                            <div class="bg-black/30 border border-white/10 px-3 py-1 rounded text-white font-mono font-bold">${r.suggested_s1} - ${r.suggested_s2}</div>
+                        </div>
+                        <div class="flex gap-2 border-t border-white/5 pt-3">
+                            <button onclick="window.resolveReport('${r.id}', 'approve')" class="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors shadow-lg"><i class="fa-solid fa-check mr-1"></i> Approve Fix</button>
+                            <button onclick="window.resolveReport('${r.id}', 'reject')" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors shadow-lg"><i class="fa-solid fa-xmark mr-1"></i> Reject</button>
+                        </div>
+                    </div>`;
+                }
+            });
+            
+            mList.innerHTML = mHtml || '<div class="text-slate-600 text-center py-4 italic text-sm">No match errors reported.</div>';
+            fList.innerHTML = fHtml || '<div class="text-slate-600 text-center py-4 italic text-sm">No new feedback.</div>';
+        } catch(e) {
+            mList.innerHTML = '<div class="text-red-400 text-center py-4">Error loading reports.</div>';
+        }
+    };
+
+    window.resolveReport = async function(id, action) {
+        if(!confirm(`Are you sure you want to ${action} this?`)) return;
+        try {
+            const res = await fetch('/api/admin/resolve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ report_id: id, action: action })
+            });
+            const data = await res.json();
+            if(data.success) {
+                window.loadPendingReports();
+            } else {
+                alert("Error resolving item.");
+            }
+        } catch(e) { alert("Network error."); }
+    };
+
+    window.adminOverrideRatingPrompt = async function() {
+        const name = prompt("Enter the exact Player Name to override:");
+        if(!name) return;
+        const rating = prompt(`Enter the new Glicko-2 Rating for ${name} (e.g., 1500):`);
+        if(!rating) return;
+        try {
+            const res = await fetch('/api/admin/override_rating', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, rating: rating })
+            });
+            const data = await res.json();
+            if(data.success) { alert(`Successfully overrode rating for ${name}.`); } 
+            else { alert("Error applying rating override. Please check the name spelling."); }
+        } catch(e) { alert("Network error."); }
+    };
+
+    // --- NEW: THE HISTORY EDITOR UI ---
+    window.openHistoryEditorModal = function() {
+        if(document.getElementById('historyEditorOverlay')) return; // Don't open twice
+        
+        const overlay = document.createElement('div');
+        overlay.id = "historyEditorOverlay";
+        overlay.className = "fixed inset-0 bg-black/90 z-[9999] flex flex-col p-4 md:p-10 overflow-hidden backdrop-blur-sm animate-fade-in";
+        overlay.innerHTML = `
+            <div class="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-4xl mx-auto flex flex-col h-full shadow-2xl relative">
+                <button onclick="document.getElementById('historyEditorOverlay').remove()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors z-10"><i class="fa-solid fa-xmark text-2xl"></i></button>
+                <div class="p-6 border-b border-white/10 bg-slate-800 rounded-t-2xl">
+                    <h2 class="text-xl font-black text-white mb-2 tracking-wide uppercase"><i class="fa-solid fa-clock-rotate-left mr-2 text-blue-500"></i> Match History Editor</h2>
+                    <p class="text-xs text-slate-400 mb-4">Search by Player Name or Match ID to pull up historical records and forcefully override the score.</p>
+                    <input type="text" id="historySearchInput" placeholder="Enter Match ID (e.g. A3F9B2) or Player Name..." class="w-full bg-black/40 border border-white/10 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-inner placeholder-slate-500 font-mono">
+                </div>
+                <div id="historySearchResults" class="flex-1 overflow-y-auto p-4 space-y-3 bg-black/40">
+                    <div class="text-center text-slate-500 py-20 italic">Type above to search the database...</div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        const input = document.getElementById('historySearchInput');
+        const results = document.getElementById('historySearchResults');
+        
+        let timeout = null;
+        input.addEventListener('input', () => {
+            clearTimeout(timeout);
+            const q = input.value.trim();
+            if (q.length < 2) { results.innerHTML = '<div class="text-center text-slate-500 py-20">Type above to search the database...</div>'; return; }
+            
+            results.innerHTML = '<div class="text-center text-blue-400 py-20"><i class="fa-solid fa-spinner fa-spin text-3xl"></i></div>';
+            
+            timeout = setTimeout(async () => {
+                try {
+                    const res = await fetch(`/api/admin/history?q=${encodeURIComponent(q)}`);
+                    const data = await res.json();
+                    if(data.length === 0) { results.innerHTML = '<div class="text-center text-red-400 py-10 font-bold uppercase tracking-widest text-sm">No matches found</div>'; return; }
+                    
+                    let html = '';
+                    data.forEach(m => {
+                        html += `
+                        <div class="bg-slate-800 p-4 rounded-xl border border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 hover:border-white/20 transition-colors shadow-lg">
+                            <div class="flex-1 w-full">
+                                <div class="flex gap-2 items-center mb-2">
+                                    <span class="bg-slate-700 text-white text-[10px] font-bold tracking-widest font-mono px-2 py-0.5 rounded shadow-inner border border-white/10">ID: ${m.match_id || 'UNKNOWN'}</span>
+                                    <span class="text-slate-400 text-xs font-bold uppercase tracking-wider">${m.date} • ${m.division}</span>
+                                </div>
+                                <div class="font-black text-white text-lg">${m.home_players[0]} <span class="text-slate-500 mx-2 text-sm">vs</span> ${m.away_players[0]}</div>
+                            </div>
+                            <div class="flex items-center gap-3 bg-black/30 p-3 rounded-xl border border-white/5 shadow-inner">
+                                <div class="flex flex-col items-center">
+                                    <span class="text-[8px] text-slate-500 uppercase font-bold mb-1">Set 1</span>
+                                    <input type="number" id="s1-${m.id}" value="${m.s1}" class="w-12 bg-slate-900 border border-white/10 text-white font-bold font-mono text-center rounded py-1 focus:border-blue-500 focus:outline-none">
+                                </div>
+                                <span class="text-slate-500 font-black mt-3">-</span>
+                                <div class="flex flex-col items-center">
+                                    <span class="text-[8px] text-slate-500 uppercase font-bold mb-1">Set 2</span>
+                                    <input type="number" id="s2-${m.id}" value="${m.s2}" class="w-12 bg-slate-900 border border-white/10 text-white font-bold font-mono text-center rounded py-1 focus:border-blue-500 focus:outline-none">
+                                </div>
+                                <button onclick="window.adminSaveHistoryEdit('${m.home_players[0]}', '${m.away_players[0]}', '${m.date}', '${m.id}')" class="ml-2 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded text-xs transition-transform hover:scale-105 shadow-[0_0_10px_rgba(37,99,235,0.4)] mt-3">SAVE</button>
+                            </div>
+                        </div>`;
+                    });
+                    results.innerHTML = html;
+                } catch(e) { results.innerHTML = '<div class="text-center text-red-500 py-10">Error fetching history.</div>'; }
+            }, 400);
+        });
+    };
+
+    window.adminSaveHistoryEdit = async function(p1, p2, date, id) {
+        const s1 = document.getElementById(`s1-${id}`).value;
+        const s2 = document.getElementById(`s2-${id}`).value;
+        if(!confirm(`Override match: ${p1} vs ${p2} to ${s1}-${s2}?`)) return;
+        
+        try {
+            const res = await fetch('/api/admin/update_match', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ p1: p1, p2: p2, date: date, s1: s1, s2: s2 })
+            });
+            const data = await res.json();
+            if(data.success) {
+                alert("✅ Match updated successfully! The change will be applied instantly.");
+                document.getElementById(`s1-${id}`).parentElement.parentElement.classList.add("border-green-500");
+            } else { alert("❌ Failed to update match."); }
+        } catch(e) { alert("Network Error"); }
     };
 </script>
 
@@ -43,9 +223,6 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    console.log("✅ Admin Firebase Module Loaded");
-
-    // --- LIVE CONTROL ---
     try {
         onSnapshot(query(collection(db, "fixture_schedule")), (snapshot) => {
             const liveList = document.getElementById("live-matches-list");
@@ -57,9 +234,8 @@
             const countDisplay = document.getElementById("liveMatchCount");
             if (countDisplay) countDisplay.innerText = liveCount;
         });
-    } catch(e) { console.error("Live Control Error:", e); }
+    } catch(e) {}
 
-    // --- MIGRATION LOGIC ---
     try {
         onSnapshot(doc(db, "Admin_State", "terminal"), (docSnap) => {
             if(docSnap.exists()) {
@@ -125,7 +301,6 @@
         });
     } catch(e) {}
 
-    // ACTIONS
     window.stopMigration = async () => {
         if(confirm("STOP MIGRATION? This will halt the script immediately.")) {
             try {
