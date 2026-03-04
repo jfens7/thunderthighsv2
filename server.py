@@ -213,6 +213,24 @@ def wipe_live():
 @login_required
 def get_player_directory(): return jsonify(db.admin_get_player_directory()) if db else jsonify([])
 
+# --- NOTICEBOARD ENDPOINTS ---
+@app.route('/api/notices')
+def get_notices(): 
+    return jsonify(db.get_notices()) if db else jsonify([])
+
+@app.route('/api/admin/add_notice', methods=['POST'])
+@login_required
+def add_notice():
+    if not db: return jsonify({"success": False})
+    data = request.json
+    return jsonify({"success": db.admin_add_notice(data.get('title'), data.get('message'), data.get('type'), session.get('admin_email'))})
+
+@app.route('/api/admin/delete_notice', methods=['POST'])
+@login_required
+def delete_notice():
+    if not db: return jsonify({"success": False})
+    return jsonify({"success": db.admin_delete_notice(request.json.get('notice_id'), session.get('admin_email'))})
+
 # --- SUPER ADMIN ONLY ENDPOINTS ---
 @app.route('/api/admin/audit_logs')
 @super_admin_required
