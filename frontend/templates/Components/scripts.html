@@ -56,7 +56,8 @@
         window.liveMatchesRaw.forEach(m => {
             let homeDisplay = (m.home_players && m.home_players.length > 0) ? m.home_players.join(" / ") : m.home_team;
             let awayDisplay = (m.away_players && m.away_players.length > 0) ? m.away_players.join(" / ") : m.away_team;
-            const isLive = m.match_status === "Live" || m.match_status === "Paused" || (m.live_home_score > 0 || m.live_away_score > 0);
+            
+            const isLive = m.match_status === "Live" || m.match_status === "Paused";
 
             if (isLive) {
                 hasLive = true;
@@ -202,13 +203,20 @@
     
     window.resetDonateModal = function() {
         document.getElementById('donate-step-1').classList.remove('hidden'); document.getElementById('donate-step-2').classList.add('hidden');
-        document.getElementById('payment-message').classList.add('hidden'); document.getElementById('custom-donate-amount').value = ''; clearDonateButtons();
+        document.getElementById('payment-message').classList.add('hidden'); document.getElementById('custom-donate-amount').value = ''; 
+        document.getElementById('donate-name').value = '';
+        clearDonateButtons();
     }
 
     window.proceedToPayment = async function() {
         const amt = document.getElementById('custom-donate-amount').value;
+        const donorName = document.getElementById('donate-name').value || "Anonymous";
+        
         if(!amt || amt < 5) return alert("Please enter a valid amount (Minimum $5).");
         
+        localStorage.setItem('pending_donation_name', donorName);
+        localStorage.setItem('pending_donation_amount', amt);
+
         const btn = document.getElementById('proceed-pay-btn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...'; btn.disabled = true;
         try {
             const response = await fetch('/api/create-payment-intent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: amt }) });
@@ -281,26 +289,91 @@
     
     function generateStars() { const container = document.getElementById('starContainer'); if(!container) return; container.innerHTML = ''; const starCount = 60; for (let i = 0; i < starCount; i++) { const star = document.createElement('div'); const sizeClass = Math.random() < 0.6 ? 's-small' : (Math.random() < 0.9 ? 's-medium' : 's-large'); star.className = `star ${sizeClass}`; star.style.top = `${Math.random() * 100}%`; star.style.left = `${Math.random() * 100}%`; star.style.setProperty('--duration', `${2 + Math.random() * 3}s`); star.style.setProperty('--delay', `${Math.random() * 2}s`); container.appendChild(star); } }
     
+    const loadTopDonors = async () => {
+        try {
+            const res = await fetch('/api/top_donors');
+            const data = await res.json();
+            const container = document.getElementById('top-donor-display');
+            
+            if (!container || !data || data.length === 0) return;
+
+            const top = data[0];
+            let actionBtn = "";
+            
+            if (window.allPlayersRaw && window.allPlayersRaw.includes(top.name)) {
+                actionBtn = `<button onclick="loadStats('${top.name}')" class="ml-auto bg-black/30 hover:bg-black/50 border border-white/10 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition"><i class="fa-solid fa-user text-yellow-500 mr-1"></i> View Profile</button>`;
+            } else {
+                actionBtn = `<div class="ml-auto bg-yellow-900/30 border border-yellow-500/30 text-yellow-500 text-[9px] font-bold px-3 py-1.5 rounded-lg uppercase tracking-widest flex items-center gap-1"><i class="fa-solid fa-medal"></i> Supporter</div>`;
+            }
+
+            let html = `
+            <div class="bg-gradient-to-r from-yellow-600/20 to-yellow-900/20 border border-yellow-500/30 p-4 rounded-xl flex flex-col mb-4 shadow-lg animate-fade-in w-full">
+                <div class="flex items-center gap-4 w-full">
+                    <div class="bg-yellow-500 text-black w-12 h-12 flex flex-shrink-0 items-center justify-center rounded-full text-xl shadow-[0_0_15px_rgba(234,179,8,0.5)]">
+                        <i class="fa-solid fa-crown"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-[9px] font-bold text-yellow-500 uppercase tracking-widest whitespace-nowrap">#1 Monthly Supporter</div>
+                        <div class="text-white font-black text-lg md:text-xl truncate">${top.name}</div>
+                        <div class="text-yellow-400 text-sm font-mono font-bold mt-0.5">$${top.amount.toFixed(2)}</div>
+                    </div>
+                    ${actionBtn}
+                </div>
+            `;
+
+            if (data.length > 1) {
+                html += `<div class="mt-4 pt-3 border-t border-yellow-500/20 grid grid-cols-2 md:grid-cols-4 gap-2">`;
+                for(let i=1; i<data.length; i++) {
+                    let runner = data[i];
+                    html += `
+                    <div class="bg-black/30 border border-white/5 rounded-lg p-2 flex items-center justify-between">
+                        <div class="truncate text-xs font-bold text-slate-300 w-full pr-2"><span class="text-slate-500 mr-1 text-[10px]">#${i+1}</span>${runner.name}</div>
+                        <div class="text-xs font-mono text-yellow-500/80 font-bold">$${runner.amount.toFixed(2)}</div>
+                    </div>
+                    `;
+                }
+                html += `</div>`;
+            }
+
+            html += `</div>`;
+            container.innerHTML = html;
+        } catch(e) { console.error("Honor board error:", e); }
+    };
+
     window.onload = async () => {
         generateStars(); 
         
         const clientSecret = new URLSearchParams(window.location.search).get('payment_intent_client_secret');
-        if (clientSecret) {
-            alert("Thank you for your support! Payment successful.");
-            window.history.replaceState({}, document.title, window.location.pathname);
-            enterFixturesMode();
+        const paymentIntent = new URLSearchParams(window.location.search).get('payment_intent');
+        
+        if (clientSecret && paymentIntent) {
+            const dName = localStorage.getItem('pending_donation_name') || 'Anonymous';
+            const dAmt = localStorage.getItem('pending_donation_amount') || 0;
+            
+            fetch('/api/record_donation', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({intent_id: paymentIntent, name: dName, amount: dAmt})
+            }).then(() => {
+                localStorage.removeItem('pending_donation_name');
+                localStorage.removeItem('pending_donation_amount');
+                alert(`Thank you ${dName} for your support! Payment successful. You are on the Honor Board!`);
+                window.history.replaceState({}, document.title, window.location.pathname);
+                enterFixturesMode();
+            });
         }
 
-        // --- UPDATED: BULLETPROOF SERVER BOOT WAIT ---
+        // --- UPDATED: SMARTER, BULLETPROOF LOAD CONDITION ---
         const loadInitialData = async () => {
             try {
                 const pRes = await fetch('/api/players'); window.allPlayersRaw = await pRes.json(); setupMainSearch(); 
                 const [sRes, dRes] = await Promise.all([fetch('/api/seasons'), fetch('/api/divisions')]);
                 const seasons = await sRes.json(); const divisions = await dRes.json();
                 
-                // CRITICAL FIX: Ensure at least 4 seasons OR 100 players are loaded before continuing!
-                if (seasons.length <= 3 || window.allPlayersRaw.length < 100) {
-                    console.log("Server is still downloading massive data... Retrying in 2 seconds...");
+                // FIXED: It will only wait if there are 2 or fewer seasons (meaning it is still booting). 
+                // Once it hits 3+ seasons (like your 8 seasons), it instantly loads.
+                if (seasons.length <= 2) {
+                    console.log(`Server syncing... Found ${seasons.length} seasons so far. Retrying in 2 seconds...`);
                     setTimeout(loadInitialData, 2000);
                     return;
                 }
@@ -321,10 +394,11 @@
                 const resultSeasonSelect = document.getElementById('resultsSeason'); if(resultSeasonSelect) { resultSeasonSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; resultSeasonSelect.appendChild(opt); }); resultSeasonSelect.value = latestSeason; }
                 
                 loadDivisionLeaderboard(); loadResults();
+                loadTopDonors(); 
             } catch(e) { console.error("Init Error", e); }
         };
 
-        loadInitialData(); // Start the smart load
+        loadInitialData(); 
     };
 
     function setupMainSearch() {
@@ -351,6 +425,9 @@
         
         if (window.liveMatchesRaw && window.liveMatchesRaw.length > 0) { 
             window.liveMatchesRaw.forEach(m => { 
+                const isActuallyLive = m.match_status === "Live" || m.match_status === "Paused";
+                if (!isActuallyLive) return;
+
                 let isPlaying = false; let opponentName = "Unknown"; 
                 if (m.home_players && m.home_players.includes(playerName)) { isPlaying = true; opponentName = m.away_players ? m.away_players.join("/") : m.away_team; } 
                 else if (m.away_players && m.away_players.includes(playerName)) { isPlaying = true; opponentName = m.home_players ? m.home_players.join("/") : m.home_team; } 

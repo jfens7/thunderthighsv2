@@ -1,0 +1,27 @@
+<div class="space-y-6 animate-fade-in w-full">
+    <div class="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+        <h2 class="text-red-500 font-bold uppercase tracking-widest text-sm flex items-center gap-2">
+            <i class="fa-solid fa-user-shield"></i> Super Admin Log
+        </h2>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <div class="bg-slate-800 p-6 rounded-xl border border-white/5 shadow-lg lg:col-span-1 h-min">
+            <h3 class="font-black text-white mb-1"><i class="fa-solid fa-users-gear text-blue-400 mr-2"></i> Admin Access</h3>
+            <p class="text-xs text-slate-400 mb-4">Approve or revoke system access.</p>
+            <div id="adminUsersList" class="space-y-2">
+                <div class="text-center py-4 text-slate-500"><i class="fa-solid fa-spinner fa-spin"></i></div>
+            </div>
+        </div>
+
+        <div class="bg-slate-800 p-6 rounded-xl border border-white/5 shadow-lg lg:col-span-2">
+            <h3 class="font-black text-white mb-1"><i class="fa-solid fa-clock-rotate-left text-green-400 mr-2"></i> Audit Log</h3>
+            <p class="text-xs text-slate-400 mb-4">A complete paper trail of data mutations. You can undo most destructive actions here.</p>
+            <div id="auditLogList" class="space-y-3 max-h-[600px] overflow-y-auto pr-2 scrollbar-hide">
+                <div class="text-center py-10 text-slate-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>
+            </div>
+        </div>
+
+    </div>
+</div>

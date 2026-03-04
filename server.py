@@ -2,11 +2,8 @@ import os
 import logging
 import datetime
 import stripe
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from functools import wraps
-from flask import Flask, render_template, jsonify, request, send_from_directory, session, redirect, url_for
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
 
@@ -15,8 +12,10 @@ from backend.backend import ThunderData
 app = Flask(__name__, static_folder="frontend/static", template_folder="frontend/templates")
 
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'gctta-super-secret-session-key')
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASS', 'TTgctta67-')
 stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
+
+# --- NEW: MAKE SESSIONS LAST 30 DAYS ---
+app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=30)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -46,53 +45,67 @@ scheduler = BackgroundScheduler()
 try:
     if __name__ == '__main__':
         first_run = datetime.datetime.now()
-        logger.info("💻 Local environment detected: Background scheduler starting immediately.")
+        scheduler.add_job(func=scheduled_refresh, trigger="interval", hours=12, id="scheduled_refresh", next_run_time=first_run)
     else:
         first_run = datetime.datetime.now() + datetime.timedelta(minutes=30)
-        logger.info("🌐 Render environment detected: Background scheduler delayed by 30 mins.")
-
-    scheduler.add_job(func=scheduled_refresh, trigger="interval", hours=12, id="scheduled_refresh", next_run_time=first_run)
+        scheduler.add_job(func=scheduled_refresh, trigger="interval", hours=12, id="scheduled_refresh", next_run_time=first_run)
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
-except Exception as e:
-    logger.error(f"❌ ERROR starting BackgroundScheduler: {str(e)}", exc_info=True)
+except Exception as e: pass
 
+# --- SECURITY DECORATORS ---
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not session.get('admin_logged_in'): return jsonify({'error': 'Unauthorized. Please log in.'}), 401
+        if not session.get('admin_logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+def super_admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('admin_logged_in') or session.get('admin_role') != 'super_admin': 
+            return jsonify({'error': 'Super Admin Required'}), 403
         return f(*args, **kwargs)
     return decorated_function
 
 @app.route('/')
 def index(): return render_template('index.html')
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    error = None
-    if request.method == 'POST':
-        if request.form.get('password') == ADMIN_PASSWORD:
-            session['admin_logged_in'] = True
-            return redirect(url_for('admin'))
-        else:
-            error = "Incorrect password. Access Denied."
-    return render_template('login.html', error=error)
+@app.route('/login')
+def login(): return render_template('login.html')
+
+@app.route('/api/auth/google', methods=['POST'])
+def auth_google():
+    if not db: return jsonify({"success": False, "error": "Database offline"})
+    token = request.json.get('token')
+    user_data = db.verify_admin_token(token)
+    
+    if not user_data: return jsonify({"success": False, "error": "Invalid Token"})
+    
+    if user_data['role'] in ['admin', 'super_admin']:
+        # --- NEW: TELL FLASK TO REMEMBER THIS DEVICE ---
+        session.permanent = True 
+        session['admin_logged_in'] = True
+        session['admin_email'] = user_data['email']
+        session['admin_role'] = user_data['role']
+        return jsonify({"success": True})
+    else:
+        return jsonify({"success": False, "error": "Your account is pending Super Admin approval."})
 
 @app.route('/logout')
 def logout():
-    session.pop('admin_logged_in', None)
+    session.clear()
     return redirect(url_for('index'))
 
 @app.route('/admin')
 def admin(): 
     if not session.get('admin_logged_in'): return redirect(url_for('login'))
-    return render_template('admin.html')
+    return render_template('admin.html', email=session.get('admin_email'), role=session.get('admin_role'))
 
+# --- PUBLIC DATA ENDPOINTS ---
 @app.route('/api/players')
 def get_players(): return jsonify(list(db.get_all_players().keys())) if db else jsonify([])
-
-@app.route('/api/roster_detailed')
-def get_roster_detailed(): return jsonify(db.get_roster_with_meta()) if db else jsonify([])
 
 @app.route('/api/seasons')
 def get_seasons(): return jsonify(db.get_seasons()) if db else jsonify([])
@@ -118,109 +131,108 @@ def get_rankings(season, division): return jsonify(db.get_division_rankings(seas
 @app.route('/api/week/<season>/<week>')
 def get_week_results(season, week): return jsonify(db.get_matches_by_week(season, week)) if db else jsonify([])
 
-@app.route('/api/report', methods=['POST'])
-def submit_report():
-    if not db: return jsonify({"success": False})
-    d = request.json
-    # NEW: Captures Match ID from the user
-    if db.user_submit_report(d.get('p1'), d.get('p2'), d.get('date'), d.get('reporter'), d.get('problem'), d.get('suggested_home'), d.get('suggested_away'), d.get('match_id', '')): return jsonify({"success": True})
-    return jsonify({"success": False}), 500
-
-@app.route('/api/feedback', methods=['POST'])
-def handle_feedback():
-    if not db: return jsonify({"success": False}), 500
-    data = request.json
-    db.user_submit_feedback(data.get('type', 'Feedback'), data.get('message', ''), data.get('contact', 'Anonymous'), data.get('context', 'Not provided'))
-    return jsonify({"success": True})
-
+# --- DONATION ENDPOINTS ---
 @app.route('/api/create-payment-intent', methods=['POST'])
 def create_payment():
     try:
         data = request.json
         amount = int(float(data.get('amount', 5.00)) * 100) 
-        intent = stripe.PaymentIntent.create(amount=amount, currency='aud', automatic_payment_methods={'enabled': True})
+        intent = stripe.PaymentIntent.create(
+            amount=amount, 
+            currency='aud', 
+            automatic_payment_methods={'enabled': True}
+        )
         return jsonify({'clientSecret': intent.client_secret})
     except Exception as e: return jsonify(error=str(e)), 403
 
+@app.route('/api/record_donation', methods=['POST'])
+def record_donation():
+    if not db: return jsonify({"success": False})
+    data = request.json
+    success = db.record_donation(data.get('intent_id'), data.get('name'), data.get('amount'))
+    return jsonify({"success": success})
+
+@app.route('/api/top_donors')
+def top_donors():
+    if not db: return jsonify([])
+    res = db.get_top_donors()
+    return jsonify(res)
+
+# --- ADMIN ACTIONS (LOGGED) ---
 @app.route('/api/admin/reports')
 @login_required
 def get_reports(): return jsonify(db.admin_get_reports()) if db else jsonify([])
+
+@app.route('/api/admin/date_errors')
+@login_required
+def get_date_errors(): return jsonify(db.admin_get_date_errors()) if db else jsonify([])
 
 @app.route('/api/admin/resolve', methods=['POST'])
 @login_required
 def resolve_report():
     if not db: return jsonify({"success": False})
-    d = request.json
-    if db.admin_resolve_report(d.get('report_id'), d.get('action')): return jsonify({"success": True})
-    return jsonify({"success": False}), 500
+    return jsonify({"success": db.admin_resolve_report(request.json.get('report_id'), request.json.get('action'), session.get('admin_email'))})
 
 @app.route('/api/admin/history')
 @login_required
 def search_history():
-    q = request.args.get('q', '')
-    season = request.args.get('season', '')
-    division = request.args.get('division', '')
-    week = request.args.get('week', '')
-    date = request.args.get('date', '')
-    return jsonify(db.admin_search_history(q, season, division, week, date)) if db else jsonify([])
+    return jsonify(db.admin_search_history(request.args.get('q', ''))) if db else jsonify([])
 
 @app.route('/api/admin/update_match', methods=['POST'])
 @login_required
 def update_match():
     if not db: return jsonify({"success": False})
     d = request.json
-    if db.admin_update_historical_match(d.get('p1'), d.get('p2'), d.get('date'), d.get('s1'), d.get('s2')): return jsonify({"success": True})
-    return jsonify({"success": False}), 500
-
-@app.route('/api/admin/duplicates')
-@login_required
-def get_duplicates(): return jsonify(db.admin_get_merge_suggestions()) if db else jsonify([])
+    return jsonify({"success": db.admin_update_historical_match(d.get('p1'), d.get('p2'), d.get('date'), d.get('s1'), d.get('s2'), d.get('new_date'), session.get('admin_email'))})
 
 @app.route('/api/admin/merge', methods=['POST'])
 @login_required
 def merge_players():
     if not db: return jsonify({"success": False})
-    return jsonify({"success": db.admin_merge_players(request.json.get('bad_name'), request.json.get('good_name'))})
-
-@app.route('/api/admin/approvals')
-@login_required
-def get_approvals(): return jsonify(db.admin_get_pending_approvals()) if db else jsonify([])
-
-@app.route('/api/admin/resolve_approval', methods=['POST'])
-@login_required
-def resolve_approval():
-    if not db: return jsonify({"success": False})
-    data = request.json
-    success = db.admin_resolve_approval(data.get('id'), data.get('action'), data.get('s1'), data.get('s2'))
-    return jsonify({"success": success})
-
-@app.route('/api/admin/recent_approved')
-@login_required
-def recent_approved(): return jsonify(db.admin_get_recent_approved()) if db else jsonify([])
-
-@app.route('/api/admin/delete_recent', methods=['POST'])
-@login_required
-def delete_recent():
-    if not db: return jsonify({"success": False})
-    success = db.admin_delete_match_result(request.json.get('id'))
-    return jsonify({"success": success})
-
-@app.route('/api/admin/ranks', methods=['GET', 'POST'])
-@login_required
-def manage_ranks():
-    if request.method == 'GET': return jsonify(db.admin_get_ranks()) if db else jsonify({})
-    else:
-        data = request.json
-        success = db.admin_set_rank(data.get('name'), data.get('rank'))
-        return jsonify({"success": success})
+    return jsonify({"success": db.admin_merge_players(request.json.get('bad_name'), request.json.get('good_name'), session.get('admin_email'))})
 
 @app.route('/api/admin/override_rating', methods=['POST'])
 @login_required
 def override_rating():
     if not db: return jsonify({"success": False})
-    data = request.json
-    success = db.admin_override_rating(data.get('name'), data.get('rating'))
-    return jsonify({"success": success})
+    return jsonify({"success": db.admin_override_rating(request.json.get('player_id'), request.json.get('rating'), session.get('admin_email'))})
+
+@app.route('/api/admin/force_finish_live', methods=['POST'])
+@login_required
+def force_finish_live():
+    if not db: return jsonify({"success": False})
+    return jsonify({"success": db.admin_force_finish_live(request.json.get('id'), request.json.get('s1'), request.json.get('s2'), session.get('admin_email'))})
+
+@app.route('/api/admin/wipe_live', methods=['POST'])
+@login_required
+def wipe_live():
+    if not db: return jsonify({"success": False})
+    return jsonify({"success": db.admin_wipe_live(request.json.get('id'), session.get('admin_email'))})
+
+@app.route('/api/admin/player_directory')
+@login_required
+def get_player_directory(): return jsonify(db.admin_get_player_directory()) if db else jsonify([])
+
+# --- SUPER ADMIN ONLY ENDPOINTS ---
+@app.route('/api/admin/audit_logs')
+@super_admin_required
+def audit_logs(): return jsonify(db.get_audit_logs()) if db else jsonify([])
+
+@app.route('/api/admin/undo_action', methods=['POST'])
+@super_admin_required
+def undo_action():
+    if not db: return jsonify({"success": False})
+    return jsonify({"success": db.undo_audit_action(request.json.get('log_id'), session.get('admin_email'))})
+
+@app.route('/api/admin/users')
+@super_admin_required
+def admin_users(): return jsonify(db.get_admin_users()) if db else jsonify([])
+
+@app.route('/api/admin/approve_user', methods=['POST'])
+@super_admin_required
+def approve_user():
+    if not db: return jsonify({"success": False})
+    return jsonify({"success": db.approve_admin(request.json.get('email'), request.json.get('action'))})
 
 @app.route('/api/refresh')
 @login_required

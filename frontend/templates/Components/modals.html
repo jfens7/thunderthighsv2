@@ -1,121 +1,148 @@
-<div id="donateModal" class="fixed inset-0 flex items-center justify-center hidden z-[120] bg-black/90 backdrop-blur-sm px-4">
-    <div class="bg-slate-900 border border-white/10 rounded-2xl p-6 md:p-8 w-full max-w-md relative shadow-2xl">
-        <button onclick="closeDonateModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
-        <h3 class="text-2xl font-black text-white mb-2"><i class="fa-solid fa-burger text-yellow-500 mr-2"></i> Support the Project</h3>
+<div id="reportModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] px-4 animate-fade-in">
+    <div class="bg-slate-900 border border-white/10 p-6 rounded-2xl w-full max-w-md shadow-2xl relative">
+        <button onclick="closeReportModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+        <h2 class="text-xl font-black text-white mb-1"><i class="fa-solid fa-triangle-exclamation text-yellow-500 mr-2"></i> Report Match Error</h2>
+        <p class="text-xs text-slate-400 mb-6">Found an incorrect score? Let us know so an admin can override the history.</p>
         
-        <p class="text-sm text-slate-400 mb-6">For the price of a Maccas cheeseburger, you can help support the upgrades, updates, and maintenance of this project! (Server costs are $10/mo and maintenance is $12/mo).</p>
+        <div class="space-y-4">
+            <div class="bg-slate-800 p-3 rounded-lg border border-white/5 text-center shadow-inner">
+                <div class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Target Match</div>
+                <div id="report-match-desc" class="text-sm font-bold text-white text-center"></div>
+            </div>
+            
+            <input type="hidden" id="rep-p1">
+            <input type="hidden" id="rep-p2">
+            <input type="hidden" id="rep-date">
+
+            <div>
+                <label class="text-xs font-bold text-slate-500 uppercase block mb-1">Your Name</label>
+                <input type="text" id="repName" placeholder="Who is reporting this?" class="w-full bg-black/40 border border-white/10 text-white text-sm rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 transition-all outline-none">
+            </div>
+
+            <div>
+                <label class="text-xs font-bold text-slate-500 uppercase block mb-1">What is wrong?</label>
+                <textarea id="repDesc" rows="2" placeholder="e.g. The score was actually 3-1..." class="w-full bg-black/40 border border-white/10 text-white text-sm rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 transition-all outline-none resize-none"></textarea>
+            </div>
+
+            <div>
+                <label class="text-xs font-bold text-slate-500 uppercase block mb-2">Provide the Correct Score</label>
+                <div class="flex items-center gap-4 bg-black/40 p-3 rounded-xl border border-white/5">
+                    <div class="flex-1 flex flex-col items-center">
+                        <label id="lbl-rep-p1" class="text-[10px] text-slate-400 font-bold mb-1 text-center h-4 overflow-hidden">P1</label>
+                        <input type="number" id="rep-s1" min="0" class="w-full bg-slate-900 border border-white/10 text-white text-center font-bold text-lg rounded-lg py-2 focus:border-yellow-500 outline-none">
+                    </div>
+                    <span class="text-slate-500 font-black">-</span>
+                    <div class="flex-1 flex flex-col items-center">
+                        <label id="lbl-rep-p2" class="text-[10px] text-slate-400 font-bold mb-1 text-center h-4 overflow-hidden">P2</label>
+                        <input type="number" id="rep-s2" min="0" class="w-full bg-slate-900 border border-white/10 text-white text-center font-bold text-lg rounded-lg py-2 focus:border-yellow-500 outline-none">
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="submitReport()" class="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-black font-black py-3 rounded-xl shadow-lg transition-transform hover:scale-[1.02]">Submit Correction</button>
+        </div>
+    </div>
+</div>
+
+<div id="donateModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] px-4 animate-fade-in">
+    <div class="bg-slate-900 border border-white/10 p-6 rounded-2xl w-full max-w-md shadow-2xl relative max-h-[90vh] overflow-y-auto">
+        <button onclick="closeDonateModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors z-10"><i class="fa-solid fa-xmark text-xl"></i></button>
         
         <div id="donate-step-1">
-            <div class="grid grid-cols-3 gap-3 mb-4">
-                <button onclick="setDonationAmount(5)" class="donate-amt-btn bg-black/40 border border-white/10 p-3 rounded-lg text-white font-bold hover:border-yellow-500 transition focus:outline-none">$5</button>
-                <button onclick="setDonationAmount(10)" class="donate-amt-btn bg-black/40 border border-white/10 p-3 rounded-lg text-white font-bold hover:border-yellow-500 transition focus:outline-none">$10</button>
-                <button onclick="setDonationAmount(20)" class="donate-amt-btn bg-black/40 border border-white/10 p-3 rounded-lg text-white font-bold hover:border-yellow-500 transition focus:outline-none">$20</button>
+            <div class="text-center mb-6 mt-2">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-600/20 text-red-500 mb-4 shadow-[0_0_15px_rgba(239,68,68,0.4)]">
+                    <i class="fa-solid fa-heart text-3xl"></i>
+                </div>
+                <h2 class="text-2xl font-black text-white tracking-tight leading-tight">Support the App</h2>
+                <p class="text-xs text-slate-400 mt-2">For the price of a Maccas Cheeseburger, you help cover server costs and fuel future updates.</p>
             </div>
-            <div class="relative mb-6">
-                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
-                <input type="number" id="custom-donate-amount" placeholder="Custom Amount (Min $5)" class="w-full bg-black/40 border border-white/10 p-3 pl-8 rounded-lg text-white font-bold outline-none focus:border-yellow-500 transition" oninput="clearDonateButtons()">
+
+            <div class="space-y-4">
+                <div class="grid grid-cols-3 gap-2">
+                    <button onclick="setDonationAmount(5)" class="donate-amt-btn bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl border border-white/5 transition">$5</button>
+                    <button onclick="setDonationAmount(10)" class="donate-amt-btn bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl border border-white/5 transition">$10</button>
+                    <button onclick="setDonationAmount(20)" class="donate-amt-btn bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl border border-white/5 transition">$20</button>
+                </div>
+                
+                <div class="relative">
+                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold">$</span>
+                    <input type="number" id="custom-donate-amount" placeholder="Custom Amount (Min $5)" min="5" class="w-full bg-black/40 border border-white/10 text-white rounded-xl px-8 py-3 focus:ring-2 focus:ring-red-500 outline-none text-center font-bold">
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-slate-500 uppercase block mb-1">Your Name (For the Honor Board)</label>
+                    <input type="text" id="donate-name" placeholder="Leave blank to remain anonymous" class="w-full bg-black/40 border border-white/10 text-white text-sm rounded-xl px-4 py-3 focus:ring-2 focus:ring-red-500 transition-all outline-none">
+                </div>
+
+                <div class="flex items-center justify-center gap-3 text-slate-500 text-2xl pt-2 pb-2">
+                    <i class="fa-brands fa-apple-pay hover:text-white transition" title="Apple Pay"></i>
+                    <i class="fa-brands fa-google-pay hover:text-white transition" title="Google Pay"></i>
+                    <i class="fa-brands fa-cc-paypal hover:text-white transition" title="PayPal"></i>
+                    <i class="fa-brands fa-cc-visa hover:text-white transition" title="Visa"></i>
+                    <i class="fa-brands fa-cc-mastercard hover:text-white transition" title="Mastercard"></i>
+                </div>
+                <div class="text-[9px] text-center text-slate-500 font-bold uppercase tracking-widest mt-[-10px] mb-2">Supports Apple Pay, Google Pay & PayPal via Stripe</div>
+
+                <button id="proceed-pay-btn" onclick="proceedToPayment()" class="w-full bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-500 hover:to-orange-400 text-white font-black py-4 rounded-xl shadow-lg transition-transform hover:scale-[1.02] flex items-center justify-center gap-2">
+                    Continue to Checkout <i class="fa-solid fa-arrow-right"></i>
+                </button>
+                
+                <p class="text-[10px] text-center text-slate-600 font-medium">Secured by Stripe checkout. 100% safe.</p>
             </div>
-            <button onclick="proceedToPayment()" id="proceed-pay-btn" class="w-full py-4 bg-yellow-500 hover:bg-yellow-400 text-slate-900 font-black rounded-xl transition-colors flex justify-center items-center gap-2">
-                Continue to Checkout <i class="fa-solid fa-arrow-right"></i>
-            </button>
         </div>
 
         <div id="donate-step-2" class="hidden">
-            <div id="payment-element" class="bg-white p-4 rounded-xl mb-4"></div>
-            <button onclick="submitStripePayment()" id="final-pay-btn" class="w-full py-4 bg-green-500 hover:bg-green-400 text-slate-900 font-black rounded-xl transition-colors flex justify-center items-center gap-2"><i class="fa-solid fa-lock"></i> Pay Now</button>
-            <div id="payment-message" class="text-center mt-3 text-sm hidden font-bold"></div>
-            <button onclick="resetDonateModal()" class="w-full text-center text-slate-500 mt-4 text-sm hover:text-white">Back</button>
+            <button onclick="resetDonateModal()" class="text-slate-400 hover:text-white text-xs font-bold flex items-center gap-1 mb-4 transition-colors"><i class="fa-solid fa-arrow-left"></i> Back</button>
+            <h2 class="text-lg font-black text-white mb-4">Complete Payment</h2>
+            <div class="bg-black/20 rounded-xl p-2 border border-white/5 mb-4 min-h-[300px]">
+                <div id="payment-element"></div>
+            </div>
+            <button id="final-pay-btn" onclick="submitStripePayment()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-xl transition-transform hover:scale-[1.02] shadow-lg flex justify-center items-center gap-2 mt-4">
+                <i class="fa-solid fa-lock"></i> Pay Securely Now
+            </button>
+            <div id="payment-message" class="hidden text-center text-sm font-bold mt-4 p-3 rounded-lg border border-red-500/20 bg-red-900/20"></div>
         </div>
     </div>
 </div>
 
-<div id="reportModal" class="fixed inset-0 flex items-center justify-center hidden z-[110] bg-black/90 backdrop-blur-sm px-4">
-    <div class="bg-slate-900 border border-white/10 rounded-2xl p-6 md:p-8 w-full max-w-lg relative shadow-2xl">
-        <button onclick="closeReportModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
-        <h3 class="text-2xl font-bold text-white mb-2 text-red-400"><i class="fa-solid fa-triangle-exclamation mr-2"></i> Report Issue</h3>
-        <p class="text-xs text-slate-400 mb-6" id="report-match-desc"></p>
-
-        <input type="hidden" id="rep-p1">
-        <input type="hidden" id="rep-p2">
-        <input type="hidden" id="rep-date">
-
+<div id="feedbackModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] px-4 animate-fade-in">
+    <div class="bg-slate-900 border border-white/10 p-6 rounded-2xl w-full max-w-md shadow-2xl relative">
+        <button onclick="document.getElementById('feedbackModal').classList.add('hidden')" class="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+        <h2 class="text-xl font-black text-white mb-1"><i class="fa-solid fa-comment-dots text-blue-400 mr-2"></i> Send Feedback</h2>
+        <p class="text-xs text-slate-400 mb-6">Found a bug? Have an idea? Let the developers know directly.</p>
+        
         <div class="space-y-4">
             <div>
-                <label class="text-xs font-bold text-slate-500 uppercase">Your Name (Reporter)</label>
-                <input type="text" id="repName" placeholder="e.g. John Doe" class="w-full mt-1 bg-black/40 border border-white/10 rounded p-3 text-white outline-none focus:border-red-500 transition">
-            </div>
-            <div>
-                <label class="text-xs font-bold text-slate-500 uppercase">What's wrong?</label>
-                <textarea id="repDesc" class="w-full mt-1 bg-black/40 border border-white/10 rounded p-3 text-white outline-none resize-none h-32 focus:border-red-500 transition" placeholder="e.g., Score should be 3-1, not 3-0"></textarea>
-            </div>
-            <div class="flex gap-4">
-                <div class="flex-1">
-                    <label class="text-xs font-bold text-slate-500 uppercase truncate block" id="lbl-rep-p1">P1 Sets</label>
-                    <input type="number" id="rep-s1" class="w-full mt-1 bg-black/40 border border-white/10 rounded p-3 text-white text-center font-mono outline-none focus:border-red-500">
-                </div>
-                <div class="flex-1">
-                    <label class="text-xs font-bold text-slate-500 uppercase truncate block" id="lbl-rep-p2">P2 Sets</label>
-                    <input type="number" id="rep-s2" class="w-full mt-1 bg-black/40 border border-white/10 rounded p-3 text-white text-center font-mono outline-none focus:border-red-500">
-                </div>
-            </div>
-            <button onclick="submitReport()" class="w-full bg-red-600 hover:bg-red-500 py-3 rounded-lg font-bold text-white transition shadow-lg mt-2">Submit Correction</button>
-        </div>
-    </div>
-</div>
-
-<div id="feedbackModal" class="hidden fixed inset-0 z-[120] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-slate-900 p-6 md:p-8 rounded-2xl max-w-md w-full relative border border-white/10 shadow-2xl">
-        <button onclick="document.getElementById('feedbackModal').classList.add('hidden')" class="absolute top-4 right-4 text-slate-500 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
-        <h3 class="text-xl font-bold text-white mb-4"><i class="fa-solid fa-bullhorn text-sky-400 mr-2"></i> Submit Feedback</h3>
-        <div class="space-y-4">
-            <div>
-                <label class="text-xs font-bold text-slate-500 uppercase">Your Name</label>
-                <input type="text" id="fb-name" placeholder="e.g. John Doe" class="w-full mt-1 bg-black/40 border border-white/10 rounded-lg p-3 text-white outline-none focus:border-sky-500 transition">
-            </div>
-            <div>
-                <label class="text-xs font-bold text-slate-500 uppercase">Nature of Request</label>
-                <select id="fb-type" class="w-full mt-1 bg-black/40 border border-white/10 rounded-lg p-3 text-white outline-none focus:border-sky-500 transition">
-                    <option value="Bug">Report a Bug / Issue</option>
-                    <option value="Suggestion">Request a Feature</option>
-                    <option value="Complaint">Complaint</option>
+                <label class="text-xs font-bold text-slate-500 uppercase block mb-1">Category</label>
+                <select id="fb-type" class="w-full bg-black/40 border border-white/10 text-white text-sm rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer">
+                    <option value="Bug Report">🐛 Report a Bug</option>
+                    <option value="Feature Request">💡 Feature Request</option>
+                    <option value="Data Correction">📊 General Data Issue</option>
+                    <option value="Other">💬 Other</option>
                 </select>
             </div>
             <div>
-                <label class="text-xs font-bold text-slate-500 uppercase">What were you doing?</label>
-                <input type="text" id="fb-context" placeholder="e.g. Searching for stats, checking standings..." class="w-full mt-1 bg-black/40 border border-white/10 rounded-lg p-3 text-white outline-none focus:border-sky-500 transition">
+                <label class="text-xs font-bold text-slate-500 uppercase block mb-1">Your Name</label>
+                <input type="text" id="fb-name" placeholder="Who are you?" class="w-full bg-black/40 border border-white/10 text-white text-sm rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 transition-all outline-none">
             </div>
             <div>
-                <label class="text-xs font-bold text-slate-500 uppercase">Description</label>
-                <textarea id="fb-msg" placeholder="Tell us exactly what happened or what you want..." class="w-full mt-1 bg-black/40 border border-white/10 rounded-lg p-3 h-24 text-white outline-none resize-none focus:border-sky-500 transition"></textarea>
+                <label class="text-xs font-bold text-slate-500 uppercase block mb-1">Message</label>
+                <textarea id="fb-msg" rows="4" placeholder="Describe the issue or idea in detail..." class="w-full bg-black/40 border border-white/10 text-white text-sm rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 transition-all outline-none resize-none"></textarea>
             </div>
-            <button onclick="submitFeedback()" class="w-full bg-sky-600 hover:bg-sky-500 py-3 rounded-lg font-bold text-white transition shadow-lg mt-2">Send Report</button>
+            <input type="hidden" id="fb-context">
+            <button onclick="submitFeedback()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-transform hover:scale-[1.02]">Send Message</button>
         </div>
     </div>
 </div>
 
-<div id="compareModal" class="fixed inset-0 flex items-center justify-center hidden z-50 modal-bg px-4">
-    <div class="glass-panel rounded-2xl p-6 md:p-8 w-full max-w-md relative">
-        <button onclick="closeCompareModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
-        <h3 class="text-2xl font-bold text-white mb-6">Head-to-Head</h3>
-        <div class="relative mb-8">
-            <input type="text" id="compareInput" class="input-premium w-full p-4 rounded-xl text-lg" placeholder="VS Opponent Name..." autocomplete="off">
-            <div id="compare-suggestions-list" class="absolute w-full mt-2 bg-slate-800 rounded-xl shadow-2xl z-50"></div>
+<div id="coming-soon-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
+    <div class="bg-slate-900 border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl relative text-center">
+        <button onclick="document.getElementById('coming-soon-modal').classList.add('hidden')" class="absolute top-4 right-4 text-slate-500 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+        <div class="w-16 h-16 bg-blue-900/30 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-500/20 text-3xl">
+            <i class="fa-solid fa-lock"></i>
         </div>
-        <div id="compareResults" class="hidden">
-            <div class="flex justify-between items-center mb-8">
-                <div class="text-center w-1/3">
-                    <div class="text-yellow-500 font-bold text-lg truncate" id="comp-p1-name"></div>
-                    <div class="text-5xl font-black text-white my-2" id="comp-p1-wins">0</div>
-                    <div class="text-[10px] font-bold text-slate-500 tracking-widest">WINS</div>
-                </div>
-                <div class="text-slate-600 font-black text-2xl">VS</div>
-                <div class="text-center w-1/3">
-                    <div class="text-sky-500 font-bold text-lg truncate" id="comp-p2-name"></div>
-                    <div class="text-5xl font-black text-white my-2" id="comp-p2-wins">0</div>
-                    <div class="text-[10px] font-bold text-slate-500 tracking-widest">WINS</div>
-                </div>
-            </div>
-            <div id="compareLog" class="max-h-48 overflow-y-auto text-sm space-y-1"></div>
-        </div>
+        <h2 class="text-2xl font-black text-white mb-2">Premium Feature</h2>
+        <p class="text-sm text-slate-400 mb-6">The Live Fixtures hub is currently locked. It is only accessible via direct tournament link or for premium members.</p>
+        <button onclick="document.getElementById('coming-soon-modal').classList.add('hidden'); openDonateModal()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition shadow-lg">Support to Unlock</button>
     </div>
 </div>

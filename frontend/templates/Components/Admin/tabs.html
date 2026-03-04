@@ -1,7 +1,17 @@
 <div class="w-full bg-slate-900/50 border-b border-white/5">
-    <div class="max-w-6xl mx-auto flex">
-        <button onclick="switchTab('live')" id="tab-live" class="tab-btn active">Live Control</button>
-        <button onclick="switchTab('pending')" id="tab-pending" class="tab-btn">Pending Approval <span id="pendingCount" class="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1 hidden">0</span></button>
-        <button onclick="switchTab('approved')" id="tab-approved" class="tab-btn">Recently Approved</button>
+    <div class="max-w-6xl mx-auto flex overflow-x-auto scrollbar-hide">
+        <button onclick="switchAdminTab('live')" id="tab-btn-live" class="px-6 py-4 font-bold text-sm text-yellow-500 border-b-2 border-yellow-500 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap">Live Control</button>
+        <button onclick="switchAdminTab('approved')" id="tab-btn-approved" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap">Recently Approved</button>
+        
+        <button onclick="switchAdminTab('inbox-match')" id="tab-btn-inbox-match" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap">Match Inbox <span id="match-badge" class="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1 hidden">0</span></button>
+        <button onclick="switchAdminTab('inbox-feedback')" id="tab-btn-inbox-feedback" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap">Feedback <span id="feedback-badge" class="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1 hidden">0</span></button>
+        <button onclick="switchAdminTab('date-errors')" id="tab-btn-date-errors" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap"><i class="fa-solid fa-calendar-xmark"></i> Date Errors <span id="date-badge" class="bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1 hidden">0</span></button>
+        
+        <button onclick="switchAdminTab('players')" id="tab-btn-players" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap"><i class="fa-solid fa-user-pen"></i> Player Editor</button>
+        <button onclick="switchAdminTab('history')" id="tab-btn-history" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap"><i class="fa-solid fa-clock-rotate-left"></i> History Editor</button>
+        
+        {% if role == 'super_admin' %}
+        <button onclick="switchAdminTab('audit')" id="tab-btn-audit" class="px-6 py-4 font-bold text-sm text-red-500 hover:text-red-400 transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap"><i class="fa-solid fa-user-shield"></i> Logs & Auth</button>
+        {% endif %}
     </div>
 </div>
