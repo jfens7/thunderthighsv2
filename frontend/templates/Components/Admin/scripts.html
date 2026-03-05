@@ -2,7 +2,7 @@
     console.log("✅ Admin UI Script Loaded");
 
     window.switchAdminTab = function(tabId) {
-        ['live', 'approved', 'inbox-match', 'inbox-feedback', 'date-errors', 'players', 'history', 'migration', 'audit', 'notices'].forEach(t => {
+        ['live', 'approved', 'inbox-match', 'inbox-feedback', 'date-errors', 'players', 'history', 'migration', 'audit', 'notices', 'chat'].forEach(t => {
             const section = document.getElementById(`admin-${t}`);
             if (section) section.classList.add('hidden');
             
@@ -20,6 +20,7 @@
         if (tabId === 'date-errors') window.loadDateErrors();
         if (tabId === 'players') window.loadPlayerDirectory();
         if (tabId === 'notices') window.loadAdminNotices();
+        if (tabId === 'chat') window.loadAdminChat();
         if (tabId === 'audit') { window.loadAuditLogs(); window.loadAdminUsers(); window.loadTrafficStats(); }
     };
 
@@ -67,9 +68,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        // Attach to Override Tool
         attachPlayerSearch('override-search', 'override-suggestions', 'override-id');
-        // Attach to Merge Tool
         attachPlayerSearch('merge-bad-search', 'merge-bad-suggestions');
         attachPlayerSearch('merge-good-search', 'merge-good-suggestions');
     });
@@ -118,6 +117,48 @@
             } else alert("❌ Error merging players.");
         } catch(e) { alert("Network error."); }
     }
+
+    // --- ADMIN CHAT LOGIC ---
+    window.loadAdminChat = async function() {
+        const list = document.getElementById('adminChatList');
+        if(!list) return;
+        try {
+            const res = await fetch('/api/admin/messages');
+            const messages = await res.json();
+            if(messages.length === 0) {
+                list.innerHTML = '<div class="text-slate-500 text-center py-8 italic">No notes yet.</div>';
+                return;
+            }
+            list.innerHTML = messages.map(m => `
+                <div class="bg-slate-900/50 p-4 rounded-lg border border-white/5 relative">
+                    <div class="flex justify-between items-center mb-2 border-b border-white/5 pb-2">
+                        <span class="text-xs font-bold text-indigo-400"><i class="fa-solid fa-user-shield mr-1"></i>${m.author}</span>
+                        <span class="text-[10px] text-slate-500 font-mono">${m.time_str}</span>
+                    </div>
+                    <div class="text-sm text-slate-300 whitespace-pre-wrap">${m.message}</div>
+                </div>
+            `).join('');
+        } catch(e) { console.error(e); }
+    };
+
+    window.postAdminMessage = async function() {
+        const input = document.getElementById('admin-chat-input');
+        const msg = input.value.trim();
+        if(!msg) return;
+        
+        try {
+            const res = await fetch('/api/admin/add_message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: msg })
+            });
+            const data = await res.json();
+            if(data.success) {
+                input.value = '';
+                window.loadAdminChat();
+            } else alert("Failed to post message.");
+        } catch(e) { alert("Network Error"); }
+    };
 
     // --- NOTICEBOARD LOGIC ---
     window.loadAdminNotices = async function() {
@@ -218,7 +259,7 @@
             logs.forEach(l => {
                 const isUndone = l.status === 'undone';
                 const bgClass = isUndone ? 'bg-slate-800/30 border-dashed opacity-50' : 'bg-slate-800';
-                const undoBtn = (!isUndone && !['MERGE_PLAYER', 'ADD_NOTICE', 'DELETE_NOTICE'].includes(l.action)) ? `<button onclick="window.undoAction('${l.id}')" class="text-[10px] bg-red-600 hover:bg-red-500 text-white font-bold px-2 py-1 rounded transition ml-auto shadow">UNDO</button>` : '';
+                const undoBtn = (!isUndone && !['MERGE_PLAYER', 'ADD_NOTICE', 'DELETE_NOTICE', 'SET_FORMAT'].includes(l.action)) ? `<button onclick="window.undoAction('${l.id}')" class="text-[10px] bg-red-600 hover:bg-red-500 text-white font-bold px-2 py-1 rounded transition ml-auto shadow">UNDO</button>` : '';
                 
                 html += `
                 <div class="${bgClass} border border-white/5 p-3 rounded-lg flex flex-col md:flex-row md:items-center gap-3">

@@ -149,7 +149,7 @@ def get_rankings(season, division): return jsonify(db.get_division_rankings(seas
 def get_week_results(season, week): return jsonify(db.get_matches_by_week(season, week)) if db else jsonify([])
 
 
-# --- SUBMISSION ENDPOINTS (FIXED 404 BUGS) ---
+# --- SUBMISSION ENDPOINTS ---
 @app.route('/api/feedback', methods=['POST'])
 def submit_feedback():
     if not db: return jsonify({"success": False}), 500
@@ -258,6 +258,20 @@ def set_fixture_format():
 @app.route('/api/admin/player_directory')
 @login_required
 def get_player_directory(): return jsonify(db.admin_get_player_directory()) if db else jsonify([])
+
+
+# --- ADMIN NOTES / CHAT ENDPOINTS ---
+@app.route('/api/admin/messages')
+@login_required
+def get_admin_messages():
+    return jsonify(db.get_admin_messages()) if db else jsonify([])
+
+@app.route('/api/admin/add_message', methods=['POST'])
+@login_required
+def add_admin_message():
+    if not db: return jsonify({"success": False})
+    data = request.json
+    return jsonify({"success": db.add_admin_message(data.get('message'), session.get('admin_email'))})
 
 
 # --- NOTICEBOARD ENDPOINTS ---

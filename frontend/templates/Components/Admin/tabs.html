@@ -11,6 +11,8 @@
         <button onclick="switchAdminTab('history')" id="tab-btn-history" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap"><i class="fa-solid fa-clock-rotate-left"></i> History Editor</button>
         <button onclick="switchAdminTab('notices')" id="tab-btn-notices" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap"><i class="fa-solid fa-bullhorn"></i> Noticeboard</button>
         
+        <button onclick="switchAdminTab('chat')" id="tab-btn-chat" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap"><i class="fa-solid fa-comments"></i> Admin Notes</button>
+
         {% if role == 'super_admin' %}
         <button onclick="switchAdminTab('audit')" id="tab-btn-audit" class="px-6 py-4 font-bold text-sm text-red-500 hover:text-red-400 transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap"><i class="fa-solid fa-user-shield"></i> Logs & Auth</button>
         {% endif %}
