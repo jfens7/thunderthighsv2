@@ -138,7 +138,6 @@ class ThunderData:
             self._ensure_config_exists()
         except: self.db = None
 
-    # --- TRAFFIC ANALYTICS METHODS ---
     def record_page_view(self, ip_address):
         if not self.db: return
         try:
@@ -655,7 +654,6 @@ class ThunderData:
             return True
         except: return False
 
-    # --- ADDED USER SUBMIT REPORT LOGIC ---
     def user_submit_report(self, match_id, p1, p2, date, reporter, problem, suggested_home, suggested_away):
         if not self.db: return False
         try:
@@ -998,3 +996,30 @@ class ThunderData:
             return True
         except Exception as e:
             return False
+
+    # --- NEW: ADMIN CHAT LOGIC ---
+    def get_admin_messages(self):
+        if not self.db: return []
+        try:
+            docs = self.db.collection('admin_messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(50).stream()
+            res = []
+            for d in docs:
+                data = d.to_dict()
+                data['id'] = d.id
+                ts = data.get('timestamp')
+                data['time_str'] = ts.strftime('%d/%m/%Y %H:%M') if ts else 'Just now'
+                res.append(data)
+            return res
+        except Exception as e:
+            return []
+
+    def add_admin_message(self, message, admin_email):
+        if not self.db: return False
+        try:
+            self.db.collection('admin_messages').add({
+                'message': message,
+                'author': admin_email,
+                'timestamp': firestore.SERVER_TIMESTAMP
+            })
+            return True
+        except Exception as e: return False
