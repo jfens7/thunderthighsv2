@@ -80,6 +80,7 @@
                 <button id="nav-week" onclick="window.switchTab('week')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Standings</button>
                 <button id="nav-sheets" onclick="window.switchTab('sheets')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Match Centre</button>
                 <button id="nav-search" onclick="window.switchTab('search')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Player Search</button>
+                <button id="nav-notices" onclick="window.switchTab('notices')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Notices</button>
             </div>
 
             <div class="flex items-center gap-3 shrink-0">
@@ -101,8 +102,8 @@
         {% include 'Components/live.html' %}
         {% include 'Components/standings.html' %}
         {% include 'Components/results.html' %}
-        
         {% include 'Components/search.html' %}
+        {% include 'Components/notices.html' %}
         {% include 'Components/profile.html' %}
     </main>
 
@@ -144,6 +145,10 @@
                 <i class="fa-solid fa-magnifying-glass text-xl"></i>
                 <span class="text-[10px] font-medium">Search</span>
             </button>
+            <button id="b-nav-notices" onclick="window.switchTab('notices')" class="nav-item flex flex-col items-center gap-1 p-2 flex-1 transition-all duration-300 text-slate-400">
+                <i class="fa-solid fa-clipboard-list text-xl"></i>
+                <span class="text-[10px] font-medium">Notices</span>
+            </button>
         </div>
     </div>
 
@@ -160,5 +165,57 @@
 
     {% include 'Components/modals.html' %}
     {% include 'Components/scripts.html' %}
+    
+    <script>
+        window.addEventListener('popstate', function(event) {
+            const reportModal = document.getElementById('reportModal');
+            const donateModal = document.getElementById('donateModal');
+            const feedbackModal = document.getElementById('feedbackModal');
+            const compareModal = document.getElementById('compareModal');
+            const matchDetailsModal = document.getElementById('matchDetailsModal');
+
+            if (reportModal && !reportModal.classList.contains('hidden')) { closeReportModal(); return; }
+            if (donateModal && !donateModal.classList.contains('hidden')) { closeDonateModal(); return; }
+            if (feedbackModal && !feedbackModal.classList.contains('hidden')) { document.getElementById('feedbackModal').classList.add('hidden'); return; }
+            if (compareModal && !compareModal.classList.contains('hidden')) { closeCompareModal(); return; }
+            if (matchDetailsModal && !matchDetailsModal.classList.contains('hidden')) { closeMatchDetails(); return; }
+            
+            if (event.state && event.state.tab) { switchTab(event.state.tab, false); }
+        });
+
+        window.switchTab = function(tabId, pushHistory = true) {
+            if(pushHistory) { history.pushState({ page: 'fixtures', tab: tabId }, "", "#" + tabId); }
+            
+            // ADDED 'notices' TO THE ARRAY SO IT PROPERLY SWITCHES
+            ['home', 'week', 'sheets', 'search', 'notices', 'live-center', 'rules'].forEach(t => { 
+                const el = document.getElementById(`tab-${t}`); 
+                if(el) el.classList.add('hidden'); 
+                const nav = document.getElementById(`nav-${t}`); 
+                if(nav) nav.classList.remove('active'); 
+                const bnav = document.getElementById(`b-nav-${t}`); 
+                if(bnav) bnav.classList.remove('active'); 
+            }); 
+            
+            const stats = document.getElementById('statsContainer'); 
+            if(stats) stats.classList.add('hidden'); 
+            
+            if (tabId === 'statsContainer') { 
+                if(stats) { stats.classList.remove('hidden'); stats.classList.add('animate-fade-in'); }
+            } else { 
+                const target = document.getElementById(`tab-${tabId}`); 
+                if(target) { target.classList.remove('hidden'); target.classList.add('animate-fade-in'); } 
+                const targetNav = document.getElementById(`nav-${tabId}`); 
+                if(targetNav) targetNav.classList.add('active'); 
+                const targetBNav = document.getElementById(`b-nav-${tabId}`); 
+                if(targetBNav) targetBNav.classList.add('active'); 
+                
+                if(tabId === 'search') {
+                    const searchInput = document.getElementById('bigPlayerSearch');
+                    if(searchInput) setTimeout(() => searchInput.focus(), 100);
+                }
+            } 
+            window.scrollTo({ top: 0, behavior: 'smooth' }); 
+        };
+    </script>
 </body>
 </html>
