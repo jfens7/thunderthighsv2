@@ -314,11 +314,13 @@ def approve_user():
     if not db: return jsonify({"success": False})
     return jsonify({"success": db.approve_admin(request.json.get('email'), request.json.get('action'))})
 
-@app.route('/api/refresh')
+@app.route('/api/refresh', methods=['POST'])
 @login_required
 def force_refresh():
-    if db: db.refresh_data()
-    return jsonify({"status": "Refreshed"})
+    if db: 
+        db.refresh_data()
+        db._log_audit(session.get('admin_email', 'Unknown'), 'FORCE_REFRESH', "Manually triggered a database sync with the Master Google Sheet.", {})
+    return jsonify({"success": True, "status": "Refreshed"})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5001))
