@@ -137,6 +137,30 @@ class ThunderData:
             self.db = firestore.client()
             self._ensure_config_exists()
         except: self.db = None
+
+    # --- TRAFFIC ANALYTICS METHODS ---
+    def record_page_view(self, ip_address):
+        if not self.db: return
+        try:
+            today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+            doc_ref = self.db.collection('daily_traffic').document(today_str)
+            doc_ref.set({
+                'date': today_str,
+                'views': firestore.Increment(1),
+                'ips': firestore.ArrayUnion([ip_address])
+            }, merge=True)
+        except: pass
+
+    def get_traffic_stats(self):
+        if not self.db: return {'views': 0, 'uniques': 0}
+        try:
+            today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+            doc = self.db.collection('daily_traffic').document(today_str).get()
+            if doc.exists:
+                data = doc.to_dict()
+                return {'views': data.get('views', 0), 'uniques': len(data.get('ips', []))}
+            return {'views': 0, 'uniques': 0}
+        except: return {'views': 0, 'uniques': 0}
         
     def _ensure_config_exists(self):
         if not self.db: return
@@ -631,6 +655,22 @@ class ThunderData:
             return True
         except: return False
 
+    # --- ADDED USER SUBMIT REPORT LOGIC ---
+    def user_submit_report(self, match_id, p1, p2, date, reporter, problem, suggested_home, suggested_away):
+        if not self.db: return False
+        try:
+            self.db.collection('match_reports').add({
+                'match_id': match_id,
+                'p1': p1, 'p2': p2, 'date': date,
+                'reporter': reporter, 'problem': problem,
+                'suggested_s1': suggested_home, 'suggested_s2': suggested_away,
+                'timestamp': firestore.SERVER_TIMESTAMP,
+                'status': 'Pending'
+            })
+            return True
+        except Exception as e:
+            return False
+
     def admin_get_ranks(self):
         if not self.db: return {}
         try: docs = self.db.collection('player_ranks').stream(); return {d.to_dict().get('name'): d.to_dict().get('rank') for d in docs}
@@ -947,3 +987,14 @@ class ThunderData:
             self._log_audit(admin_email, 'DELETE_NOTICE', f"Deleted notice ID: {notice_id}", {})
             return True
         except Exception as e: return False
+
+    def admin_set_fixture_format(self, fixture_id, format_type, admin_email="Unknown"):
+        if not self.db: return False
+        try:
+            self.db.collection('fixture_schedule').document(fixture_id).update({
+                'format_override': format_type if format_type in ['2v2', '3v3'] else None
+            })
+            self._log_audit(admin_email, 'SET_FORMAT', f"Changed format override for fixture {fixture_id} to {format_type}", {})
+            return True
+        except Exception as e:
+            return False

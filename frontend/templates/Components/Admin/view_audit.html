@@ -3,6 +3,24 @@
         <h2 class="text-red-500 font-bold uppercase tracking-widest text-sm flex items-center gap-2">
             <i class="fa-solid fa-user-shield"></i> Super Admin Log
         </h2>
+        <a href="/ghostmode" target="_blank" class="text-[10px] text-slate-500 hover:text-white uppercase font-bold border border-white/10 px-2 py-1 rounded bg-black/30"><i class="fa-solid fa-ghost mr-1"></i> Trigger Ghost Mode</a>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="bg-sky-900/20 border border-sky-500/30 rounded-xl p-4 flex items-center gap-4">
+            <div class="bg-sky-500/20 w-12 h-12 rounded-full flex items-center justify-center text-sky-400 text-xl"><i class="fa-solid fa-eye"></i></div>
+            <div>
+                <div class="text-[10px] uppercase font-bold text-sky-500 tracking-widest">Today's Views</div>
+                <div id="dash-traffic-views" class="text-3xl font-black text-white">0</div>
+            </div>
+        </div>
+        <div class="bg-green-900/20 border border-green-500/30 rounded-xl p-4 flex items-center gap-4">
+            <div class="bg-green-500/20 w-12 h-12 rounded-full flex items-center justify-center text-green-400 text-xl"><i class="fa-solid fa-users"></i></div>
+            <div>
+                <div class="text-[10px] uppercase font-bold text-green-500 tracking-widest">Unique Users</div>
+                <div id="dash-traffic-uniques" class="text-3xl font-black text-white">0</div>
+            </div>
+        </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
