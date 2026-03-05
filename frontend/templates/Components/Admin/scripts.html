@@ -20,10 +20,10 @@
         if (tabId === 'date-errors') window.loadDateErrors();
         if (tabId === 'players') window.loadPlayerDirectory();
         if (tabId === 'notices') window.loadAdminNotices();
-        if (tabId === 'audit') { window.loadAuditLogs(); window.loadAdminUsers(); }
+        if (tabId === 'audit') { window.loadAuditLogs(); window.loadAdminUsers(); window.loadTrafficStats(); }
     };
 
-    // --- SEARCHABLE PLAYER DROPDOWN ---
+    // --- SEARCHABLE DROPDOWNS (GENERALIZED) ---
     let playerDirectoryData = [];
     window.loadPlayerDirectory = async function() {
         try {
@@ -32,42 +32,47 @@
         } catch(e) {}
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-        const searchInput = document.getElementById('override-search');
-        const suggBox = document.getElementById('override-suggestions');
+    function attachPlayerSearch(inputId, suggId, hiddenId = null) {
+        const input = document.getElementById(inputId);
+        const sugg = document.getElementById(suggId);
+        if(!input || !sugg) return;
         
-        if(searchInput && suggBox) {
-            searchInput.addEventListener('input', (e) => {
-                const q = e.target.value.toLowerCase();
-                if(q.length < 1) { suggBox.classList.add('hidden'); return; }
-                
-                const matches = playerDirectoryData.filter(p => p.name.toLowerCase().includes(q));
-                if(matches.length === 0) { 
-                    suggBox.innerHTML = '<div class="px-3 py-2 text-slate-500 text-sm italic">No players found</div>';
-                    suggBox.classList.remove('hidden'); 
-                    return; 
-                }
-
-                suggBox.innerHTML = matches.slice(0, 8).map(p => `
-                    <div class="px-4 py-3 hover:bg-blue-600/30 cursor-pointer text-sm text-white font-bold border-b border-white/5 last:border-0 transition-colors" 
-                         onclick="window.selectOverridePlayer('${p.id}', '${p.name.replace(/'/g, "\\'")}')">
-                        ${p.name} <span class="text-[10px] text-slate-500 font-normal ml-2 font-mono">${p.id}</span>
-                    </div>
-                `).join('');
-                suggBox.classList.remove('hidden');
-            });
+        input.addEventListener('input', (e) => {
+            const q = e.target.value.toLowerCase();
+            if(q.length < 1) { sugg.classList.add('hidden'); return; }
             
-            document.addEventListener('click', (e) => {
-                if(e.target !== searchInput && e.target !== suggBox) suggBox.classList.add('hidden');
-            });
-        }
-    });
+            const matches = playerDirectoryData.filter(p => p.name.toLowerCase().includes(q));
+            if(matches.length === 0) { 
+                sugg.innerHTML = '<div class="px-3 py-2 text-slate-400 text-xs italic">No players found</div>';
+                sugg.classList.remove('hidden'); 
+                return; 
+            }
 
-    window.selectOverridePlayer = function(id, name) {
-        document.getElementById('override-id').value = id;
-        document.getElementById('override-search').value = name;
-        document.getElementById('override-suggestions').classList.add('hidden');
+            sugg.innerHTML = matches.slice(0, 8).map(p => `
+                <div class="px-4 py-2 hover:bg-blue-600/30 cursor-pointer text-sm text-white font-bold border-b border-white/5 last:border-0 transition-colors" 
+                     onclick="
+                        document.getElementById('${inputId}').value = '${p.name.replace(/'/g, "\\'")}';
+                        ${hiddenId ? `document.getElementById('${hiddenId}').value = '${p.id}';` : ''}
+                        document.getElementById('${suggId}').classList.add('hidden');
+                     ">
+                    ${p.name} <span class="text-[10px] text-slate-500 font-normal ml-2 font-mono">${p.id}</span>
+                </div>
+            `).join('');
+            sugg.classList.remove('hidden');
+        });
+        
+        document.addEventListener('click', (e) => {
+            if(e.target !== input && e.target !== sugg) sugg.classList.add('hidden');
+        });
     }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // Attach to Override Tool
+        attachPlayerSearch('override-search', 'override-suggestions', 'override-id');
+        // Attach to Merge Tool
+        attachPlayerSearch('merge-bad-search', 'merge-bad-suggestions');
+        attachPlayerSearch('merge-good-search', 'merge-good-suggestions');
+    });
 
     window.submitRatingOverride = async function() {
         const id = document.getElementById('override-id').value;
@@ -89,6 +94,30 @@
             } else { alert("❌ Error applying rating override."); }
         } catch(e) { alert("Network error."); }
     };
+
+    window.submitPlayerMerge = async function() {
+        const bad = document.getElementById('merge-bad-search').value;
+        const good = document.getElementById('merge-good-search').value;
+        
+        if(!bad || !good) return alert("Please select both names.");
+        if(bad.toLowerCase() === good.toLowerCase()) return alert("Names must be different.");
+        
+        if(!confirm(`⚠️ DANGER: You are about to PERMANENTLY merge "${bad}" into "${good}". \n\nAll history for "${bad}" will be transferred, and the original profile will be deleted. Are you sure?`)) return;
+        
+        try {
+            const res = await fetch('/api/admin/merge', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bad_name: bad, good_name: good })
+            });
+            const data = await res.json();
+            if(data.success) {
+                alert(`✅ Successfully merged profiles!`);
+                document.getElementById('merge-bad-search').value = '';
+                document.getElementById('merge-good-search').value = '';
+            } else alert("❌ Error merging players.");
+        } catch(e) { alert("Network error."); }
+    }
 
     // --- NOTICEBOARD LOGIC ---
     window.loadAdminNotices = async function() {
@@ -164,7 +193,19 @@
         } catch(e) {}
     };
 
-    // --- AUDIT & USER LOGIC ---
+    // --- AUDIT, USERS & TRAFFIC LOGIC ---
+    window.loadTrafficStats = async function() {
+        const viewsEl = document.getElementById('dash-traffic-views');
+        const uniquesEl = document.getElementById('dash-traffic-uniques');
+        if(!viewsEl || !uniquesEl) return;
+        try {
+            const res = await fetch('/api/admin/traffic');
+            const data = await res.json();
+            viewsEl.innerText = data.views;
+            uniquesEl.innerText = data.uniques;
+        } catch(e) {}
+    };
+
     window.loadAuditLogs = async function() {
         const list = document.getElementById('auditLogList');
         if(!list) return;
@@ -477,24 +518,39 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
+    window.setFormatOverride = async function(fixtureId, formatType) {
+        try {
+            const res = await fetch('/api/admin/set_fixture_format', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fixture_id: fixtureId, format_type: formatType })
+            });
+            const data = await res.json();
+            if(!data.success) alert("Failed to save format override.");
+        } catch(e) { console.error("Network error saving format."); }
+    };
+
     try {
         onSnapshot(query(collection(db, "fixture_schedule")), (snapshot) => {
             const liveList = document.getElementById("live-list");
+            const scheduledList = document.getElementById("scheduled-list");
             let liveCount = 0;
-            let html = "";
+            let liveHtml = "";
+            let schedHtml = "";
             
             snapshot.forEach((doc) => {
                 const m = doc.data();
                 const id = doc.id;
                 
+                const p1 = (m.home_players && m.home_players.length > 0) ? m.home_players[0] : m.home_team;
+                const p2 = (m.away_players && m.away_players.length > 0) ? m.away_players[0] : m.away_team;
+                
                 if (m.match_status === "Live" || m.match_status === "Paused" || m.live_home_score > 0 || m.live_away_score > 0) {
                     liveCount++;
-                    const p1 = (m.home_players && m.home_players.length > 0) ? m.home_players[0] : m.home_team;
-                    const p2 = (m.away_players && m.away_players.length > 0) ? m.away_players[0] : m.away_team;
                     const s1 = m.live_home_sets || 0;
                     const s2 = m.live_away_sets || 0;
                     
-                    html += `
+                    liveHtml += `
                     <div class="bg-slate-800 p-5 rounded-xl border border-blue-500/30 shadow-lg relative overflow-hidden mb-4">
                         <div class="absolute top-0 right-0 bg-blue-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-lg animate-pulse">ACTIVE NOW</div>
                         <div class="flex justify-between items-center mb-3 mt-1">
@@ -510,14 +566,35 @@
                         </div>
                         
                         <div class="flex gap-3">
-                            <button onclick="window.forceFinishLive('${id}', '${p1}', '${p2}')" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm transition-transform hover:scale-[1.02] shadow-[0_0_15px_rgba(37,99,235,0.4)] flex items-center justify-center gap-2"><i class="fa-solid fa-flag-checkered"></i> Force Finish & Submit</button>
-                            <button onclick="window.wipeLiveMatch('${id}')" class="bg-red-900/50 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 font-bold py-2.5 px-4 rounded-lg text-sm transition-colors" title="Wipe Error"><i class="fa-solid fa-trash"></i> Wipe Error</button>
+                            <button onclick="window.forceFinishLive('${id}', '${p1}', '${p2}')" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm transition-transform hover:scale-[1.02] shadow-[0_0_15px_rgba(37,99,235,0.4)] flex items-center justify-center gap-2"><i class="fa-solid fa-flag-checkered"></i> Force Finish</button>
+                            <button onclick="window.wipeLiveMatch('${id}')" class="bg-red-900/50 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 font-bold py-2.5 px-4 rounded-lg text-sm transition-colors" title="Wipe Error"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>`;
+                } 
+                else if (m.match_status === "Scheduled" || !m.match_status) {
+                    const formatVal = m.format_override || "Auto";
+                    schedHtml += `
+                    <div class="bg-slate-800/80 p-4 rounded-xl border border-white/5 shadow relative">
+                        <div class="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1 border-b border-white/5 pb-1 flex justify-between">
+                            <span>Table ${m.table}</span>
+                            <span class="text-blue-400">${m.division}</span>
+                        </div>
+                        <div class="font-bold text-white text-sm mt-2">${m.home_team} <br><span class="text-slate-500 text-xs font-normal">vs</span><br> ${m.away_team}</div>
+                        
+                        <div class="mt-4 pt-3 border-t border-white/5">
+                            <label class="block text-[9px] text-slate-500 uppercase font-bold mb-1">Match Format</label>
+                            <select onchange="window.setFormatOverride('${id}', this.value)" class="w-full bg-slate-900 border border-white/10 text-slate-300 font-bold text-xs rounded py-2 px-2 focus:border-blue-500 outline-none">
+                                <option value="Auto" ${formatVal === 'Auto' ? 'selected' : ''}>Auto-Detect</option>
+                                <option value="2v2" ${formatVal === '2v2' ? 'selected' : ''}>Force 2v2 (5 Matches)</option>
+                                <option value="3v3" ${formatVal === '3v3' ? 'selected' : ''}>Force 3v3 (11 Matches)</option>
+                            </select>
                         </div>
                     </div>`;
                 }
             });
             
-            if(liveList) liveList.innerHTML = html || '<div class="text-slate-500 text-center py-10 italic">No matches currently active.</div>';
+            if(liveList) liveList.innerHTML = liveHtml || '<div class="col-span-1 md:col-span-2 text-slate-500 text-center py-10 italic border border-white/5 rounded-xl bg-slate-800/30">No matches currently active.</div>';
+            if(scheduledList) scheduledList.innerHTML = schedHtml || '<div class="col-span-1 md:col-span-3 text-slate-500 text-center py-10 italic border border-white/5 rounded-xl bg-slate-800/30">No scheduled matches pending.</div>';
             
             const countDisplay = document.getElementById("liveMatchCount");
             if (countDisplay) countDisplay.innerText = liveCount;

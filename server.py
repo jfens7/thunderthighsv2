@@ -3,7 +3,7 @@ import logging
 import datetime
 import stripe
 from functools import wraps
-from flask import Flask, render_template, jsonify, request, session, redirect, url_for
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for, make_response
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
 
@@ -14,7 +14,6 @@ app = Flask(__name__, static_folder="frontend/static", template_folder="frontend
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'gctta-super-secret-session-key')
 stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
 
-# --- NEW: MAKE SESSIONS LAST 30 DAYS ---
 app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=30)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -53,7 +52,8 @@ try:
     atexit.register(lambda: scheduler.shutdown())
 except Exception as e: pass
 
-# --- SECURITY DECORATORS ---
+
+# --- SECURITY & TRAFFIC TRACKING DECORATORS ---
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -68,6 +68,23 @@ def super_admin_required(f):
             return jsonify({'error': 'Super Admin Required'}), 403
         return f(*args, **kwargs)
     return decorated_function
+
+@app.before_request
+def track_traffic():
+    # Only track public page visits
+    if request.path == '/' or request.path == '/index':
+        # Ignore if Ghost Mode is active OR if an Admin is logged in
+        if not request.cookies.get('ghostmode') and not session.get('admin_logged_in'):
+            if db:
+                ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+                if ip: ip = ip.split(',')[0].strip()
+                db.record_page_view(ip)
+
+@app.route('/ghostmode')
+def activate_ghost_mode():
+    resp = make_response(jsonify({"success": True, "message": "👻 GHOST MODE ACTIVATED: Your visits to this site will no longer be tracked in the analytics."}))
+    resp.set_cookie('ghostmode', '1', max_age=60*60*24*365*10) # Lasts 10 years
+    return resp
 
 @app.route('/')
 def index(): return render_template('index.html')
@@ -84,7 +101,6 @@ def auth_google():
     if not user_data: return jsonify({"success": False, "error": "Invalid Token"})
     
     if user_data['role'] in ['admin', 'super_admin']:
-        # --- NEW: TELL FLASK TO REMEMBER THIS DEVICE ---
         session.permanent = True 
         session['admin_logged_in'] = True
         session['admin_email'] = user_data['email']
@@ -102,6 +118,7 @@ def logout():
 def admin(): 
     if not session.get('admin_logged_in'): return redirect(url_for('login'))
     return render_template('admin.html', email=session.get('admin_email'), role=session.get('admin_role'))
+
 
 # --- PUBLIC DATA ENDPOINTS ---
 @app.route('/api/players')
@@ -131,6 +148,23 @@ def get_rankings(season, division): return jsonify(db.get_division_rankings(seas
 @app.route('/api/week/<season>/<week>')
 def get_week_results(season, week): return jsonify(db.get_matches_by_week(season, week)) if db else jsonify([])
 
+
+# --- SUBMISSION ENDPOINTS (FIXED 404 BUGS) ---
+@app.route('/api/feedback', methods=['POST'])
+def submit_feedback():
+    if not db: return jsonify({"success": False}), 500
+    data = request.json
+    success = db.user_submit_feedback(data.get('type'), data.get('message'), data.get('contact'), data.get('context'))
+    return jsonify({"success": success})
+
+@app.route('/api/report', methods=['POST'])
+def submit_report():
+    if not db: return jsonify({"success": False}), 500
+    data = request.json
+    success = db.user_submit_report(data.get('match_id'), data.get('p1'), data.get('p2'), data.get('date'), data.get('reporter'), data.get('problem'), data.get('suggested_home'), data.get('suggested_away'))
+    return jsonify({"success": success})
+
+
 # --- DONATION ENDPOINTS ---
 @app.route('/api/create-payment-intent', methods=['POST'])
 def create_payment():
@@ -158,7 +192,12 @@ def top_donors():
     res = db.get_top_donors()
     return jsonify(res)
 
+
 # --- ADMIN ACTIONS (LOGGED) ---
+@app.route('/api/admin/traffic')
+@login_required
+def admin_traffic(): return jsonify(db.get_traffic_stats()) if db else jsonify({'views': 0, 'uniques': 0})
+
 @app.route('/api/admin/reports')
 @login_required
 def get_reports(): return jsonify(db.admin_get_reports()) if db else jsonify([])
@@ -209,9 +248,17 @@ def wipe_live():
     if not db: return jsonify({"success": False})
     return jsonify({"success": db.admin_wipe_live(request.json.get('id'), session.get('admin_email'))})
 
+@app.route('/api/admin/set_fixture_format', methods=['POST'])
+@login_required
+def set_fixture_format():
+    if not db: return jsonify({"success": False})
+    data = request.json
+    return jsonify({"success": db.admin_set_fixture_format(data.get('fixture_id'), data.get('format_type'), session.get('admin_email'))})
+
 @app.route('/api/admin/player_directory')
 @login_required
 def get_player_directory(): return jsonify(db.admin_get_player_directory()) if db else jsonify([])
+
 
 # --- NOTICEBOARD ENDPOINTS ---
 @app.route('/api/notices')
@@ -230,6 +277,7 @@ def add_notice():
 def delete_notice():
     if not db: return jsonify({"success": False})
     return jsonify({"success": db.admin_delete_notice(request.json.get('notice_id'), session.get('admin_email'))})
+
 
 # --- SUPER ADMIN ONLY ENDPOINTS ---
 @app.route('/api/admin/audit_logs')
