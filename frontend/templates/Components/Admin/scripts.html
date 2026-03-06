@@ -33,7 +33,7 @@
     };
 
     window.switchAdminTab = function(tabId) {
-        ['live', 'approved', 'inbox-match', 'inbox-feedback', 'date-errors', 'players', 'history', 'migration', 'audit', 'notices', 'chat'].forEach(t => {
+        ['live', 'approved', 'inbox-match', 'inbox-feedback', 'date-errors', 'players', 'history', 'migration', 'audit', 'notices', 'chat', 'diagnostics'].forEach(t => {
             const section = document.getElementById(`admin-${t}`);
             if (section) section.classList.add('hidden');
             
@@ -49,9 +49,14 @@
 
         if (tabId === 'inbox-match' || tabId === 'inbox-feedback') window.loadPendingReports();
         if (tabId === 'date-errors') window.loadDateErrors();
-        if (tabId === 'players') window.loadPlayerDirectory();
         if (tabId === 'notices') window.loadAdminNotices();
         if (tabId === 'chat') window.loadAdminChat();
+        
+        // Auto-load player directory if opening the players or diagnostics tab
+        if (['players', 'diagnostics'].includes(tabId) && playerDirectoryData.length === 0) {
+            window.loadPlayerDirectory();
+        }
+        
         if (tabId === 'audit') { window.loadAuditLogs(); window.loadAdminUsers(); window.loadTrafficStats(); }
     };
 
@@ -98,10 +103,16 @@
         });
     }
 
+    // Attach search inputs to the correct tools
     document.addEventListener('DOMContentLoaded', () => {
+        // Player Editor Overrides & Merge
         attachPlayerSearch('override-search', 'override-suggestions', 'override-id');
         attachPlayerSearch('merge-bad-search', 'merge-bad-suggestions');
         attachPlayerSearch('merge-good-search', 'merge-good-suggestions');
+        
+        // Diagnostics Tool Searches
+        attachPlayerSearch('diag-p1-search', 'diag-p1-suggestions');
+        attachPlayerSearch('diag-p2-search', 'diag-p2-suggestions');
     });
 
     window.submitRatingOverride = async function() {
@@ -148,6 +159,69 @@
             } else alert("❌ Error merging players.");
         } catch(e) { alert("Network error."); }
     }
+
+    // --- GLICKO DIAGNOSTICS LOGIC ---
+    window.runDiagnostics = async function() {
+        const p1 = document.getElementById('diag-p1-search').value;
+        const p2 = document.getElementById('diag-p2-search').value;
+        const s1 = document.getElementById('diag-s1').value;
+        const s2 = document.getElementById('diag-s2').value;
+        const resultsBox = document.getElementById('diag-results');
+        const btn = document.getElementById('diag-btn');
+        
+        if(!p1 || !p2) return alert("Please select both players.");
+        
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Calculating...';
+        
+        try {
+            const res = await fetch('/api/admin/glicko_calc', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ p1: p1, p2: p2, s1: s1, s2: s2 })
+            });
+            const d = await res.json();
+            
+            if(d.success) {
+                const math = d.data;
+                const renderPlayerMath = (pData) => {
+                    const deltaColor = pData.delta > 0 ? "text-emerald-400" : "text-red-400";
+                    const deltaSign = pData.delta > 0 ? "+" : "";
+                    return `
+                    <div class="bg-slate-800 p-5 rounded-xl border border-white/5 relative">
+                        <div class="font-black text-white text-lg mb-4 border-b border-white/10 pb-2">${pData.name}</div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <div class="text-[10px] uppercase font-bold text-slate-500 mb-1">Current Rating</div>
+                                <div class="text-xl font-mono text-white">${pData.old_rating} <span class="text-xs text-slate-500">(±${pData.old_rd})</span></div>
+                            </div>
+                            <div>
+                                <div class="text-[10px] uppercase font-bold text-slate-500 mb-1">Expected Win %</div>
+                                <div class="text-xl font-mono text-sky-400">${pData.expected_win_pct}%</div>
+                            </div>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-white/10 flex justify-between items-center bg-black/20 p-3 rounded-lg">
+                            <div class="text-[10px] uppercase font-bold text-slate-500">Calculated Shift</div>
+                            <div class="text-2xl font-black font-mono ${deltaColor}">${deltaSign}${pData.delta} pts</div>
+                        </div>
+                        <div class="text-center mt-3">
+                            <span class="text-[10px] uppercase text-slate-500 font-bold">Resulting Rating: </span>
+                            <span class="text-white font-mono font-bold">${pData.new_rating}</span>
+                        </div>
+                    </div>`;
+                };
+
+                resultsBox.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${renderPlayerMath(math.p1)}
+                        ${renderPlayerMath(math.p2)}
+                    </div>
+                `;
+                resultsBox.classList.remove('hidden');
+            }
+        } catch(e) { alert("Network Error"); } finally {
+            btn.innerHTML = '<i class="fa-solid fa-microchip"></i> Run Simulation';
+        }
+    };
 
     // --- ADMIN CHAT LOGIC ---
     window.loadAdminChat = async function() {
@@ -477,9 +551,9 @@
                 html += `
                 <div class="bg-slate-800 p-4 rounded-xl border border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 shadow-lg">
                     <div class="flex-1 w-full">
-                        <div class="flex gap-2 items-center mb-2">
+                        <div class="flex flex-wrap gap-2 items-center mb-2">
                             <span class="bg-red-900/30 text-red-400 border border-red-500/20 text-[10px] font-bold tracking-widest px-2 py-0.5 rounded">NO DATE</span>
-                            <span class="bg-slate-700 text-white text-[10px] font-bold tracking-widest font-mono px-2 py-0.5 rounded">ID: ${m.match_id || 'UNKNOWN'}</span>
+                            <span class="bg-indigo-900/30 text-indigo-400 border border-indigo-500/20 text-[10px] font-bold tracking-widest px-2 py-0.5 rounded shadow-inner"><i class="fa-solid fa-file-excel mr-1"></i>${m.sheet_name} • ROW ${m.row_index}</span>
                         </div>
                         <div class="font-black text-white text-lg">${m.home_players[0]} <span class="text-slate-500 mx-2 text-sm">vs</span> ${m.away_players[0]}</div>
                         <div class="text-xs text-slate-500 mt-1">Current Score: ${m.s1} - ${m.s2}</div>
