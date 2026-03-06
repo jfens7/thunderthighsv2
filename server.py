@@ -115,7 +115,6 @@ def admin():
     if not session.get('admin_logged_in'): return redirect(url_for('login'))
     return render_template('admin.html', email=session.get('admin_email'), role=session.get('admin_role'))
 
-
 @app.route('/api/players')
 def get_players(): return jsonify(list(db.get_all_players().keys())) if db else jsonify([])
 
@@ -297,7 +296,6 @@ def get_contacts():
     if not db: return jsonify({"emails": "", "phones": ""})
     return jsonify(db.get_contact_lists())
 
-# --- NEW: CLICKSEND API ROUTE ---
 @app.route('/api/admin/send_sms', methods=['POST'])
 @login_required
 def send_sms():
@@ -307,6 +305,13 @@ def send_sms():
     if not msg: return jsonify({"success": False, "error": "Message cannot be empty."})
     result = db.admin_send_sms_broadcast(msg, session.get('admin_email', 'Unknown'))
     return jsonify(result)
+
+# --- NEW: DONATIONS LEDGER ROUTE ---
+@app.route('/api/admin/donations')
+@login_required
+def admin_donations():
+    if not db: return jsonify([])
+    return jsonify(db.admin_get_all_donations())
 
 @app.route('/api/admin/audit_logs')
 @super_admin_required

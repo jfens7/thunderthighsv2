@@ -581,7 +581,6 @@
     }
     window.closeReportModal = function() { document.getElementById('reportModal').classList.add('hidden'); }
 
-    // --- REBUILT ERROR CODE ALERT FUNCTIONS ---
     window.submitReport = async function() { 
         const p1 = document.getElementById('rep-p1').value; 
         const p2 = document.getElementById('rep-p2').value; 
@@ -652,6 +651,43 @@
     
     window.loadResults = async function() { const season = document.getElementById('resultsSeason')?.value || currentSeason; const week = document.getElementById('resultsWeek')?.value || "1"; const search = document.getElementById('resultsSearch')?.value.toLowerCase() || ""; const container = document.getElementById('resultsContainer'); if(!container) return; container.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-4xl text-yellow-500"></i></div>'; try { const res = await fetch(`/api/week/${encodeURIComponent(season)}/${week}`); const matches = await res.json(); if (!matches || matches.length === 0) { container.innerHTML = '<div class="text-center text-slate-500 py-10">No matches found for this week.</div>'; return; } let html = ""; let filtered = matches; if (search) filtered = matches.filter(m => m.p1.toLowerCase().includes(search) || m.p2.toLowerCase().includes(search)); filtered.forEach(m => { html += `<div class="bg-slate-800/50 p-4 rounded-xl border border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 hover:bg-slate-800 transition-colors"><div class="flex items-center gap-4 flex-1"><div class="text-xs font-bold text-slate-500 uppercase tracking-widest bg-black/20 px-2 py-1 rounded">${m.division}</div><div class="font-bold text-white text-lg">${m.p1} <span class="text-slate-500 text-sm mx-2">vs</span> ${m.p2}</div></div><div class="text-right"><div class="text-2xl font-mono font-black text-yellow-500 tracking-tight">${m.score}</div><div class="text-[10px] text-slate-500 font-bold uppercase">${m.date}</div></div></div>`; }); container.innerHTML = html || '<div class="text-center text-slate-500 py-10">No matches match your search.</div>'; } catch(e) { console.error(e); container.innerHTML = '<div class="text-center text-red-400 py-10">Error loading results.</div>'; } };
 
+    // --- ADDED THE LOAD NOTICES LOGIC HERE ---
+    window.loadNotices = async function() {
+        const list = document.getElementById('noticesList');
+        if(!list) return;
+        
+        try {
+            const res = await fetch('/api/notices');
+            const notices = await res.json();
+            
+            if(notices.length === 0) {
+                list.innerHTML = `
+                    <div class="text-center py-20 bg-slate-800/50 rounded-3xl border border-white/5">
+                        <i class="fa-solid fa-box-open text-5xl text-slate-700 mb-4"></i>
+                        <p class="text-slate-500 font-bold uppercase tracking-widest text-sm">No recent announcements</p>
+                    </div>`;
+                return;
+            }
+
+            list.innerHTML = notices.map(n => {
+                let badgeColor = 'bg-slate-700 text-slate-300';
+                if(n.type === 'Update') badgeColor = 'bg-sky-500/20 text-sky-400 border border-sky-500/30';
+                if(n.type === 'Event') badgeColor = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30';
+                if(n.type === 'Alert') badgeColor = 'bg-red-500/20 text-red-400 border border-red-500/30';
+                
+                return `
+                <div class="bg-slate-800/80 backdrop-blur-sm p-6 rounded-3xl border border-white/5 shadow-xl transition-transform hover:scale-[1.01] mb-4">
+                    <div class="flex flex-wrap items-center gap-3 mb-4">
+                        <span class="text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-tighter ${badgeColor}">${n.type}</span>
+                        <span class="text-xs text-slate-500 font-bold"><i class="fa-solid fa-clock mr-1.5 opacity-50"></i>${n.date_str}</span>
+                    </div>
+                    <h3 class="text-xl md:text-2xl font-black text-white mb-3 leading-tight">${n.title}</h3>
+                    <p class="text-slate-400 leading-relaxed text-sm md:text-base whitespace-pre-wrap">${n.message}</p>
+                </div>`;
+            }).join('');
+        } catch(e) { console.error("Notice Error:", e); }
+    };
+
     window.onload = async () => {
         generateStars(); 
         
@@ -702,8 +738,13 @@
                 
                 const resultSeasonSelect = document.getElementById('resultsSeason'); if(resultSeasonSelect) { resultSeasonSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; resultSeasonSelect.appendChild(opt); }); resultSeasonSelect.value = latestSeason; }
                 
-                loadDivisionLeaderboard(); loadResults();
+                loadDivisionLeaderboard(); 
+                loadResults();
                 loadTopDonors(); 
+                
+                // CALLING THE NEW NOTICES FUNCTION ON LOAD SO IT POPULATES THE TAB IMMEDIATELY
+                window.loadNotices();
+                
             } catch(e) {}
         };
 

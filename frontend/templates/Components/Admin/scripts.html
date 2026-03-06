@@ -4,39 +4,23 @@
     // --- FORCE REFRESH LOGIC ---
     window.forceRefresh = async function() {
         if(!confirm("Force the server to pull the latest data from the Master Google Sheet? This may take a few seconds.")) return;
-        
         const btn = event.currentTarget || document.querySelector('button[onclick="window.forceRefresh()"]');
         const originalHtml = btn ? btn.innerHTML : "FORCE REFRESH";
-        
-        if(btn) {
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> SYNCING...';
-            btn.disabled = true;
-        }
+        if(btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> SYNCING...'; btn.disabled = true; }
         
         try {
             const res = await fetch('/api/refresh', { method: 'POST' });
             const data = await res.json();
-            if(data.success || data.status === "Refreshed") {
-                alert("✅ Data successfully synced with Google Sheets!");
-                window.location.reload();
-            } else {
-                alert("❌ Sync failed.");
-            }
-        } catch(e) {
-            alert("❌ Network Error connecting to server.");
-        } finally {
-            if(btn) {
-                btn.innerHTML = originalHtml;
-                btn.disabled = false;
-            }
-        }
+            if(data.success || data.status === "Refreshed") { alert("✅ Data successfully synced with Google Sheets!"); window.location.reload(); } 
+            else { alert("❌ Sync failed."); }
+        } catch(e) { alert("❌ Network Error connecting to server."); } 
+        finally { if(btn) { btn.innerHTML = originalHtml; btn.disabled = false; } }
     };
 
     window.switchAdminTab = function(tabId) {
-        ['live', 'approved', 'inbox-match', 'inbox-feedback', 'date-errors', 'players', 'history', 'migration', 'audit', 'notices', 'chat', 'diagnostics', 'broadcast'].forEach(t => {
+        ['live', 'approved', 'inbox-match', 'inbox-feedback', 'date-errors', 'players', 'history', 'migration', 'audit', 'notices', 'chat', 'diagnostics', 'broadcast', 'donations'].forEach(t => {
             const section = document.getElementById(`admin-${t}`);
             if (section) section.classList.add('hidden');
-            
             const btn = document.getElementById(`tab-btn-${t}`);
             if (btn) btn.className = "px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap";
         });
@@ -45,60 +29,49 @@
         if (targetSection) targetSection.classList.remove('hidden');
         
         const targetBtn = document.getElementById(`tab-btn-${tabId}`);
-        if (targetBtn) targetBtn.className = "px-6 py-4 font-bold text-sm text-yellow-500 border-b-2 border-yellow-500 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap";
+        if (targetBtn) {
+            let activeColor = tabId === 'donations' ? 'text-emerald-500' : 'text-yellow-500';
+            let activeBorder = tabId === 'donations' ? 'border-emerald-500' : 'border-yellow-500';
+            targetBtn.className = `px-6 py-4 font-bold text-sm ${activeColor} border-b-2 ${activeBorder} transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap`;
+        }
 
         if (tabId === 'inbox-match' || tabId === 'inbox-feedback') window.loadPendingReports();
         if (tabId === 'date-errors') window.loadDateErrors();
         if (tabId === 'notices') window.loadAdminNotices();
         if (tabId === 'chat') window.loadAdminChat();
+        if (tabId === 'donations') window.loadDonations();
         
-        if (['players', 'diagnostics'].includes(tabId) && playerDirectoryData.length === 0) {
-            window.loadPlayerDirectory();
+        // NEW: Automatically loads divisions for the History Filter dropdown
+        if (tabId === 'history') {
+            const histDivFilter = document.getElementById('hist-div-filter');
+            if (histDivFilter && histDivFilter.options.length <= 1) {
+                fetch('/api/divisions').then(r=>r.json()).then(divs => {
+                    divs.forEach(d => { histDivFilter.innerHTML += `<option value="${d}">${d}</option>`; });
+                }).catch(e=>console.error(e));
+            }
         }
         
+        if (['players', 'diagnostics'].includes(tabId) && playerDirectoryData.length === 0) window.loadPlayerDirectory();
         if (tabId === 'audit') { window.loadAuditLogs(); window.loadAdminUsers(); window.loadTrafficStats(); }
     };
 
     let playerDirectoryData = [];
     window.loadPlayerDirectory = async function() {
-        try {
-            const res = await fetch('/api/admin/player_directory');
-            playerDirectoryData = await res.json();
-        } catch(e) {}
+        try { const res = await fetch('/api/admin/player_directory'); playerDirectoryData = await res.json(); } catch(e) {}
     }
 
     function attachPlayerSearch(inputId, suggId, hiddenId = null) {
-        const input = document.getElementById(inputId);
-        const sugg = document.getElementById(suggId);
+        const input = document.getElementById(inputId); const sugg = document.getElementById(suggId);
         if(!input || !sugg) return;
-        
         input.addEventListener('input', (e) => {
             const q = e.target.value.toLowerCase();
             if(q.length < 1) { sugg.classList.add('hidden'); return; }
-            
             const matches = playerDirectoryData.filter(p => p.name.toLowerCase().includes(q));
-            if(matches.length === 0) { 
-                sugg.innerHTML = '<div class="px-3 py-2 text-slate-400 text-xs italic">No players found</div>';
-                sugg.classList.remove('hidden'); 
-                return; 
-            }
-
-            sugg.innerHTML = matches.slice(0, 8).map(p => `
-                <div class="px-4 py-2 hover:bg-blue-600/30 cursor-pointer text-sm text-white font-bold border-b border-white/5 last:border-0 transition-colors" 
-                     onclick="
-                        document.getElementById('${inputId}').value = '${p.name.replace(/'/g, "\\'")}';
-                        ${hiddenId ? `document.getElementById('${hiddenId}').value = '${p.id}';` : ''}
-                        document.getElementById('${suggId}').classList.add('hidden');
-                     ">
-                    ${p.name} <span class="text-[10px] text-slate-500 font-normal ml-2 font-mono">${p.id}</span>
-                </div>
-            `).join('');
+            if(matches.length === 0) { sugg.innerHTML = '<div class="px-3 py-2 text-slate-400 text-xs italic">No players found</div>'; sugg.classList.remove('hidden'); return; }
+            sugg.innerHTML = matches.slice(0, 8).map(p => `<div class="px-4 py-2 hover:bg-blue-600/30 cursor-pointer text-sm text-white font-bold border-b border-white/5 last:border-0 transition-colors" onclick="document.getElementById('${inputId}').value = '${p.name.replace(/'/g, "\\'")}'; ${hiddenId ? `document.getElementById('${hiddenId}').value = '${p.id}';` : ''} document.getElementById('${suggId}').classList.add('hidden');">${p.name} <span class="text-[10px] text-slate-500 font-normal ml-2 font-mono">${p.id}</span></div>`).join('');
             sugg.classList.remove('hidden');
         });
-        
-        document.addEventListener('click', (e) => {
-            if(e.target !== input && e.target !== sugg) sugg.classList.add('hidden');
-        });
+        document.addEventListener('click', (e) => { if(e.target !== input && e.target !== sugg) sugg.classList.add('hidden'); });
     }
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -110,105 +83,117 @@
     });
 
     window.submitRatingOverride = async function() {
-        const id = document.getElementById('override-id').value;
-        const rating = document.getElementById('override-score').value;
-        const isRetro = document.getElementById('override-retro').checked;
+        const id = document.getElementById('override-id').value; const rating = document.getElementById('override-score').value; const isRetro = document.getElementById('override-retro').checked;
         if(!id || !rating) return alert("Please select a player and provide a rating.");
         try {
-            const res = await fetch('/api/admin/override_rating', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ player_id: id, rating: rating, retroactive: isRetro })
-            });
+            const res = await fetch('/api/admin/override_rating', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ player_id: id, rating: rating, retroactive: isRetro }) });
             const data = await res.json();
-            if(data.success) { 
-                alert(`✅ Successfully applied rating override.`); 
-                document.getElementById('override-id').value = ''; document.getElementById('override-search').value = ''; document.getElementById('override-score').value = '';
-            } else { alert("❌ Error applying rating override."); }
+            if(data.success) { alert(`✅ Successfully applied rating override.`); document.getElementById('override-id').value = ''; document.getElementById('override-search').value = ''; document.getElementById('override-score').value = ''; } 
+            else { alert("❌ Error applying rating override."); }
         } catch(e) { alert("Network error."); }
     };
 
     window.submitPlayerMerge = async function() {
-        const bad = document.getElementById('merge-bad-search').value;
-        const good = document.getElementById('merge-good-search').value;
+        const bad = document.getElementById('merge-bad-search').value; const good = document.getElementById('merge-good-search').value;
         if(!bad || !good) return alert("Please select both names.");
         if(bad.toLowerCase() === good.toLowerCase()) return alert("Names must be different.");
         if(!confirm(`⚠️ DANGER: You are about to PERMANENTLY merge "${bad}" into "${good}". \n\nAll history for "${bad}" will be transferred, and the original profile will be deleted. Are you sure?`)) return;
         try {
-            const res = await fetch('/api/admin/merge', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ bad_name: bad, good_name: good })
-            });
+            const res = await fetch('/api/admin/merge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bad_name: bad, good_name: good }) });
             const data = await res.json();
-            if(data.success) {
-                alert(`✅ Successfully merged profiles!`);
-                document.getElementById('merge-bad-search').value = ''; document.getElementById('merge-good-search').value = '';
-            } else alert("❌ Error merging players.");
+            if(data.success) { alert(`✅ Successfully merged profiles!`); document.getElementById('merge-bad-search').value = ''; document.getElementById('merge-good-search').value = ''; } 
+            else alert("❌ Error merging players.");
         } catch(e) { alert("Network error."); }
     }
 
-    // --- INBOX AND FEEDBACK LOGIC ---
-    window.loadPendingReports = async function() {
-        const mList = document.getElementById('matchReportsList');
-        const fList = document.getElementById('feedbackList');
-        const mBadge = document.getElementById('match-badge');
-        const fBadge = document.getElementById('feedback-badge');
+    // --- BRAND NEW: ADVANCED HISTORY SEARCH ENGINE ---
+    window.searchHistory = async function() {
+        const q = document.getElementById('history-search').value.trim();
+        const divFilter = document.getElementById('hist-div-filter')?.value || 'All';
+        const dateFilter = document.getElementById('hist-date-filter')?.value.trim() || '';
         
-        if(mList) mList.innerHTML = '<div class="text-center py-10 text-slate-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
-        if(fList) fList.innerHTML = '<div class="text-center py-10 text-slate-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
+        const list = document.getElementById('historyList');
+        if(!q && divFilter === 'All' && !dateFilter) return; 
+        
+        list.innerHTML = '<div class="text-center py-10 text-indigo-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
         
         try {
-            const res = await fetch('/api/admin/reports');
-            const reports = await res.json();
+            // Backend already naturally sorts the matches chronologically (most recent first)
+            const res = await fetch(`/api/admin/history?q=${encodeURIComponent(q)}`);
+            let matches = await res.json();
             
-            let mHtml = ""; let fHtml = "";
-            let mCount = 0; let fCount = 0;
+            // Client-Side Advanced Filtering
+            if (divFilter !== 'All') {
+                matches = matches.filter(m => m.division.toLowerCase() === divFilter.toLowerCase());
+            }
+            if (dateFilter) {
+                matches = matches.filter(m => m.date.includes(dateFilter));
+            }
             
+            if(matches.length === 0) { 
+                list.innerHTML = '<div class="text-slate-500 text-center py-10 italic">No matches found with those filters.</div>'; 
+                return; 
+            }
+            
+            let html = '';
+            matches.forEach(m => {
+                html += `
+                <div class="bg-black/30 p-4 rounded-xl border border-white/5 mb-3 flex flex-col md:flex-row justify-between items-center gap-4 hover:bg-slate-800 transition-colors">
+                    <div class="flex-1 w-full">
+                        <div class="flex flex-wrap items-center gap-2 mb-1">
+                            <span class="bg-slate-800 text-slate-300 px-2 py-0.5 rounded text-[10px] font-mono border border-white/10">ID: ${m.match_id || 'N/A'}</span>
+                            <span class="bg-indigo-900/30 text-indigo-400 border border-indigo-500/20 text-[10px] px-2 py-0.5 rounded uppercase font-bold tracking-widest">${m.division}</span>
+                        </div>
+                        <div class="text-lg font-black text-white">${m.home_players[0]} <span class="text-slate-500 mx-2 text-sm">vs</span> ${m.away_players[0]}</div>
+                    </div>
+                    <div class="flex items-center gap-3 bg-slate-900/80 p-3 rounded-xl border border-white/10 w-full md:w-auto shrink-0">
+                        <div class="flex flex-col w-14">
+                            <span class="text-[8px] text-slate-500 uppercase font-bold mb-1 text-center">Score 1</span>
+                            <input type="number" id="s1-${m.id}" value="${m.s1}" class="w-full bg-slate-800 border border-white/10 text-white font-bold font-mono text-center rounded py-1.5 focus:border-indigo-500 outline-none text-sm">
+                        </div>
+                        <span class="text-slate-600 font-black mt-3">-</span>
+                        <div class="flex flex-col w-14">
+                            <span class="text-[8px] text-slate-500 uppercase font-bold mb-1 text-center">Score 2</span>
+                            <input type="number" id="s2-${m.id}" value="${m.s2}" class="w-full bg-slate-800 border border-white/10 text-white font-bold font-mono text-center rounded py-1.5 focus:border-indigo-500 outline-none text-sm">
+                        </div>
+                        <div class="flex flex-col w-28 ml-2">
+                            <span class="text-[8px] text-slate-500 uppercase font-bold mb-1 text-center">Date (DD/MM/YYYY)</span>
+                            <input type="text" id="date-${m.id}" value="${m.date}" class="w-full bg-slate-800 border border-white/10 text-white font-bold font-mono text-center rounded py-1.5 focus:border-indigo-500 outline-none text-sm">
+                        </div>
+                        <button onclick="window.adminSaveHistoryEdit('${m.home_players[0].replace(/'/g, "\\'")}', '${m.away_players[0].replace(/'/g, "\\'")}', '${m.date}', '${m.id}')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-lg transition ml-2 mt-4 shadow-lg flex items-center justify-center h-[34px]"><i class="fa-solid fa-floppy-disk"></i></button>
+                    </div>
+                </div>`;
+            });
+            list.innerHTML = html;
+        } catch(e) { list.innerHTML = '<div class="text-red-400 text-center py-10">Error loading history.</div>'; }
+    };
+
+    window.adminSaveHistoryEdit = async function(p1, p2, oldDate, id) {
+        const s1 = document.getElementById(`s1-${id}`).value; const s2 = document.getElementById(`s2-${id}`).value; const newDate = document.getElementById(`date-${id}`).value;
+        if(!confirm(`OVERRIDE MATCH:\n\nPlayers: ${p1} vs ${p2}\nNew Score: ${s1}-${s2}\nNew Date: ${newDate}\n\nProceed?`)) return;
+        try {
+            const res = await fetch('/api/admin/update_match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ p1: p1, p2: p2, date: oldDate, s1: s1, s2: s2, new_date: newDate }) });
+            const data = await res.json();
+            if(data.success) alert("✅ Update locked in! Data will automatically re-sort into the correct chronological timeline."); else alert("❌ Failed to update match.");
+        } catch(e) { alert("Network Error"); }
+    };
+
+    window.loadPendingReports = async function() {
+        const mList = document.getElementById('matchReportsList'); const fList = document.getElementById('feedbackList'); const mBadge = document.getElementById('match-badge'); const fBadge = document.getElementById('feedback-badge');
+        if(mList) mList.innerHTML = '<div class="text-center py-10 text-slate-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
+        if(fList) fList.innerHTML = '<div class="text-center py-10 text-slate-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
+        try {
+            const res = await fetch('/api/admin/reports'); const reports = await res.json();
+            let mHtml = ""; let fHtml = ""; let mCount = 0; let fCount = 0;
             reports.forEach(r => {
                 if (r.type === 'FEEDBACK') {
                     fCount++;
-                    fHtml += `
-                    <div class="bg-slate-800 p-4 rounded-lg border border-blue-500/20 shadow-lg mb-3">
-                        <div class="flex justify-between items-start mb-2">
-                            <div>
-                                <span class="text-xs font-bold text-blue-400 bg-blue-900/30 px-2 py-1 rounded border border-blue-500/20 mr-2">${r.title}</span>
-                                <span class="text-xs text-slate-400 font-mono">${r.date}</span>
-                            </div>
-                            <div class="text-xs text-slate-500">From: <span class="text-slate-300 font-bold">${r.reporter}</span></div>
-                        </div>
-                        <div class="bg-black/30 border border-white/5 rounded p-3 mb-3 whitespace-pre-wrap text-sm text-slate-300">${r.problem}</div>
-                        <div class="flex gap-2 border-t border-white/5 pt-3">
-                            <button onclick="window.resolveReport('${r.id}', 'approve')" class="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors shadow-lg"><i class="fa-solid fa-check mr-1"></i> Mark Resolved</button>
-                            <button onclick="window.resolveReport('${r.id}', 'reject')" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors shadow-lg"><i class="fa-solid fa-trash mr-1"></i> Dismiss</button>
-                        </div>
-                    </div>`;
+                    fHtml += `<div class="bg-slate-800 p-4 rounded-lg border border-blue-500/20 shadow-lg mb-3"><div class="flex justify-between items-start mb-2"><div><span class="text-xs font-bold text-blue-400 bg-blue-900/30 px-2 py-1 rounded border border-blue-500/20 mr-2">${r.title}</span><span class="text-xs text-slate-400 font-mono">${r.date}</span></div><div class="text-xs text-slate-500">From: <span class="text-slate-300 font-bold">${r.reporter}</span></div></div><div class="bg-black/30 border border-white/5 rounded p-3 mb-3 whitespace-pre-wrap text-sm text-slate-300">${r.problem}</div><div class="flex gap-2 border-t border-white/5 pt-3"><button onclick="window.resolveReport('${r.id}', 'approve')" class="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors shadow-lg"><i class="fa-solid fa-check mr-1"></i> Mark Resolved</button><button onclick="window.resolveReport('${r.id}', 'reject')" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors shadow-lg"><i class="fa-solid fa-trash mr-1"></i> Dismiss</button></div></div>`;
                 } else {
                     mCount++;
-                    mHtml += `
-                    <div class="bg-slate-800 p-4 rounded-lg border border-yellow-500/20 shadow-lg mb-3">
-                        <div class="flex justify-between items-start mb-2">
-                            <div>
-                                <span class="text-xs font-bold text-yellow-500 bg-yellow-900/30 px-2 py-1 rounded border border-yellow-500/20 mr-2">SCORE ERROR</span>
-                                <span class="text-xs text-slate-400 font-mono">${r.date}</span>
-                            </div>
-                            <div class="text-xs text-slate-500 flex items-center gap-2">
-                                <span class="bg-slate-700 text-white px-2 py-0.5 rounded font-mono">ID: ${r.match_id || 'N/A'}</span>
-                                <span>Reported by: <span class="text-slate-300 font-bold">${r.reporter}</span></span>
-                            </div>
-                        </div>
-                        <div class="text-lg font-bold text-white mb-2">${r.title}</div>
-                        <div class="bg-red-900/20 border border-red-500/20 rounded p-3 mb-3 whitespace-pre-wrap text-sm text-red-200">${r.problem}</div>
-                        <div class="flex items-center gap-4 mb-3">
-                            <div class="text-sm text-slate-400">Suggested Fix:</div>
-                            <div class="bg-black/30 border border-white/10 px-3 py-1 rounded text-white font-mono font-bold">${r.suggested_s1} - ${r.suggested_s2}</div>
-                        </div>
-                        <div class="flex gap-2 border-t border-white/5 pt-3">
-                            <button onclick="window.resolveReport('${r.id}', 'approve')" class="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors shadow-lg"><i class="fa-solid fa-check mr-1"></i> Approve Fix</button>
-                            <button onclick="window.resolveReport('${r.id}', 'reject')" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors shadow-lg"><i class="fa-solid fa-xmark mr-1"></i> Reject</button>
-                        </div>
-                    </div>`;
+                    mHtml += `<div class="bg-slate-800 p-4 rounded-lg border border-yellow-500/20 shadow-lg mb-3"><div class="flex justify-between items-start mb-2"><div><span class="text-xs font-bold text-yellow-500 bg-yellow-900/30 px-2 py-1 rounded border border-yellow-500/20 mr-2">SCORE ERROR</span><span class="text-xs text-slate-400 font-mono">${r.date}</span></div><div class="text-xs text-slate-500 flex items-center gap-2"><span class="bg-slate-700 text-white px-2 py-0.5 rounded font-mono">ID: ${r.match_id || 'N/A'}</span><span>Reported by: <span class="text-slate-300 font-bold">${r.reporter}</span></span></div></div><div class="text-lg font-bold text-white mb-2">${r.title}</div><div class="bg-red-900/20 border border-red-500/20 rounded p-3 mb-3 whitespace-pre-wrap text-sm text-red-200">${r.problem}</div><div class="flex items-center gap-4 mb-3"><div class="text-sm text-slate-400">Suggested Fix:</div><div class="bg-black/30 border border-white/10 px-3 py-1 rounded text-white font-mono font-bold">${r.suggested_s1} - ${r.suggested_s2}</div></div><div class="flex gap-2 border-t border-white/5 pt-3"><button onclick="window.resolveReport('${r.id}', 'approve')" class="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors shadow-lg"><i class="fa-solid fa-check mr-1"></i> Approve Fix</button><button onclick="window.resolveReport('${r.id}', 'reject')" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors shadow-lg"><i class="fa-solid fa-xmark mr-1"></i> Reject</button></div></div>`;
                 }
             });
-            
             if(mList) mList.innerHTML = mHtml || '<div class="text-slate-600 text-center py-10 italic">No match errors reported.</div>';
             if(fList) fList.innerHTML = fHtml || '<div class="text-slate-600 text-center py-10 italic">No new feedback.</div>';
             if(mBadge) { mBadge.innerText = mCount; mCount > 0 ? mBadge.classList.remove('hidden') : mBadge.classList.add('hidden'); }
@@ -219,106 +204,43 @@
     window.resolveReport = async function(id, action) {
         if(!confirm(`Are you sure you want to ${action} this?`)) return;
         try {
-            const res = await fetch('/api/admin/resolve', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ report_id: id, action: action })
-            });
+            const res = await fetch('/api/admin/resolve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ report_id: id, action: action }) });
             const data = await res.json();
             if(data.success) { window.loadPendingReports(); } else { alert("Error resolving item."); }
         } catch(e) { alert("Network error."); }
     };
 
-    // --- GLICKO DIAGNOSTICS LOGIC ---
     window.runDiagnostics = async function() {
-        const p1 = document.getElementById('diag-p1-search').value;
-        const p2 = document.getElementById('diag-p2-search').value;
-        const s1 = document.getElementById('diag-s1').value;
-        const s2 = document.getElementById('diag-s2').value;
-        const resultsBox = document.getElementById('diag-results');
-        const btn = document.getElementById('diag-btn');
-        
+        const p1 = document.getElementById('diag-p1-search').value; const p2 = document.getElementById('diag-p2-search').value; const s1 = document.getElementById('diag-s1').value; const s2 = document.getElementById('diag-s2').value;
+        const resultsBox = document.getElementById('diag-results'); const btn = document.getElementById('diag-btn');
         if(!p1 || !p2) return alert("Please select both players.");
-        
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Calculating...';
-        
         try {
-            const res = await fetch('/api/admin/glicko_calc', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ p1: p1, p2: p2, s1: s1, s2: s2 })
-            });
+            const res = await fetch('/api/admin/glicko_calc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ p1: p1, p2: p2, s1: s1, s2: s2 }) });
             const d = await res.json();
-            
             if(d.success) {
                 const math = d.data;
                 const renderPlayerMath = (pData) => {
                     const deltaColor = pData.delta > 0 ? "text-emerald-400" : "text-red-400";
                     const deltaSign = pData.delta > 0 ? "+" : "";
-                    return `
-                    <div class="bg-slate-800 p-5 rounded-xl border border-white/5 relative">
-                        <div class="font-black text-white text-lg mb-4 border-b border-white/10 pb-2">${pData.name}</div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <div class="text-[10px] uppercase font-bold text-slate-500 mb-1">Current Rating</div>
-                                <div class="text-xl font-mono text-white">${pData.old_rating} <span class="text-xs text-slate-500">(±${pData.old_rd})</span></div>
-                            </div>
-                            <div>
-                                <div class="text-[10px] uppercase font-bold text-slate-500 mb-1">Expected Win %</div>
-                                <div class="text-xl font-mono text-sky-400">${pData.expected_win_pct}%</div>
-                            </div>
-                        </div>
-                        <div class="mt-4 pt-4 border-t border-white/10 flex justify-between items-center bg-black/20 p-3 rounded-lg">
-                            <div class="text-[10px] uppercase font-bold text-slate-500">Calculated Shift</div>
-                            <div class="text-2xl font-black font-mono ${deltaColor}">${deltaSign}${pData.delta} pts</div>
-                        </div>
-                        <div class="text-center mt-3">
-                            <span class="text-[10px] uppercase text-slate-500 font-bold">Resulting Rating: </span>
-                            <span class="text-white font-mono font-bold">${pData.new_rating}</span>
-                        </div>
-                    </div>`;
+                    return `<div class="bg-slate-800 p-5 rounded-xl border border-white/5 relative"><div class="font-black text-white text-lg mb-4 border-b border-white/10 pb-2">${pData.name}</div><div class="grid grid-cols-2 gap-4"><div><div class="text-[10px] uppercase font-bold text-slate-500 mb-1">Current Rating</div><div class="text-xl font-mono text-white">${pData.old_rating} <span class="text-xs text-slate-500">(±${pData.old_rd})</span></div></div><div><div class="text-[10px] uppercase font-bold text-slate-500 mb-1">Expected Win %</div><div class="text-xl font-mono text-sky-400">${pData.expected_win_pct}%</div></div></div><div class="mt-4 pt-4 border-t border-white/10 flex justify-between items-center bg-black/20 p-3 rounded-lg"><div class="text-[10px] uppercase font-bold text-slate-500">Calculated Shift</div><div class="text-2xl font-black font-mono ${deltaColor}">${deltaSign}${pData.delta} pts</div></div><div class="text-center mt-3"><span class="text-[10px] uppercase text-slate-500 font-bold">Resulting Rating: </span><span class="text-white font-mono font-bold">${pData.new_rating}</span></div></div>`;
                 };
-
                 resultsBox.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">${renderPlayerMath(math.p1)}${renderPlayerMath(math.p2)}</div>`;
                 resultsBox.classList.remove('hidden');
             }
-        } catch(e) { alert("Network Error"); } finally {
-            btn.innerHTML = '<i class="fa-solid fa-microchip"></i> Run Simulation';
-        }
+        } catch(e) { alert("Network Error"); } finally { btn.innerHTML = '<i class="fa-solid fa-microchip"></i> Run Simulation'; }
     };
 
-    // --- DATE ERROR & SMART BULK FIX LOGIC ---
     window.loadDateErrors = async function() {
-        const dList = document.getElementById('dateErrorsList');
-        const dBadge = document.getElementById('date-badge');
-        if(!dList) return;
-        dList.innerHTML = '<div class="text-center py-10 text-orange-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
-        
+        const dList = document.getElementById('dateErrorsList'); const dBadge = document.getElementById('date-badge');
+        if(!dList) return; dList.innerHTML = '<div class="text-center py-10 text-orange-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
         try {
-            const res = await fetch('/api/admin/date_errors');
-            const errors = await res.json();
-            
+            const res = await fetch('/api/admin/date_errors'); const errors = await res.json();
             if(dBadge) { dBadge.innerText = errors.length; errors.length > 0 ? dBadge.classList.remove('hidden') : dBadge.classList.add('hidden'); }
             if(errors.length === 0) { dList.innerHTML = '<div class="text-slate-600 text-center py-10 italic">Awesome! No missing dates found.</div>'; return; }
-            
             let html = "";
             errors.forEach(m => {
-                html += `
-                <div id="date-card-${m.id}" class="date-card bg-slate-800 p-4 rounded-xl border border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 shadow-lg mb-3" data-season="${m.season}" data-div="${m.division}" data-week="${m.week}">
-                    <div class="flex-1 w-full">
-                        <div class="flex flex-wrap gap-2 items-center mb-2">
-                            <span class="bg-red-900/30 text-red-400 border border-red-500/20 text-[10px] font-bold tracking-widest px-2 py-0.5 rounded">NO DATE</span>
-                            <span class="bg-indigo-900/30 text-indigo-400 border border-indigo-500/20 text-[10px] font-bold tracking-widest px-2 py-0.5 rounded shadow-inner"><i class="fa-solid fa-file-excel mr-1"></i>${m.sheet_name} • ROW ${m.row_index}</span>
-                            <span class="bg-yellow-900/30 text-yellow-400 border border-yellow-500/20 text-[10px] font-bold tracking-widest px-2 py-0.5 rounded shadow-inner uppercase">${m.division} • WK ${m.week}</span>
-                        </div>
-                        <div class="font-black text-white text-lg">${m.home_players[0]} <span class="text-slate-500 mx-2 text-sm">vs</span> ${m.away_players[0]}</div>
-                    </div>
-                    <div class="flex items-center gap-3 bg-black/30 p-3 rounded-xl border border-white/5 shrink-0">
-                        <div class="flex flex-col">
-                            <span class="text-[8px] text-slate-500 uppercase font-bold mb-1">Fix Date (DD/MM/YYYY)</span>
-                            <input type="text" id="fix-date-${m.id}" placeholder="e.g. 14/02/2026" class="w-28 bg-slate-900 border border-white/10 text-white font-bold font-mono text-center rounded py-1 focus:border-orange-500 focus:outline-none text-xs">
-                        </div>
-                        <button onclick="window.adminBulkDateFix('${m.season}', '${m.division}', '${m.week}', '${m.id}', this)" class="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded text-xs transition-transform hover:scale-105 shadow-[0_0_10px_rgba(249,115,22,0.4)] mt-3">FIX</button>
-                    </div>
-                </div>`;
+                html += `<div id="date-card-${m.id}" class="date-card bg-slate-800 p-4 rounded-xl border border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 shadow-lg mb-3" data-season="${m.season}" data-div="${m.division}" data-week="${m.week}"><div class="flex-1 w-full"><div class="flex flex-wrap gap-2 items-center mb-2"><span class="bg-red-900/30 text-red-400 border border-red-500/20 text-[10px] font-bold tracking-widest px-2 py-0.5 rounded">NO DATE</span><span class="bg-indigo-900/30 text-indigo-400 border border-indigo-500/20 text-[10px] font-bold tracking-widest px-2 py-0.5 rounded shadow-inner"><i class="fa-solid fa-file-excel mr-1"></i>${m.sheet_name} • ROW ${m.row_index}</span><span class="bg-yellow-900/30 text-yellow-400 border border-yellow-500/20 text-[10px] font-bold tracking-widest px-2 py-0.5 rounded shadow-inner uppercase">${m.division} • WK ${m.week}</span></div><div class="font-black text-white text-lg">${m.home_players[0]} <span class="text-slate-500 mx-2 text-sm">vs</span> ${m.away_players[0]}</div></div><div class="flex items-center gap-3 bg-black/30 p-3 rounded-xl border border-white/5 shrink-0"><div class="flex flex-col"><span class="text-[8px] text-slate-500 uppercase font-bold mb-1">Fix Date (DD/MM/YYYY)</span><input type="text" id="fix-date-${m.id}" placeholder="e.g. 14/02/2026" class="w-28 bg-slate-900 border border-white/10 text-white font-bold font-mono text-center rounded py-1 focus:border-orange-500 focus:outline-none text-xs"></div><button onclick="window.adminBulkDateFix('${m.season}', '${m.division}', '${m.week}', '${m.id}', this)" class="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded text-xs transition-transform hover:scale-105 shadow-[0_0_10px_rgba(249,115,22,0.4)] mt-3">FIX</button></div></div>`;
             });
             dList.innerHTML = html;
         } catch(e) { dList.innerHTML = '<div class="text-red-400 text-center py-10">Error loading date errors.</div>'; }
@@ -327,19 +249,12 @@
     window.adminBulkDateFix = async function(season, division, week, id, btnElement) {
         const newDate = document.getElementById(`fix-date-${id}`).value;
         if (!newDate) return alert("Please enter a valid date.");
-        
         btnElement.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; btnElement.disabled = true;
-        
         try {
-            const res = await fetch('/api/admin/bulk_fix_date', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ season: season, division: division, week: week, date: newDate })
-            });
+            const res = await fetch('/api/admin/bulk_fix_date', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ season: season, division: division, week: week, date: newDate }) });
             const data = await res.json();
-            
             if(data.success) {
-                const allCards = document.querySelectorAll('.date-card');
-                let removedCount = 0;
+                const allCards = document.querySelectorAll('.date-card'); let removedCount = 0;
                 allCards.forEach(card => {
                     if (card.dataset.season === season && card.dataset.div === division && card.dataset.week === week) {
                         card.style.transition = "all 0.3s ease"; card.style.opacity = "0"; card.style.transform = "translateX(20px)";
@@ -351,78 +266,45 @@
                     let count = parseInt(dBadge.innerText) || 0; count = Math.max(0, count - removedCount); dBadge.innerText = count;
                     if(count === 0) { dBadge.classList.add('hidden'); document.getElementById('dateErrorsList').innerHTML = '<div class="text-slate-600 text-center py-10 italic">Awesome! No missing dates found.</div>'; }
                 }
-            } else { 
-                alert("❌ Failed to set bulk date fix."); btnElement.innerHTML = 'FIX'; btnElement.disabled = false;
-            }
+            } else { alert("❌ Failed to set bulk date fix."); btnElement.innerHTML = 'FIX'; btnElement.disabled = false; }
         } catch(e) { alert("Network Error"); btnElement.innerHTML = 'FIX'; btnElement.disabled = false; }
     };
 
-    window.adminSaveHistoryEdit = async function(p1, p2, oldDate, id) {
-        const s1 = document.getElementById(`s1-${id}`).value;
-        const s2 = document.getElementById(`s2-${id}`).value;
-        const newDate = document.getElementById(`date-${id}`).value;
-        
-        if(!confirm(`OVERRIDE MATCH:\n\nPlayers: ${p1} vs ${p2}\nNew Score: ${s1}-${s2}\nNew Date: ${newDate}\n\nProceed?`)) return;
-        try {
-            const res = await fetch('/api/admin/update_match', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ p1: p1, p2: p2, date: oldDate, s1: s1, s2: s2, new_date: newDate })
-            });
-            const data = await res.json();
-            if(data.success) alert("✅ Update locked in! Data will automatically re-sort into the correct chronological timeline.");
-            else alert("❌ Failed to update match.");
-        } catch(e) { alert("Network Error"); }
-    };
-
     window.loadAdminChat = async function() {
-        const list = document.getElementById('adminChatList');
-        if(!list) return;
+        const list = document.getElementById('adminChatList'); if(!list) return;
         try {
-            const res = await fetch('/api/admin/messages');
-            const messages = await res.json();
+            const res = await fetch('/api/admin/messages'); const messages = await res.json();
             if(messages.length === 0) { list.innerHTML = '<div class="text-slate-500 text-center py-8 italic">No notes yet.</div>'; return; }
-            list.innerHTML = messages.map(m => `
-                <div class="bg-slate-900/50 p-4 rounded-lg border border-white/5 relative">
-                    <div class="flex justify-between items-center mb-2 border-b border-white/5 pb-2"><span class="text-xs font-bold text-indigo-400"><i class="fa-solid fa-user-shield mr-1"></i>${m.author}</span><span class="text-[10px] text-slate-500 font-mono">${m.time_str}</span></div>
-                    <div class="text-sm text-slate-300 whitespace-pre-wrap">${m.message}</div>
-                </div>
-            `).join('');
+            list.innerHTML = messages.map(m => `<div class="bg-slate-900/50 p-4 rounded-lg border border-white/5 relative"><div class="flex justify-between items-center mb-2 border-b border-white/5 pb-2"><span class="text-xs font-bold text-indigo-400"><i class="fa-solid fa-user-shield mr-1"></i>${m.author}</span><span class="text-[10px] text-slate-500 font-mono">${m.time_str}</span></div><div class="text-sm text-slate-300 whitespace-pre-wrap">${m.message}</div></div>`).join('');
         } catch(e) {}
     };
 
     window.postAdminMessage = async function() {
-        const input = document.getElementById('admin-chat-input');
-        const msg = input.value.trim();
-        if(!msg) return;
+        const input = document.getElementById('admin-chat-input'); const msg = input.value.trim(); if(!msg) return;
         try {
             const res = await fetch('/api/admin/add_message', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) });
             const data = await res.json();
-            if(data.success) { input.value = ''; window.loadAdminChat(); } 
-            else alert("Failed to post message.");
+            if(data.success) { input.value = ''; window.loadAdminChat(); } else alert("Failed to post message.");
         } catch(e) { alert("Network Error"); }
     };
 
     window.loadAdminNotices = async function() {
-        const list = document.getElementById('adminNoticesList');
-        if(!list) return;
+        const list = document.getElementById('adminNoticesList'); if(!list) return;
         try {
-            const res = await fetch('/api/notices');
-            const notices = await res.json();
+            const res = await fetch('/api/notices'); const notices = await res.json();
             if(notices.length === 0) { list.innerHTML = '<div class="text-slate-600 text-center py-10 italic">No active notices.</div>'; return; }
             list.innerHTML = notices.map(n => {
                 let badgeColor = 'bg-slate-700 text-slate-300';
                 if(n.type === 'Update') badgeColor = 'bg-sky-500/20 text-sky-400 border border-sky-500/30';
                 if(n.type === 'Event') badgeColor = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30';
                 if(n.type === 'Alert') badgeColor = 'bg-red-500/20 text-red-400 border border-red-500/30';
-                return `<div class="bg-slate-800 p-4 rounded-xl border border-white/5 flex justify-between items-start gap-4"><div><div class="flex items-center gap-2 mb-1"><span class="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest ${badgeColor}">${n.type}</span><span class="text-xs text-slate-500 font-mono">${n.date_str}</span></div><h4 class="text-white font-bold text-lg leading-tight mb-2">${n.title}</h4><p class="text-sm text-slate-400 line-clamp-2">${n.message}</p></div><button onclick="window.deleteNotice('${n.id}')" class="bg-red-900/30 hover:bg-red-600 text-red-500 hover:text-white border border-red-500/20 px-3 py-2 rounded-lg transition-colors shrink-0"><i class="fa-solid fa-trash"></i></button></div>`;
+                return `<div class="bg-slate-800 p-4 rounded-xl border border-white/5 flex justify-between items-start gap-4"><div><div class="flex items-center gap-2 mb-1"><span class="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest ${badgeColor}">${n.type}</span><span class="text-xs text-emerald-400 font-mono">${n.date_str}</span></div><h4 class="text-white font-bold text-lg leading-tight mb-2">${n.title}</h4><p class="text-sm text-slate-400 line-clamp-2">${n.message}</p></div><button onclick="window.deleteNotice('${n.id}')" class="bg-red-900/30 hover:bg-red-600 text-red-500 hover:text-white border border-red-500/20 px-3 py-2 rounded-lg transition-colors shrink-0"><i class="fa-solid fa-trash"></i></button></div>`;
             }).join('');
         } catch(e) {}
     };
 
     window.submitNotice = async function() {
-        const title = document.getElementById('notice-title').value;
-        const type = document.getElementById('notice-type').value;
-        const msg = document.getElementById('notice-message').value;
+        const title = document.getElementById('notice-title').value; const type = document.getElementById('notice-type').value; const msg = document.getElementById('notice-message').value;
         if(!title || !msg) return alert("Title and Message are required.");
         try {
             const res = await fetch('/api/admin/add_notice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title, type: type, message: msg }) });
@@ -442,31 +324,21 @@
     };
 
     window.loadTrafficStats = async function() {
-        const viewsEl = document.getElementById('dash-traffic-views');
-        const uniquesEl = document.getElementById('dash-traffic-uniques');
+        const viewsEl = document.getElementById('dash-traffic-views'); const uniquesEl = document.getElementById('dash-traffic-uniques');
         if(!viewsEl || !uniquesEl) return;
-        try {
-            const res = await fetch('/api/admin/traffic');
-            const data = await res.json();
-            viewsEl.innerText = data.views; uniquesEl.innerText = data.uniques;
-        } catch(e) {}
+        try { const res = await fetch('/api/admin/traffic'); const data = await res.json(); viewsEl.innerText = data.views; uniquesEl.innerText = data.uniques; } catch(e) {}
     };
 
     window.loadAuditLogs = async function() {
-        const list = document.getElementById('auditLogList');
-        if(!list) return;
+        const list = document.getElementById('auditLogList'); if(!list) return;
         try {
-            const res = await fetch('/api/admin/audit_logs');
-            const logs = await res.json();
+            const res = await fetch('/api/admin/audit_logs'); const logs = await res.json();
             if(logs.length === 0) { list.innerHTML = '<div class="text-slate-500 py-10 text-center italic">No actions recorded yet.</div>'; return; }
             let html = '';
             logs.forEach(l => {
-                const isUndone = l.status === 'undone';
-                const bgClass = isUndone ? 'bg-slate-800/30 border-dashed opacity-50' : 'bg-slate-800';
-                
+                const isUndone = l.status === 'undone'; const bgClass = isUndone ? 'bg-slate-800/30 border-dashed opacity-50' : 'bg-slate-800';
                 const noUndoActions = ['MERGE_PLAYER', 'ADD_NOTICE', 'DELETE_NOTICE', 'SET_FORMAT', 'FORCE_REFRESH', 'RESOLVE_INBOX', 'SMS_BROADCAST'];
                 const undoBtn = (!isUndone && !noUndoActions.includes(l.action)) ? `<button onclick="window.undoAction('${l.id}')" class="text-[10px] bg-red-600 hover:bg-red-500 text-white font-bold px-2 py-1 rounded transition ml-auto shadow">UNDO</button>` : '';
-                
                 html += `<div class="${bgClass} border border-white/5 p-3 rounded-lg flex flex-col md:flex-row md:items-center gap-3"><div class="flex flex-col gap-1"><div class="flex items-center gap-2"><span class="text-[9px] bg-slate-700 text-white px-2 py-0.5 rounded uppercase font-bold tracking-widest">${l.action}</span><span class="text-[10px] text-slate-400 font-mono">${l.time_str}</span></div><div class="text-sm font-bold text-white">${l.description}</div><div class="text-[10px] text-slate-500">Authorized by: <span class="text-slate-300">${l.admin}</span></div></div>${undoBtn}${isUndone ? `<div class="ml-auto text-[10px] text-red-500 font-bold uppercase tracking-widest border border-red-500/30 px-2 py-1 rounded bg-red-900/20">REVERSED BY ${l.undone_by}</div>` : ''}</div>`;
             });
             list.innerHTML = html;
@@ -483,15 +355,11 @@
     };
 
     window.loadAdminUsers = async function() {
-        const list = document.getElementById('adminUsersList');
-        if(!list) return;
+        const list = document.getElementById('adminUsersList'); if(!list) return;
         try {
-            const res = await fetch('/api/admin/users');
-            const users = await res.json();
-            let html = '';
+            const res = await fetch('/api/admin/users'); const users = await res.json(); let html = '';
             users.forEach(u => {
-                const isPending = u.role === 'pending';
-                const roleBadge = isPending ? '<span class="text-yellow-500 bg-yellow-900/30 border border-yellow-500/30 px-2 py-0.5 rounded text-[9px] uppercase font-bold">Pending</span>' : `<span class="text-blue-400 bg-blue-900/30 border border-blue-500/30 px-2 py-0.5 rounded text-[9px] uppercase font-bold">${u.role}</span>`;
+                const isPending = u.role === 'pending'; const roleBadge = isPending ? '<span class="text-yellow-500 bg-yellow-900/30 border border-yellow-500/30 px-2 py-0.5 rounded text-[9px] uppercase font-bold">Pending</span>' : `<span class="text-blue-400 bg-blue-900/30 border border-blue-500/30 px-2 py-0.5 rounded text-[9px] uppercase font-bold">${u.role}</span>`;
                 let actions = '';
                 if(u.role !== 'super_admin') {
                     if(isPending) { actions = `<button onclick="window.manageUser('${u.email}', 'approve')" class="text-green-500 hover:text-green-400 text-sm"><i class="fa-solid fa-check"></i></button><button onclick="window.manageUser('${u.email}', 'delete')" class="text-red-500 hover:text-red-400 text-sm"><i class="fa-solid fa-trash"></i></button>`; } 
@@ -511,6 +379,51 @@
             if(data.success) window.loadAdminUsers();
         } catch(e) {}
     }
+
+    window.loadDonations = async function() {
+        const list = document.getElementById('donationsList');
+        const totalEl = document.getElementById('donations-total');
+        const countEl = document.getElementById('donations-count');
+        if(!list) return;
+        
+        list.innerHTML = '<div class="text-center py-10 text-emerald-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
+
+        try {
+            const res = await fetch('/api/admin/donations');
+            const data = await res.json();
+
+            let total = 0;
+            let html = '';
+
+            if (data.length === 0) {
+                list.innerHTML = '<div class="text-slate-500 text-center py-10 italic">No donations recorded yet.</div>';
+                if(totalEl) totalEl.innerText = '$0.00';
+                if(countEl) countEl.innerText = '0';
+                return;
+            }
+
+            data.forEach(d => {
+                total += d.amount;
+                html += `
+                <div class="bg-black/30 p-4 rounded-xl border border-emerald-500/20 flex justify-between items-center transition-colors hover:bg-slate-800">
+                    <div>
+                        <div class="font-bold text-white text-lg">${d.name}</div>
+                        <div class="text-[10px] text-slate-500 font-mono tracking-widest mt-1">${d.time_str}</div>
+                    </div>
+                    <div class="text-2xl font-black text-emerald-400 font-mono bg-emerald-900/20 px-3 py-1 rounded-lg border border-emerald-500/30">
+                        $${d.amount.toFixed(2)}
+                    </div>
+                </div>`;
+            });
+
+            list.innerHTML = html;
+            if(totalEl) totalEl.innerText = '$' + total.toFixed(2);
+            if(countEl) countEl.innerText = data.length;
+
+        } catch (e) {
+            list.innerHTML = '<div class="text-red-400 text-center py-10">Error loading donations.</div>';
+        }
+    };
 </script>
 
 <script type="module">
@@ -526,13 +439,12 @@
             const res = await fetch('/api/admin/set_fixture_format', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fixture_id: fixtureId, format_type: formatType }) });
             const data = await res.json();
             if(!data.success) alert("Failed to save format override.");
-        } catch(e) { console.error("Network error saving format."); }
+        } catch(e) {}
     };
 
     try {
         onSnapshot(query(collection(db, "fixture_schedule")), (snapshot) => {
-            const liveList = document.getElementById("live-list");
-            const scheduledList = document.getElementById("scheduled-list");
+            const liveList = document.getElementById("live-list"); const scheduledList = document.getElementById("scheduled-list");
             let liveCount = 0; let liveHtml = ""; let schedHtml = "";
             
             snapshot.forEach((doc) => {
@@ -552,15 +464,12 @@
             
             if(liveList) liveList.innerHTML = liveHtml || '<div class="col-span-1 md:col-span-2 text-slate-500 text-center py-10 italic border border-white/5 rounded-xl bg-slate-800/30">No matches currently active.</div>';
             if(scheduledList) scheduledList.innerHTML = schedHtml || '<div class="col-span-1 md:col-span-3 text-slate-500 text-center py-10 italic border border-white/5 rounded-xl bg-slate-800/30">No scheduled matches pending.</div>';
-            
-            const countDisplay = document.getElementById("liveMatchCount");
-            if (countDisplay) countDisplay.innerText = liveCount;
+            const countDisplay = document.getElementById("liveMatchCount"); if (countDisplay) countDisplay.innerText = liveCount;
         });
     } catch(e) {}
 
     window.forceFinishLive = async function(id, p1, p2) {
-        const s1 = document.getElementById(`live-s1-${id}`).value;
-        const s2 = document.getElementById(`live-s2-${id}`).value;
+        const s1 = document.getElementById(`live-s1-${id}`).value; const s2 = document.getElementById(`live-s2-${id}`).value;
         if(!confirm(`FORCE FINISH MATCH:\n\n${p1} vs ${p2}\nFinal Score: ${s1} - ${s2}\n\nThis will submit the match to history and clear it from the iPad. Proceed?`)) return;
         try {
             const res = await fetch('/api/admin/force_finish_live', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, s1: s1, s2: s2 }) });
@@ -579,58 +488,30 @@
     };
 
     window.copyContactList = async function(type) {
-        const btn = document.getElementById(`btn-copy-${type}`);
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Fetching Sheet...';
+        const btn = document.getElementById(`btn-copy-${type}`); const originalText = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Fetching Sheet...';
         try {
-            const res = await fetch('/api/admin/contacts');
-            const data = await res.json();
-            if (!data[type] || data[type] === "") {
-                alert(`Could not find any ${type} in the "Member info" tab. Check the column headers!`); btn.innerHTML = originalText; return;
-            }
+            const res = await fetch('/api/admin/contacts'); const data = await res.json();
+            if (!data[type] || data[type] === "") { alert(`Could not find any ${type} in the "Member info" tab. Check the column headers!`); btn.innerHTML = originalText; return; }
             navigator.clipboard.writeText(data[type]).then(() => {
-                const msg = document.getElementById('copy-success-msg');
-                msg.innerText = `✅ Copied ${data[type].split(',').length} ${type} to clipboard! Ready to paste.`;
-                msg.classList.remove('hidden'); setTimeout(() => msg.classList.add('hidden'), 4000);
-                btn.innerHTML = originalText;
+                const msg = document.getElementById('copy-success-msg'); msg.innerText = `✅ Copied ${data[type].split(',').length} ${type} to clipboard! Ready to paste.`;
+                msg.classList.remove('hidden'); setTimeout(() => msg.classList.add('hidden'), 4000); btn.innerHTML = originalText;
             });
         } catch(e) { alert("Network error fetching contacts."); btn.innerHTML = originalText; }
     }
 
-    // --- BRAND NEW: API AUTOMATION FUNCTION ---
     window.sendSmsBroadcast = async function() {
         const msgText = document.getElementById('broadcast-input').value.trim();
         if (!msgText) return alert("You must write a custom message before sending!");
-        
         if (!confirm(`🚨 DANGER ZONE 🚨\n\nYou are about to send a mass SMS to EVERY phone number in the Google Sheet. This will use real API credits.\n\nProceed?`)) return;
-
-        const btn = document.getElementById('btn-send-sms');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> CONTACTING API...';
-        btn.disabled = true;
-
+        const btn = document.getElementById('btn-send-sms'); const originalText = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> CONTACTING API...'; btn.disabled = true;
         try {
-            const res = await fetch('/api/admin/send_sms', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: msgText })
-            });
+            const res = await fetch('/api/admin/send_sms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msgText }) });
             const data = await res.json();
-
             if (data.success) {
-                const succ = document.getElementById('sms-success-msg');
-                succ.innerText = `✅ SUCCESS! ${data.message}`;
-                succ.classList.remove('hidden');
-                document.getElementById('broadcast-input').value = '';
-                setTimeout(() => succ.classList.add('hidden'), 5000);
-            } else {
-                alert(`❌ API ERROR: ${data.error}`);
-            }
-        } catch(e) {
-            alert("❌ FATAL ERROR: Could not connect to backend server.");
-        } finally {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-        }
+                const succ = document.getElementById('sms-success-msg'); succ.innerText = `✅ SUCCESS! ${data.message}`; succ.classList.remove('hidden');
+                document.getElementById('broadcast-input').value = ''; setTimeout(() => succ.classList.add('hidden'), 5000);
+            } else { alert(`❌ API ERROR: ${data.error}`); }
+        } catch(e) { alert("❌ FATAL ERROR: Could not connect to backend server."); } 
+        finally { btn.innerHTML = originalText; btn.disabled = false; }
     }
 </script>

@@ -1,21 +1,33 @@
-<div class="space-y-6 animate-fade-in w-full">
-    <div class="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
-        <h2 class="text-emerald-400 font-bold uppercase tracking-widest text-sm flex items-center gap-2">
-            <i class="fa-solid fa-clock-rotate-left"></i> History Editor
-        </h2>
-    </div>
-
-    <div class="bg-slate-800 p-6 rounded-xl border border-white/5 shadow-lg">
-        <p class="text-sm text-slate-400 mb-4">Search the entire Google Sheets and Firebase database to instantly override historical scores and dates.</p>
-        <div class="flex flex-col md:flex-row gap-4">
-            <div class="relative flex-1">
-                <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"></i>
-                <input type="text" id="tabHistorySearchInput" placeholder="Search Match ID (e.g. A3F9B2), Player Name, Date, or Division..." class="w-full bg-black/40 border border-white/10 rounded-lg pl-12 pr-4 py-4 text-white focus:ring-2 focus:ring-emerald-500 outline-none font-mono text-sm shadow-inner transition-all">
-            </div>
+<div class="space-y-6 animate-fade-in w-full max-w-4xl mx-auto">
+    <div class="flex items-center gap-3 mb-6">
+        <div class="bg-indigo-600/20 p-2 rounded-lg border border-indigo-500/30">
+            <i class="fa-solid fa-clock-rotate-left text-indigo-500 text-xl shadow-[0_0_10px_rgba(99,102,241,0.5)]"></i>
+        </div>
+        <div>
+            <h2 class="text-2xl font-black text-white leading-none">Match Time Machine</h2>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Search & Override Historical Data</p>
         </div>
     </div>
 
-    <div id="tabHistorySearchResults" class="space-y-3">
-        <div class="text-center text-slate-500 py-20 italic">Type above to search the database...</div>
+    <div class="bg-slate-800 p-6 rounded-xl border border-white/5 shadow-lg">
+        
+        <div class="flex flex-col md:flex-row gap-3 mb-6 relative">
+            <div class="relative flex-1">
+                <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <input type="text" id="history-search" placeholder="Search Player Name or Match ID..." class="w-full bg-slate-900 border border-white/10 text-white rounded-lg pl-10 pr-4 py-3 focus:border-indigo-500 outline-none font-bold" onkeyup="if(event.key === 'Enter') window.searchHistory()">
+            </div>
+            
+            <div class="flex flex-col md:flex-row gap-3">
+                <select id="hist-div-filter" onchange="window.searchHistory()" class="bg-slate-900 border border-white/10 text-white text-sm rounded-lg px-4 py-3 focus:border-indigo-500 outline-none font-bold cursor-pointer min-w-[160px]">
+                    <option value="All">All Divisions</option>
+                </select>
+                <input type="text" id="hist-date-filter" placeholder="Filter Date (DD/MM/YYYY)" class="bg-slate-900 border border-white/10 text-white text-sm rounded-lg px-4 py-3 focus:border-indigo-500 outline-none font-mono min-w-[180px]" onkeyup="if(event.key === 'Enter') window.searchHistory()">
+                <button onclick="window.searchHistory()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-3 rounded-lg transition shadow-lg shrink-0">Search</button>
+            </div>
+        </div>
+        
+        <div id="historyList" class="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+            <div class="text-center py-10 text-slate-500 italic">Enter a search query to pull historical records.</div>
+        </div>
     </div>
 </div>

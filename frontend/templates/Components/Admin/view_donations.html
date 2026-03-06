@@ -1,0 +1,32 @@
+<div class="space-y-6 animate-fade-in w-full max-w-4xl mx-auto">
+    <div class="flex items-center gap-3 mb-6">
+        <div class="bg-emerald-600/20 p-2 rounded-lg border border-emerald-500/30">
+            <i class="fa-solid fa-hand-holding-dollar text-emerald-500 text-xl shadow-[0_0_10px_rgba(16,185,129,0.5)]"></i>
+        </div>
+        <div>
+            <h2 class="text-2xl font-black text-white leading-none">Financial Ledger</h2>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Live record of all club donations</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="bg-slate-800 p-6 rounded-xl border border-white/5 shadow-lg flex flex-col items-center justify-center">
+            <div class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Total Raised</div>
+            <div id="donations-total" class="text-4xl font-black text-emerald-400 font-mono">$0.00</div>
+        </div>
+        <div class="bg-slate-800 p-6 rounded-xl border border-white/5 shadow-lg flex flex-col items-center justify-center">
+            <div class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Total Contributions</div>
+            <div id="donations-count" class="text-4xl font-black text-white font-mono">0</div>
+        </div>
+    </div>
+
+    <div class="bg-slate-800 p-6 rounded-xl border border-white/5 shadow-lg">
+        <div class="text-xs font-bold text-slate-500 uppercase tracking-widest border-b border-white/10 pb-3 mb-4 flex justify-between">
+            <span>Donor & Time</span>
+            <span>Amount</span>
+        </div>
+        <div id="donationsList" class="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+            <div class="text-center py-10 text-emerald-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>
+        </div>
+    </div>
+</div>
