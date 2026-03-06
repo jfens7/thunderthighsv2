@@ -13,6 +13,9 @@ import string
 import difflib
 import math
 import hashlib
+import urllib.request
+import urllib.parse
+import base64
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -112,14 +115,14 @@ class RatingEngine:
             res = calculate_match(p1_stats, p2_stats, s1, s2)
             self.players[p1_name] = res['winner']
             self.players[p2_name] = res['loser']
-            # --- THE STRICT PLAYER SANITY CLAMPS ---
+            # Strict Player Sanity Clamps
             self.players[p1_name]['rating'] = max(r1_old, self.players[p1_name]['rating'])
             self.players[p2_name]['rating'] = min(r2_old, self.players[p2_name]['rating'])
         else: 
             res = calculate_match(p2_stats, p1_stats, s2, s1)
             self.players[p2_name] = res['winner']
             self.players[p1_name] = res['loser']
-            # --- THE STRICT PLAYER SANITY CLAMPS ---
+            # Strict Player Sanity Clamps
             self.players[p2_name]['rating'] = max(r2_old, self.players[p2_name]['rating'])
             self.players[p1_name]['rating'] = min(r1_old, self.players[p1_name]['rating'])
             
@@ -283,7 +286,6 @@ class ThunderData:
                 if payload.get('schedule_id') and payload.get('fixture_data'):
                     self.db.collection('fixture_schedule').document(payload.get('schedule_id')).set(payload.get('fixture_data'))
             elif action == 'BULK_DATE_FIX':
-                # Fully mapped to correctly delete the exact rule that forced the date
                 if 'rule_id' in payload:
                     self.db.collection('bulk_date_rules').document(payload['rule_id']).delete()
 
@@ -357,7 +359,6 @@ class ThunderData:
                 'season': season, 'division': division, 'week': week, 'date': new_date,
                 'author': admin_email, 'timestamp': firestore.SERVER_TIMESTAMP
             })
-            # Injecting the rule_id so the UNDO payload can find it
             self._log_audit(admin_email, 'BULK_DATE_FIX', f"Smart-mapped all missing matches for {season} {division} Week {week} to {new_date}.", {"rule_id": rule_id})
             self.refresh_data()
             return True
@@ -759,48 +760,23 @@ class ThunderData:
         except: return False
 
     def user_submit_feedback(self, category, text, contact, context="Not provided"):
-        print("\n=== 🗣️ FEEDBACK RECEIVED 🗣️ ===")
-        print(f"Type: {category}")
-        print(f"From: {contact}")
-        if not self.db: 
-            print("❌ ERROR: No database connection found!")
-            return False
+        if not self.db: return False
         try:
-            res = self.db.collection('feedback').add({
-                'type': category, 
-                'message': text, 
-                'contact': contact, 
-                'context': context, 
-                'timestamp': firestore.SERVER_TIMESTAMP, 
-                'status': 'New'
-            })
-            print(f"✅ SUCCESS: Saved to Firestore! Document ID: {res[1].id}\n")
+            self.db.collection('feedback').add({'type': category, 'message': text, 'contact': contact, 'context': context, 'timestamp': firestore.SERVER_TIMESTAMP, 'status': 'New'})
             return True
-        except Exception as e:
-            print(f"❌ FATAL FIRESTORE ERROR: {str(e)}\n")
-            return False
+        except: return False
 
     def user_submit_report(self, match_id, p1, p2, date, reporter, problem, suggested_home, suggested_away):
-        print("\n=== 🚨 MATCH REPORT RECEIVED 🚨 ===")
-        print(f"Match: {p1} vs {p2}")
-        print(f"Reported By: {reporter}")
-        if not self.db: 
-            print("❌ ERROR: No database connection found!")
-            return False
+        if not self.db: return False
         try:
-            res = self.db.collection('match_reports').add({
-                'match_id': match_id,
-                'p1': p1, 'p2': p2, 'date': date,
+            self.db.collection('match_reports').add({
+                'match_id': match_id, 'p1': p1, 'p2': p2, 'date': date,
                 'reporter': reporter, 'problem': problem,
                 'suggested_s1': suggested_home, 'suggested_s2': suggested_away,
-                'timestamp': firestore.SERVER_TIMESTAMP,
-                'status': 'Pending'
+                'timestamp': firestore.SERVER_TIMESTAMP, 'status': 'Pending'
             })
-            print(f"✅ SUCCESS: Saved to Firestore! Document ID: {res[1].id}\n")
             return True
-        except Exception as e:
-            print(f"❌ FATAL FIRESTORE ERROR: {str(e)}\n")
-            return False
+        except Exception as e: return False
 
     def admin_get_ranks(self):
         if not self.db: return {}
@@ -816,23 +792,18 @@ class ThunderData:
         if not self.db: return False
         try:
             new_status = 'Resolved' if action == 'approve' else 'Dismissed'
-            
             doc_ref = self.db.collection('match_reports').document(doc_id)
             if doc_ref.get().exists:
                 doc_ref.update({'status': new_status})
                 self._log_audit(admin_email, 'RESOLVE_INBOX', f"Marked Match Report {doc_id} as {new_status}.", {})
                 return True
-                
             fb_ref = self.db.collection('feedback').document(doc_id)
             if fb_ref.get().exists:
                 fb_ref.update({'status': new_status})
                 self._log_audit(admin_email, 'RESOLVE_INBOX', f"Marked Feedback {doc_id} as {new_status}.", {})
                 return True
-                
             return False
-        except Exception as e:
-            print(f"❌ Error resolving report: {e}")
-            return False
+        except: return False
         
     def admin_get_reports(self):
         if not self.db: return []
@@ -849,7 +820,6 @@ class ThunderData:
                         'suggested_s2': data.get('suggested_s2', ''), 'match_id': data.get('match_id', ''),
                         'timestamp': data.get('timestamp')
                     })
-                    
             f_docs = self.db.collection('feedback').stream()
             for d in f_docs:
                 data = d.to_dict()
@@ -862,22 +832,16 @@ class ThunderData:
                         'problem': f"Context: {data.get('context', '')}\n\nMessage: {data.get('message', '')}",
                         'suggested_s1': '', 'suggested_s2': '', 'match_id': '', 'timestamp': ts
                     })
-                    
             def safe_ts(x):
                 ts = x.get('timestamp')
                 if hasattr(ts, 'timestamp'): return ts.timestamp()
                 if isinstance(ts, (int, float)): return ts
                 return 0
-                
             reports.sort(key=safe_ts, reverse=True)
             for r in reports:
-                if 'timestamp' in r:
-                    r['timestamp'] = str(r['timestamp']) 
-                    
+                if 'timestamp' in r: r['timestamp'] = str(r['timestamp']) 
             return reports
-        except Exception as e: 
-            print(f"❌ ERROR LOADING REPORTS: {str(e)}")
-            return []
+        except: return []
 
     def admin_get_date_errors(self):
         results = []; seen = set()
@@ -958,23 +922,16 @@ class ThunderData:
         if not self.db: return False
         try: 
             payload = {'p1': p1, 'p2': p2, 'date': date, 's1': int(s1), 's2': int(s2), 'timestamp': firestore.SERVER_TIMESTAMP}
-            if new_date and new_date != date:
-                payload['new_date'] = new_date
-            
+            if new_date and new_date != date: payload['new_date'] = new_date
             res = self.db.collection('match_corrections').add(payload)
-            correction_id = res[1].id
-            
-            self._log_audit(admin_email, 'UPDATE_MATCH', f"Overrode score for {p1} vs {p2} on {date} to {s1}-{s2}.", {"correction_id": correction_id})
-            self.refresh_data()
-            return True
+            self._log_audit(admin_email, 'UPDATE_MATCH', f"Overrode score for {p1} vs {p2} on {date} to {s1}-{s2}.", {"correction_id": res[1].id})
+            self.refresh_data(); return True
         except: return False
 
     def admin_merge_players(self, bad_name, good_name, admin_email="Unknown"):
         if not self.db: return False
         batch = self.db.batch(); count = 0
-        
         self._log_audit(admin_email, 'MERGE_PLAYER', f"Permanently merged profile '{bad_name}' into '{good_name}'.", {})
-        
         home_games = self.db.collection('match_results').where('home_players', 'array_contains', bad_name).stream()
         for doc in home_games: d = doc.to_dict(); new_home = [good_name if p == bad_name else p for p in d.get('home_players', [])]; batch.update(doc.reference, {'home_players': new_home, 'home_team': good_name}); count += 1
         away_games = self.db.collection('match_results').where('away_players', 'array_contains', bad_name).stream()
@@ -993,22 +950,12 @@ class ThunderData:
         try:
             player_name = self.id_to_name.get(player_id)
             if not player_name: return False
-            
             safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()
             date_to_use = "1900-01-01" if retroactive else datetime.datetime.now().strftime("%Y-%m-%d")
-            
-            self.db.collection('rating_overrides').document(safe_id).set({
-                'name': player_name,
-                'rating': float(new_rating),
-                'date_str': date_to_use,
-                'timestamp': firestore.SERVER_TIMESTAMP
-            })
-            log_desc = f"Set {player_name}'s seed rating to {new_rating} (Retroactive: {retroactive})."
-            self._log_audit(admin_email, 'OVERRIDE_RATING', log_desc, {"name": player_name})
-            self.refresh_data()
-            return True
-        except Exception as e:
-            return False
+            self.db.collection('rating_overrides').document(safe_id).set({'name': player_name, 'rating': float(new_rating), 'date_str': date_to_use, 'timestamp': firestore.SERVER_TIMESTAMP})
+            self._log_audit(admin_email, 'OVERRIDE_RATING', f"Set {player_name}'s seed rating to {new_rating} (Retroactive: {retroactive}).", {"name": player_name})
+            self.refresh_data(); return True
+        except: return False
             
     def admin_force_finish_live(self, schedule_id, s1, s2, admin_email="Unknown"):
         if not self.db: return False
@@ -1017,62 +964,26 @@ class ThunderData:
             doc_snap = doc_ref.get()
             if not doc_snap.exists: return False
             data = doc_snap.to_dict()
-            
             res = self.db.collection('match_results').add({
-                'home_players': data.get('home_players', []),
-                'away_players': data.get('away_players', []),
-                'home_team': data.get('home_team', ''),
-                'away_team': data.get('away_team', ''),
-                'division': data.get('division', 'Unknown'),
-                'season': data.get('season', 'Unknown'),
-                'date': data.get('date', datetime.datetime.now().strftime("%d/%m/%Y")),
-                'week': data.get('week', 'Unknown'),
-                'live_home_sets': int(s1),
-                'live_away_sets': int(s2),
-                'game_scores_history': data.get('game_scores_history', ''),
-                'richStats': data.get('richStats', {}),
-                'timestamp': firestore.SERVER_TIMESTAMP,
-                'status': 'approved'
+                'home_players': data.get('home_players', []), 'away_players': data.get('away_players', []),
+                'home_team': data.get('home_team', ''), 'away_team': data.get('away_team', ''),
+                'division': data.get('division', 'Unknown'), 'season': data.get('season', 'Unknown'),
+                'date': data.get('date', datetime.datetime.now().strftime("%d/%m/%Y")), 'week': data.get('week', 'Unknown'),
+                'live_home_sets': int(s1), 'live_away_sets': int(s2), 'game_scores_history': data.get('game_scores_history', ''),
+                'richStats': data.get('richStats', {}), 'timestamp': firestore.SERVER_TIMESTAMP, 'status': 'approved'
             })
-            
-            doc_ref.update({
-                'match_status': 'Scheduled',
-                'live_home_score': 0,
-                'live_away_score': 0,
-                'live_home_sets': 0,
-                'live_away_sets': 0,
-                'current_server': '',
-                'game_scores_history': '',
-                'momentum': '',
-                'richStats': None,
-                'serve_stats': None
-            })
-            
+            doc_ref.update({'match_status': 'Scheduled', 'live_home_score': 0, 'live_away_score': 0, 'live_home_sets': 0, 'live_away_sets': 0, 'current_server': '', 'game_scores_history': '', 'momentum': '', 'richStats': None, 'serve_stats': None})
             self._log_audit(admin_email, 'FORCE_FINISH_LIVE', f"Force submitted live match {schedule_id} to history.", {"result_id": res[1].id, "schedule_id": schedule_id, "fixture_data": data})
-            self.refresh_data()
-            return True
-        except Exception as e:
-            return False
+            self.refresh_data(); return True
+        except: return False
 
     def admin_wipe_live(self, schedule_id, admin_email="Unknown"):
         if not self.db: return False
         try:
             doc_ref = self.db.collection('fixture_schedule').document(schedule_id)
             data = doc_ref.get().to_dict()
-            
-            doc_ref.update({
-                'match_status': 'Scheduled',
-                'live_home_score': 0,
-                'live_away_score': 0,
-                'live_home_sets': 0,
-                'live_away_sets': 0,
-                'current_server': '',
-                'game_scores_history': '',
-                'momentum': '',
-                'richStats': None,
-                'serve_stats': None
-            })
-            self._log_audit(admin_email, 'WIPE_LIVE', f"Wiped ghost match data for {schedule_id} and returned to scheduled.", {"schedule_id": schedule_id, "fixture_data": data})
+            doc_ref.update({'match_status': 'Scheduled', 'live_home_score': 0, 'live_away_score': 0, 'live_home_sets': 0, 'live_away_sets': 0, 'current_server': '', 'game_scores_history': '', 'momentum': '', 'richStats': None, 'serve_stats': None})
+            self._log_audit(admin_email, 'WIPE_LIVE', f"Wiped ghost match data for {schedule_id}.", {"schedule_id": schedule_id, "fixture_data": data})
             return True
         except: return False
 
@@ -1088,26 +999,16 @@ class ThunderData:
     def get_top_donors(self, limit=5):
         if not self.db: return []
         try:
-            current_month = datetime.datetime.now().strftime("%Y-%m")
-            docs = self.db.collection('donations').where('month', '==', current_month).stream()
-            donors = []
-            grouped_donors = {}
+            docs = self.db.collection('donations').where('month', '==', datetime.datetime.now().strftime("%Y-%m")).stream()
+            grouped_donors = {}; donors = []
             for d in docs:
-                data = d.to_dict()
-                n = data.get('name', 'Anonymous').strip()
+                data = d.to_dict(); n = data.get('name', 'Anonymous').strip()
                 if not n: n = 'Anonymous'
                 amt = float(data.get('amount', 0))
-                
-                if n.lower() == 'anonymous':
-                    donors.append({'name': 'Anonymous', 'amount': amt})
-                else:
-                    grouped_donors[n] = grouped_donors.get(n, 0) + amt
-            
-            for k, v in grouped_donors.items():
-                donors.append({'name': k, 'amount': v})
-                
-            donors.sort(key=lambda x: x['amount'], reverse=True)
-            return donors[:limit]
+                if n.lower() == 'anonymous': donors.append({'name': 'Anonymous', 'amount': amt})
+                else: grouped_donors[n] = grouped_donors.get(n, 0) + amt
+            for k, v in grouped_donors.items(): donors.append({'name': k, 'amount': v})
+            donors.sort(key=lambda x: x['amount'], reverse=True); return donors[:limit]
         except: return []
 
     def get_notices(self):
@@ -1116,48 +1017,32 @@ class ThunderData:
             docs = self.db.collection('notices').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
             res = []
             for d in docs:
-                data = d.to_dict()
-                data['id'] = d.id
-                ts = data.get('timestamp')
-                data['date_str'] = ts.strftime('%B %Y') if ts else 'Recent'
-                data['timestamp'] = str(ts)
+                data = d.to_dict(); data['id'] = d.id; ts = data.get('timestamp')
+                data['date_str'] = ts.strftime('%B %Y') if ts else 'Recent'; data['timestamp'] = str(ts)
                 res.append(data)
             return res
-        except Exception as e:
-            return []
+        except: return []
 
     def admin_add_notice(self, title, message, notice_type, admin_email="Unknown"):
         if not self.db: return False
         try:
-            self.db.collection('notices').add({
-                'title': title,
-                'message': message,
-                'type': notice_type,
-                'timestamp': firestore.SERVER_TIMESTAMP,
-                'author': admin_email
-            })
-            self._log_audit(admin_email, 'ADD_NOTICE', f"Posted notice: {title}", {})
-            return True
-        except Exception as e: return False
+            self.db.collection('notices').add({'title': title, 'message': message, 'type': notice_type, 'timestamp': firestore.SERVER_TIMESTAMP, 'author': admin_email})
+            self._log_audit(admin_email, 'ADD_NOTICE', f"Posted notice: {title}", {}); return True
+        except: return False
 
     def admin_delete_notice(self, notice_id, admin_email="Unknown"):
         if not self.db: return False
         try:
             self.db.collection('notices').document(notice_id).delete()
-            self._log_audit(admin_email, 'DELETE_NOTICE', f"Deleted notice ID: {notice_id}", {})
-            return True
-        except Exception as e: return False
+            self._log_audit(admin_email, 'DELETE_NOTICE', f"Deleted notice ID: {notice_id}", {}); return True
+        except: return False
 
     def admin_set_fixture_format(self, fixture_id, format_type, admin_email="Unknown"):
         if not self.db: return False
         try:
-            self.db.collection('fixture_schedule').document(fixture_id).update({
-                'format_override': format_type if format_type in ['2v2', '3v3'] else None
-            })
-            self._log_audit(admin_email, 'SET_FORMAT', f"Changed format override for fixture {fixture_id} to {format_type}", {})
-            return True
-        except Exception as e:
-            return False
+            self.db.collection('fixture_schedule').document(fixture_id).update({'format_override': format_type if format_type in ['2v2', '3v3'] else None})
+            self._log_audit(admin_email, 'SET_FORMAT', f"Changed format override for fixture {fixture_id} to {format_type}", {}); return True
+        except: return False
 
     def get_admin_messages(self):
         if not self.db: return []
@@ -1165,99 +1050,100 @@ class ThunderData:
             docs = self.db.collection('admin_messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(50).stream()
             res = []
             for d in docs:
-                data = d.to_dict()
-                data['id'] = d.id
-                ts = data.get('timestamp')
-                data['time_str'] = ts.strftime('%d/%m/%Y %H:%M') if ts else 'Just now'
-                data['timestamp'] = str(ts)
+                data = d.to_dict(); data['id'] = d.id; ts = data.get('timestamp')
+                data['time_str'] = ts.strftime('%d/%m/%Y %H:%M') if ts else 'Just now'; data['timestamp'] = str(ts)
                 res.append(data)
             return res
-        except Exception as e:
-            return []
+        except: return []
 
     def add_admin_message(self, message, admin_email):
         if not self.db: return False
-        try:
-            self.db.collection('admin_messages').add({
-                'message': message,
-                'author': admin_email,
-                'timestamp': firestore.SERVER_TIMESTAMP
-            })
-            return True
-        except Exception as e: return False
+        try: self.db.collection('admin_messages').add({'message': message, 'author': admin_email, 'timestamp': firestore.SERVER_TIMESTAMP}); return True
+        except: return False
 
     def get_contact_lists(self):
         if not self.sheet_results: return {"emails": "", "phones": ""}
         try:
             ws = self.sheet_results.worksheet("Member info")
             records = ws.get_all_records()
-            emails = []
-            phones = []
-            
+            emails = []; phones = []
             for row in records:
-                email_val = ""
-                phone_val = ""
-                
+                email_val = ""; phone_val = ""
                 for k, v in row.items():
                     kl = str(k).lower()
-                    if 'email' in kl and not email_val:
-                        email_val = str(v).strip()
-                    if ('phone' in kl or 'mobile' in kl or 'number' in kl) and not phone_val:
-                        phone_val = str(v).strip()
-
-                if email_val and '@' in email_val:
-                    emails.append(email_val)
-                
+                    if 'email' in kl and not email_val: email_val = str(v).strip()
+                    if ('phone' in kl or 'mobile' in kl or 'number' in kl) and not phone_val: phone_val = str(v).strip()
+                if email_val and '@' in email_val: emails.append(email_val)
                 if phone_val:
                     clean_phone = re.sub(r'[^\d\+\s]', '', phone_val)
-                    if len(clean_phone) >= 8:
-                        phones.append(clean_phone)
+                    if len(clean_phone) >= 8: phones.append(clean_phone)
+            return {"emails": ", ".join(list(set(emails))), "phones": ", ".join(list(set(phones)))}
+        except: return {"emails": "", "phones": ""}
+
+    # --- BRAND NEW SMS BROADCAST AUTOMATION ---
+    def admin_send_sms_broadcast(self, message_body, admin_email="Unknown"):
+        contacts = self.get_contact_lists()
+        raw_phones = contacts.get("phones", "")
+        if not raw_phones: return {"success": False, "error": "No phone numbers found in the Google Sheet."}
+        
+        phone_list = [p.strip() for p in raw_phones.split(",") if p.strip()]
+        if not phone_list: return {"success": False, "error": "No valid phone numbers found."}
             
-            return {
-                "emails": ", ".join(list(set(emails))),
-                "phones": ", ".join(list(set(phones)))
-            }
+        username = "jakobwill7@gmail.com"
+        api_key = "76F26417-8DEB-E47E-8056-B86E519B4445"
+        
+        final_message = f"📢 GCTTA Database Update 📢\n\n{message_body}\n\nCheck out your updated ratings, win percentages, and division standings below! 👇\n🔗 https://gctta-stats.com.au\n\nReply STOP to opt out."
+        
+        messages = []
+        for phone in phone_list:
+            messages.append({
+                "source": "gctta_admin",
+                "from": "GCTTA-STATS",
+                "body": final_message,
+                "to": phone
+            })
+            
+        payload = json.dumps({"messages": messages}).encode('utf-8')
+        
+        try:
+            auth_str = f"{username}:{api_key}"
+            auth_bytes = base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')
+            
+            req = urllib.request.Request("https://rest.clicksend.com/v3/sms/send", data=payload)
+            req.add_header("Content-Type", "application/json")
+            req.add_header("Authorization", f"Basic {auth_bytes}")
+            
+            response = urllib.request.urlopen(req)
+            res_data = json.loads(response.read().decode('utf-8'))
+            
+            if res_data.get('http_code') == 200:
+                self._log_audit(admin_email, 'SMS_BROADCAST', f"Sent Mass SMS to {len(phone_list)} members via API.", {})
+                return {"success": True, "message": f"Successfully sent SMS to {len(phone_list)} members!"}
+            else:
+                return {"success": False, "error": f"ClickSend API Error: {res_data}"}
         except Exception as e:
-            logger.error(f"Failed to fetch contacts: {e}")
-            return {"emails": "", "phones": ""}
+            logger.error(f"SMS Broadcast Failed: {e}")
+            return {"success": False, "error": str(e)}
 
     def admin_glicko_math(self, p1, p2, s1, s2):
         r1 = self.rating_engine.get_rating(p1)
         r2 = self.rating_engine.get_rating(p2)
-        
         mu1, phi1, vol1 = (r1['rating'] - 1500) / SCALE, r1['rd'] / SCALE, r1['vol']
         mu2, phi2, vol2 = (r2['rating'] - 1500) / SCALE, r2['rd'] / SCALE, r2['vol']
-        
         def g(p): return 1.0 / math.sqrt(1.0 + 3.0 * p**2 / (math.pi**2))
         def E(m, mj, pj): return 1.0 / (1.0 + math.exp(-g(pj) * (m - mj)))
-        
-        E_1 = E(mu1, mu2, phi2)
-        E_2 = E(mu2, mu1, phi1)
-        
+        E_1 = E(mu1, mu2, phi2); E_2 = E(mu2, mu1, phi1)
         dummy_w = {'rating': r1['rating'], 'rd': r1['rd'], 'vol': r1['vol']}
         dummy_l = {'rating': r2['rating'], 'rd': r2['rd'], 'vol': r2['vol']}
-        
         if int(s1) > int(s2):
             res = calculate_match(dummy_w, dummy_l, int(s1), int(s2))
-            new_r1 = res['winner']['rating']
-            new_r2 = res['loser']['rating']
+            new_r1 = res['winner']['rating']; new_r2 = res['loser']['rating']
         elif int(s2) > int(s1):
             res = calculate_match(dummy_l, dummy_w, int(s2), int(s1))
-            new_r2 = res['winner']['rating']
-            new_r1 = res['loser']['rating']
+            new_r2 = res['winner']['rating']; new_r1 = res['loser']['rating']
         else:
-            new_r1 = r1['rating']
-            new_r2 = r2['rating']
-            
+            new_r1 = r1['rating']; new_r2 = r2['rating']
         return {
-            'p1': {
-                'name': p1, 'old_rating': round(r1['rating'], 1), 'old_rd': round(r1['rd'], 1), 
-                'expected_win_pct': round(E_1 * 100, 1), 'new_rating': round(new_r1, 1), 
-                'delta': round(new_r1 - r1['rating'], 1)
-            },
-            'p2': {
-                'name': p2, 'old_rating': round(r2['rating'], 1), 'old_rd': round(r2['rd'], 1), 
-                'expected_win_pct': round(E_2 * 100, 1), 'new_rating': round(new_r2, 1), 
-                'delta': round(new_r2 - r2['rating'], 1)
-            }
+            'p1': {'name': p1, 'old_rating': round(r1['rating'], 1), 'old_rd': round(r1['rd'], 1), 'expected_win_pct': round(E_1 * 100, 1), 'new_rating': round(new_r1, 1), 'delta': round(new_r1 - r1['rating'], 1)},
+            'p2': {'name': p2, 'old_rating': round(r2['rating'], 1), 'old_rd': round(r2['rd'], 1), 'expected_win_pct': round(E_2 * 100, 1), 'new_rating': round(new_r2, 1), 'delta': round(new_r2 - r2['rating'], 1)}
         }
