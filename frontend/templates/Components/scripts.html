@@ -428,7 +428,7 @@
                     <div class="font-mono text-slate-300 font-bold bg-black/40 px-3 py-1 rounded inline-block text-sm mb-1 border border-white/5 shadow-inner">${match.score}</div>
                     <div class="text-[9px] text-slate-600 font-bold uppercase tracking-wider">${match.date}</div>
                 </div>
-                ${!hasRichStats ? `<button onclick="event.stopPropagation(); window.openReportModal('${playerName}', '${match.opponent}', '${match.date}', '${match.match_id || ''}')" class="text-slate-500 hover:text-red-400 transition ml-1 md:ml-2" title="Report Error"><i class="fa-solid fa-triangle-exclamation"></i></button>` : ''}
+                ${!hasRichStats ? `<button onclick="event.stopPropagation(); window.openReportModal('${playerName.replace(/'/g, "\\'")}', '${match.opponent.replace(/'/g, "\\'")}', '${match.date}', '${match.match_id || ''}')" class="text-slate-500 hover:text-red-400 transition ml-1 md:ml-2" title="Report Error"><i class="fa-solid fa-triangle-exclamation"></i></button>` : ''}
             </div>`; 
             
             historyDiv.appendChild(row); 
@@ -581,6 +581,7 @@
     }
     window.closeReportModal = function() { document.getElementById('reportModal').classList.add('hidden'); }
 
+    // --- REBUILT ERROR CODE ALERT FUNCTIONS ---
     window.submitReport = async function() { 
         const p1 = document.getElementById('rep-p1').value; 
         const p2 = document.getElementById('rep-p2').value; 
@@ -591,7 +592,9 @@
         const a = document.getElementById('rep-s2').value; 
         const matchId = document.getElementById('report-match-desc').dataset.matchId || "";
         
-        if(!name || !prob || h==="" || a==="") return alert("Please fill all fields."); 
+        if(!name || !prob || h==="" || a==="") {
+            return alert("❌ CODE 400: BAD REQUEST - Please fill all fields."); 
+        }
         
         try { 
             const res = await fetch('/api/report', { 
@@ -600,14 +603,16 @@
                 body: JSON.stringify({ match_id: matchId, p1: p1, p2: p2, date: date, reporter: name, problem: prob, suggested_home: h, suggested_away: a }) 
             }); 
             
-            if(res.status === 200) { 
-                alert("✅ SUCCESS: Match report securely saved to database and sent to Admin Inbox!"); 
+            const data = await res.json();
+            
+            if(res.status === 200 && data.success) { 
+                alert(`✅ CODE 200: SUCCESS - ${data.message}`); 
                 closeReportModal(); 
             } else { 
-                alert(`❌ ERROR: Failed to save report to database.`); 
+                alert(`❌ CODE ${data.code || res.status}: ERROR - ${data.message || "Failed to save report to database."}`); 
             } 
         } catch(e) {
-            alert("❌ NETWORK ERROR: Could not connect to the server.");
+            alert("❌ CODE 503: NETWORK ERROR - Could not connect to the server. Please check your internet connection.");
         } 
     }
 
@@ -617,7 +622,9 @@
         const context = document.getElementById('fb-context').value || "Not specified"; 
         const msg = document.getElementById('fb-msg').value; 
         
-        if(!name || !msg) return alert("Please provide your name and a description of the issue."); 
+        if(!name || !msg) {
+            return alert("❌ CODE 400: BAD REQUEST - Please provide your name and a description."); 
+        }
         
         try { 
             const res = await fetch('/api/feedback', { 
@@ -626,20 +633,22 @@
                 body: JSON.stringify({ type: type, contact: name, context: context, message: msg }) 
             }); 
             
-            if(res.status === 200) { 
-                alert("✅ SUCCESS: Your feedback has been securely saved to the Database and sent to the Admin Inbox."); 
+            const data = await res.json();
+            
+            if(res.status === 200 && data.success) { 
+                alert(`✅ CODE 200: SUCCESS - ${data.message}`); 
                 document.getElementById('fb-msg').value = ''; 
                 document.getElementById('fb-context').value = ''; 
                 document.getElementById('feedbackModal').classList.add('hidden'); 
             } else {
-                alert(`❌ ERROR: Failed to save to database. Please try again.`);
+                alert(`❌ CODE ${data.code || res.status}: ERROR - ${data.message || "Failed to save feedback to database."}`);
             }
         } catch(e) { 
-            alert("❌ NETWORK ERROR: Could not connect to the server.");
+            alert("❌ CODE 503: NETWORK ERROR - Could not connect to the server. Please check your internet connection.");
         } 
     }
 
-    window.loadDivisionLeaderboard = async function() { const season = document.getElementById('boardSeason')?.value || currentSeason; const div = document.getElementById('boardDiv')?.value || "Division 1"; const week = document.getElementById('boardWeek')?.value || "Latest"; const sortMode = document.getElementById('boardSort')?.value || "wins"; const showFillIns = document.getElementById('toggleShowFillIns')?.checked; const combineFillIns = document.querySelector('input[name="fiMode"]:checked')?.value === 'combine'; const container = document.getElementById('leaderboardContent'); if(!container) return; container.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-4xl text-yellow-500"></i></div>'; try { const res = await fetch(`/api/rankings/${encodeURIComponent(season)}/${encodeURIComponent(div)}?week=${week}`); let data = await res.json(); if (!data || data.length === 0) { container.innerHTML = '<div class="text-center text-slate-500 py-10">No standings data found.</div>'; return; } data.sort((a, b) => { const aStats = showFillIns ? (combineFillIns ? a.regular : a.fillin) : a.regular; const bStats = showFillIns ? (combineFillIns ? b.regular : b.fillin) : b.regular; if(!aStats) return 1; if(!bStats) return -1; if (sortMode === 'rating') return b.rating_val - a.rating_val; if (sortMode === 'wins') return bStats.wins - aStats.wins; if (sortMode === 'percent') { const aPct = aStats.matches > 0 ? aStats.wins / aStats.matches : 0; const bPct = bStats.matches > 0 ? bStats.wins / bStats.matches : 0; return bPct - aPct; } return aStats.losses - bStats.losses; }); let html = ""; data.forEach((p, index) => { const stats = showFillIns ? (combineFillIns ? p.regular : p.fillin) : p.regular; if(!stats || stats.matches === 0) return; const winPct = Math.round((stats.wins / stats.matches) * 100); html += `<div class="grid grid-cols-7 gap-2 items-center p-3 bg-black/20 rounded-lg border border-white/5 hover:bg-white/5 transition-colors"><div class="col-span-2 flex items-center gap-3"><div class="text-slate-500 font-mono text-xs w-4">${index + 1}</div><div class="font-bold text-white truncate cursor-pointer hover:text-yellow-400" onclick="loadStats('${p.name}')">${p.name}</div></div><div class="text-center font-mono text-yellow-500 font-bold">${p.rating_val}</div><div class="text-center text-slate-300">${stats.matches}</div><div class="text-center text-green-400 font-bold">${stats.wins}</div><div class="text-center text-red-400">${stats.losses}</div><div class="text-center text-slate-300 font-mono">${winPct}%</div></div>`; }); container.innerHTML = html; } catch (e) { console.error(e); container.innerHTML = '<div class="text-center text-red-400 py-10">Error loading data.</div>'; } };
+    window.loadDivisionLeaderboard = async function() { const season = document.getElementById('boardSeason')?.value || currentSeason; const div = document.getElementById('boardDiv')?.value || "Division 1"; const week = document.getElementById('boardWeek')?.value || "Latest"; const sortMode = document.getElementById('boardSort')?.value || "wins"; const showFillIns = document.getElementById('toggleShowFillIns')?.checked; const combineFillIns = document.querySelector('input[name="fiMode"]:checked')?.value === 'combine'; const container = document.getElementById('leaderboardContent'); if(!container) return; container.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-4xl text-yellow-500"></i></div>'; try { const res = await fetch(`/api/rankings/${encodeURIComponent(season)}/${encodeURIComponent(div)}?week=${week}`); let data = await res.json(); if (!data || data.length === 0) { container.innerHTML = '<div class="text-center text-slate-500 py-10">No standings data found.</div>'; return; } data.sort((a, b) => { const aStats = showFillIns ? (combineFillIns ? a.regular : a.fillin) : a.regular; const bStats = showFillIns ? (combineFillIns ? b.regular : b.fillin) : b.regular; if(!aStats) return 1; if(!bStats) return -1; if (sortMode === 'rating') return b.rating_val - a.rating_val; if (sortMode === 'wins') return bStats.wins - aStats.wins; if (sortMode === 'percent') { const aPct = aStats.matches > 0 ? aStats.wins / aStats.matches : 0; const bPct = bStats.matches > 0 ? bStats.wins / bStats.matches : 0; return bPct - aPct; } return aStats.losses - bStats.losses; }); let html = ""; data.forEach((p, index) => { const stats = showFillIns ? (combineFillIns ? p.regular : p.fillin) : p.regular; if(!stats || stats.matches === 0) return; const winPct = Math.round((stats.wins / stats.matches) * 100); html += `<div class="grid grid-cols-7 gap-2 items-center p-3 bg-black/20 rounded-lg border border-white/5 hover:bg-white/5 transition-colors"><div class="col-span-2 flex items-center gap-3"><div class="text-slate-500 font-mono text-xs w-4">${index + 1}</div><div class="font-bold text-white truncate cursor-pointer hover:text-yellow-400" onclick="loadStats('${p.name.replace(/'/g, "\\'")}')">${p.name}</div></div><div class="text-center font-mono text-yellow-500 font-bold">${p.rating_val}</div><div class="text-center text-slate-300">${stats.matches}</div><div class="text-center text-green-400 font-bold">${stats.wins}</div><div class="text-center text-red-400">${stats.losses}</div><div class="text-center text-slate-300 font-mono">${winPct}%</div></div>`; }); container.innerHTML = html; } catch (e) { console.error(e); container.innerHTML = '<div class="text-center text-red-400 py-10">Error loading data.</div>'; } };
     
     window.loadResults = async function() { const season = document.getElementById('resultsSeason')?.value || currentSeason; const week = document.getElementById('resultsWeek')?.value || "1"; const search = document.getElementById('resultsSearch')?.value.toLowerCase() || ""; const container = document.getElementById('resultsContainer'); if(!container) return; container.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-4xl text-yellow-500"></i></div>'; try { const res = await fetch(`/api/week/${encodeURIComponent(season)}/${week}`); const matches = await res.json(); if (!matches || matches.length === 0) { container.innerHTML = '<div class="text-center text-slate-500 py-10">No matches found for this week.</div>'; return; } let html = ""; let filtered = matches; if (search) filtered = matches.filter(m => m.p1.toLowerCase().includes(search) || m.p2.toLowerCase().includes(search)); filtered.forEach(m => { html += `<div class="bg-slate-800/50 p-4 rounded-xl border border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 hover:bg-slate-800 transition-colors"><div class="flex items-center gap-4 flex-1"><div class="text-xs font-bold text-slate-500 uppercase tracking-widest bg-black/20 px-2 py-1 rounded">${m.division}</div><div class="font-bold text-white text-lg">${m.p1} <span class="text-slate-500 text-sm mx-2">vs</span> ${m.p2}</div></div><div class="text-right"><div class="text-2xl font-mono font-black text-yellow-500 tracking-tight">${m.score}</div><div class="text-[10px] text-slate-500 font-bold uppercase">${m.date}</div></div></div>`; }); container.innerHTML = html || '<div class="text-center text-slate-500 py-10">No matches match your search.</div>'; } catch(e) { console.error(e); container.innerHTML = '<div class="text-center text-red-400 py-10">Error loading results.</div>'; } };
 
