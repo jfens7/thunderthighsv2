@@ -9,6 +9,21 @@
         </div>
     </div>
 
+    <div class="bg-slate-800 p-6 rounded-xl border border-sky-500/30 shadow-lg mb-6 relative overflow-hidden">
+        <div class="absolute top-0 right-0 bg-sky-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-lg">Mass Contact lists</div>
+        <h3 class="text-lg font-black text-white mb-1"><i class="fa-solid fa-address-book text-sky-400 mr-2"></i> Player Database</h3>
+        <p class="text-xs text-slate-400 mb-4">Automatically pulls the latest contacts from the "Member info" Google Sheet tab.</p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button onclick="window.copyContactList('emails')" id="btn-copy-emails" class="bg-black/40 hover:bg-black/60 border border-white/10 text-white font-bold py-3 rounded-lg transition-all flex items-center justify-center gap-2">
+                <i class="fa-solid fa-envelope text-slate-400"></i> Copy All Emails (BCC)
+            </button>
+            <button onclick="window.copyContactList('phones')" id="btn-copy-phones" class="bg-black/40 hover:bg-black/60 border border-white/10 text-white font-bold py-3 rounded-lg transition-all flex items-center justify-center gap-2">
+                <i class="fa-solid fa-mobile-screen text-slate-400"></i> Copy All Phone Numbers
+            </button>
+        </div>
+    </div>
+
     <div class="bg-slate-800 p-6 rounded-xl border border-white/5 shadow-lg">
         <label class="text-xs font-bold text-slate-500 uppercase block mb-2">Announcement Subject / Details</label>
         <textarea id="broadcast-input" rows="4" class="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-sky-500 outline-none mb-4" placeholder="e.g. Week 12 matches have just been calculated and synced to the database!"></textarea>
@@ -27,13 +42,13 @@ Check out your updated ratings, win percentages, and division standings below! ð
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
             <button onclick="window.copyBroadcast('facebook')" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-transform hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2">
-                <i class="fa-brands fa-facebook"></i> Copy for Facebook
+                <i class="fa-brands fa-facebook"></i> Copy Message
             </button>
             <button onclick="window.copyBroadcast('whatsapp')" class="bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg transition-transform hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2">
-                <i class="fa-brands fa-whatsapp"></i> Copy for WhatsApp
+                <i class="fa-brands fa-whatsapp"></i> Copy Message
             </button>
             <button onclick="window.copyBroadcast('email')" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-lg transition-transform hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2">
-                <i class="fa-solid fa-envelope"></i> Copy for Email
+                <i class="fa-solid fa-copy"></i> Copy Message
             </button>
         </div>
         <div id="copy-success-msg" class="text-center text-emerald-400 font-bold text-sm mt-4 hidden animate-pulse">âœ… Copied to clipboard! You can now paste it directly into your app.</div>
@@ -50,8 +65,38 @@ Check out your updated ratings, win percentages, and division standings below! ð
         const text = document.getElementById('broadcast-preview').innerText;
         navigator.clipboard.writeText(text).then(() => {
             const msg = document.getElementById('copy-success-msg');
+            msg.innerText = "âœ… Message copied to clipboard!";
             msg.classList.remove('hidden');
             setTimeout(() => msg.classList.add('hidden'), 3000);
         });
+    }
+    
+    window.copyContactList = async function(type) {
+        const btn = document.getElementById(`btn-copy-${type}`);
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Fetching Sheet...';
+        
+        try {
+            const res = await fetch('/api/admin/contacts');
+            const data = await res.json();
+            
+            if (!data[type] || data[type] === "") {
+                alert(`Could not find any ${type} in the "Member info" tab. Check the column headers!`);
+                btn.innerHTML = originalText;
+                return;
+            }
+            
+            navigator.clipboard.writeText(data[type]).then(() => {
+                const msg = document.getElementById('copy-success-msg');
+                msg.innerText = `âœ… Copied ${data[type].split(',').length} ${type} to clipboard! Ready to paste.`;
+                msg.classList.remove('hidden');
+                setTimeout(() => msg.classList.add('hidden'), 4000);
+                btn.innerHTML = originalText;
+            });
+            
+        } catch(e) {
+            alert("Network error fetching contacts.");
+            btn.innerHTML = originalText;
+        }
     }
 </script>
