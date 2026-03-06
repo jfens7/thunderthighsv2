@@ -52,7 +52,6 @@ try:
     atexit.register(lambda: scheduler.shutdown())
 except Exception as e: pass
 
-
 # --- SECURITY & TRAFFIC TRACKING DECORATORS ---
 def login_required(f):
     @wraps(f)
@@ -71,9 +70,7 @@ def super_admin_required(f):
 
 @app.before_request
 def track_traffic():
-    # Only track public page visits
     if request.path == '/' or request.path == '/index':
-        # Ignore if Ghost Mode is active OR if an Admin is logged in
         if not request.cookies.get('ghostmode') and not session.get('admin_logged_in'):
             if db:
                 ip = request.headers.get('X-Forwarded-For', request.remote_addr)
@@ -83,7 +80,7 @@ def track_traffic():
 @app.route('/ghostmode')
 def activate_ghost_mode():
     resp = make_response(jsonify({"success": True, "message": "👻 GHOST MODE ACTIVATED: Your visits to this site will no longer be tracked in the analytics."}))
-    resp.set_cookie('ghostmode', '1', max_age=60*60*24*365*10) # Lasts 10 years
+    resp.set_cookie('ghostmode', '1', max_age=60*60*24*365*10) 
     return resp
 
 @app.route('/')
@@ -259,6 +256,13 @@ def set_fixture_format():
 @login_required
 def get_player_directory(): return jsonify(db.admin_get_player_directory()) if db else jsonify([])
 
+@app.route('/api/admin/glicko_calc', methods=['POST'])
+@login_required
+def glicko_calc():
+    if not db: return jsonify({"success": False})
+    data = request.json
+    res = db.admin_glicko_math(data.get('p1'), data.get('p2'), data.get('s1'), data.get('s2'))
+    return jsonify({"success": True, "data": res})
 
 # --- ADMIN NOTES / CHAT ENDPOINTS ---
 @app.route('/api/admin/messages')

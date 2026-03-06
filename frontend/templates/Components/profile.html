@@ -1,83 +1,84 @@
 <div id="statsContainer" class="hidden w-full max-w-5xl mx-auto pt-6 md:pt-24 px-4 pb-20 animate-fade-in">
     
-    <button onclick="closeProfile()" class="mb-6 flex items-center text-slate-400 hover:text-white transition-colors group">
-        <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center mr-3 group-hover:bg-slate-700">
+    <button onclick="closeProfile()" class="mb-6 flex items-center text-slate-400 hover:text-white transition-colors group w-max">
+        <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center mr-3 group-hover:bg-slate-700 shadow-md border border-white/5">
             <i class="fa-solid fa-arrow-left"></i>
         </div>
-        <span class="font-bold uppercase tracking-wider text-sm">Back</span>
+        <span class="font-bold uppercase tracking-wider text-sm">Back to Search</span>
     </button>
 
-    <div class="bg-slate-800/80 backdrop-blur-md rounded-2xl p-6 md:p-8 shadow-2xl border border-white/5 relative overflow-hidden mb-8">
+    <div class="bg-slate-800/80 backdrop-blur-md rounded-2xl p-5 md:p-8 shadow-2xl border border-white/5 relative overflow-hidden mb-8">
         <div class="absolute top-0 right-0 w-64 h-64 bg-yellow-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
 
         <div class="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8">
-            <div class="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-end justify-center shadow-xl border-4 border-slate-700/50 overflow-hidden shrink-0">
+            <div class="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-end justify-center shadow-xl border-4 border-slate-700/50 overflow-hidden shrink-0 mt-2 md:mt-0">
                 <i class="fa-solid fa-user text-5xl md:text-6xl text-slate-500 translate-y-1"></i>
             </div>
 
             <div class="flex-1 text-center md:text-left w-full">
                 <h1 id="playerName" class="text-3xl md:text-5xl font-black text-white mb-2 tracking-tight truncate">Loading...</h1>
-                <div id="playerRatingBadge" class="inline-block bg-yellow-500/20 text-yellow-400 font-mono font-bold px-3 py-1 rounded text-sm mb-4 border border-yellow-500/20">
+                <div id="playerRatingBadge" class="inline-block bg-yellow-500/20 text-yellow-400 font-mono font-black px-4 py-1.5 rounded-lg text-sm mb-6 border border-yellow-500/30 shadow-[0_0_15px_rgba(234,179,8,0.2)]">
                     Rating: ...
                 </div>
                 
-                <div class="flex flex-col md:flex-row gap-3 items-center justify-center md:justify-start w-full">
-                    <div class="flex gap-2 w-full md:w-auto">
-                        <div class="relative flex-1 md:flex-none">
-                            <i class="fa-solid fa-calendar absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                            <select id="seasonSelect" class="w-full bg-black/40 border border-white/10 text-white text-sm rounded-lg pl-9 pr-8 py-3 md:py-2 focus:ring-2 focus:ring-yellow-500 focus:outline-none appearance-none cursor-pointer hover:bg-black/60 transition-colors">
+                <div class="w-full space-y-3">
+                    <div class="flex flex-col md:flex-row gap-3 w-full">
+                        <div class="relative flex-1">
+                            <i class="fa-solid fa-calendar absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <select id="seasonSelect" style="color-scheme: dark;" class="w-full bg-black/40 border border-white/10 text-white text-base md:text-sm rounded-xl pl-11 pr-8 py-3.5 md:py-2.5 focus:ring-2 focus:ring-yellow-500 focus:outline-none appearance-none cursor-pointer hover:bg-black/60 transition-colors shadow-inner font-bold">
                                 <option value="Career">Career</option>
                             </select>
-                            <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs pointer-events-none"></i>
+                            <i class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"></i>
                         </div>
 
-                        <div class="relative flex-1 md:flex-none">
-                            <i class="fa-solid fa-layer-group absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                            <select id="profileDivisionSelect" class="w-full bg-black/40 border border-white/10 text-white text-sm rounded-lg pl-9 pr-8 py-3 md:py-2 focus:ring-2 focus:ring-yellow-500 focus:outline-none appearance-none cursor-pointer hover:bg-black/60 transition-colors">
+                        <div class="relative flex-1">
+                            <i class="fa-solid fa-layer-group absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <select id="profileDivisionSelect" style="color-scheme: dark;" class="w-full bg-black/40 border border-white/10 text-white text-base md:text-sm rounded-xl pl-11 pr-8 py-3.5 md:py-2.5 focus:ring-2 focus:ring-yellow-500 focus:outline-none appearance-none cursor-pointer hover:bg-black/60 transition-colors shadow-inner font-bold">
                                 <option value="All">All Divisions</option>
                             </select>
-                            <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs pointer-events-none"></i>
+                            <i class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"></i>
                         </div>
                     </div>
                     
-                    <label class="flex items-center cursor-pointer bg-black/40 px-4 py-3 md:py-2 rounded-lg border border-white/10 hover:bg-black/60 transition-colors w-full md:w-auto justify-center md:justify-start">
-                        <div class="relative">
+                    <label class="flex items-center justify-between md:justify-start cursor-pointer bg-black/40 px-5 py-3.5 md:py-2.5 rounded-xl border border-white/10 hover:bg-black/60 transition-colors w-full shadow-inner">
+                        <div class="text-base md:text-sm font-bold text-slate-300">Include Fill-in Matches</div>
+                        <div class="relative md:ml-4 flex-shrink-0">
                             <input type="checkbox" id="profileFillinToggle" class="sr-only" checked onchange="renderProfile()">
-                            <div id="toggleBg" class="block bg-sky-500 w-10 h-6 rounded-full transition-colors duration-300"></div>
-                            <div id="toggleDot" class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 translate-x-4 shadow"></div>
+                            <div id="toggleBg" class="block bg-sky-500 w-12 h-7 rounded-full transition-colors duration-300"></div>
+                            <div id="toggleDot" class="absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition-transform duration-300 translate-x-5 shadow-md"></div>
                         </div>
-                        <div class="ml-3 text-sm font-bold text-slate-300">Include Fill-ins</div>
                     </label>
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-3 w-full md:w-auto mt-4 md:mt-0">
-                <div class="bg-black/20 p-4 md:p-5 rounded-xl border border-white/5 text-center min-w-[100px] shadow-inner">
-                    <div id="winRate" class="text-3xl md:text-2xl font-black text-green-400">0%</div>
+            <div class="grid grid-cols-2 gap-3 w-full md:w-auto mt-6 md:mt-0 shrink-0">
+                <div class="bg-black/20 p-4 md:p-5 rounded-xl border border-white/5 text-center min-w-[110px] shadow-inner">
+                    <div id="winRate" class="text-3xl md:text-2xl font-black text-green-400 tracking-tighter">0%</div>
                     <div class="text-[10px] md:text-[11px] uppercase text-slate-500 font-bold tracking-wider mt-1">Win Rate</div>
                 </div>
-                <div class="bg-black/20 p-4 md:p-5 rounded-xl border border-white/5 text-center min-w-[100px] shadow-inner">
-                    <div id="matchesPlayed" class="text-3xl md:text-2xl font-black text-white">0</div>
+                <div class="bg-black/20 p-4 md:p-5 rounded-xl border border-white/5 text-center min-w-[110px] shadow-inner">
+                    <div id="matchesPlayed" class="text-3xl md:text-2xl font-black text-white tracking-tighter">0</div>
                     <div class="text-[10px] md:text-[11px] uppercase text-slate-500 font-bold tracking-wider mt-1">Matches</div>
                 </div>
-                <div class="bg-black/20 p-4 md:p-5 rounded-xl border border-white/5 text-center min-w-[100px] shadow-inner">
-                    <div id="wins" class="text-3xl md:text-2xl font-black text-blue-400">0</div>
+                <div class="bg-black/20 p-4 md:p-5 rounded-xl border border-white/5 text-center min-w-[110px] shadow-inner">
+                    <div id="wins" class="text-3xl md:text-2xl font-black text-blue-400 tracking-tighter">0</div>
                     <div class="text-[10px] md:text-[11px] uppercase text-slate-500 font-bold tracking-wider mt-1">Wins</div>
                 </div>
-                <div class="bg-black/20 p-4 md:p-5 rounded-xl border border-white/5 text-center min-w-[100px] shadow-inner">
-                    <div id="losses" class="text-3xl md:text-2xl font-black text-red-400">0</div>
+                <div class="bg-black/20 p-4 md:p-5 rounded-xl border border-white/5 text-center min-w-[110px] shadow-inner">
+                    <div id="losses" class="text-3xl md:text-2xl font-black text-red-400 tracking-tighter">0</div>
                     <div class="text-[10px] md:text-[11px] uppercase text-slate-500 font-bold tracking-wider mt-1">Losses</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+    <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2 px-1">
         <i class="fa-solid fa-clock-rotate-left text-yellow-500"></i> Match History
     </h3>
-    <div id="matchHistory" class="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-white/5 overflow-hidden min-h-[200px] shadow-xl">
-        <div class="p-8 text-center text-slate-500">
-            <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><br>Loading history...
+    <div id="matchHistory" class="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 overflow-hidden min-h-[200px] shadow-xl">
+        <div class="p-10 text-center text-slate-500">
+            <i class="fa-solid fa-spinner fa-spin text-3xl mb-3"></i><br>
+            <span class="text-sm font-bold uppercase tracking-widest">Loading history...</span>
         </div>
     </div>
 </div>

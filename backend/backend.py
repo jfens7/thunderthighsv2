@@ -99,10 +99,23 @@ class RatingEngine:
             self.players[name] = {'rating': r_val, 'rd': rd_val, 'vol': vol_val}
         except ValueError: pass
     def update_match(self, p1_name, p2_name, s1, s2):
-        if s1 == s2: return 
-        p1_stats = self.get_rating(p1_name); p2_stats = self.get_rating(p2_name)
-        if s1 > s2: res = calculate_match(p1_stats, p2_stats, s1, s2); self.players[p1_name] = res['winner']; self.players[p2_name] = res['loser']
-        else: res = calculate_match(p2_stats, p1_stats, s2, s1); self.players[p2_name] = res['winner']; self.players[p1_name] = res['loser']
+        if s1 == s2: return {'p1_delta': 0, 'p2_delta': 0}
+        p1_stats = self.get_rating(p1_name)
+        p2_stats = self.get_rating(p2_name)
+        r1_old = p1_stats['rating']
+        r2_old = p2_stats['rating']
+        if s1 > s2: 
+            res = calculate_match(p1_stats, p2_stats, s1, s2)
+            self.players[p1_name] = res['winner']
+            self.players[p2_name] = res['loser']
+        else: 
+            res = calculate_match(p2_stats, p1_stats, s2, s1)
+            self.players[p2_name] = res['winner']
+            self.players[p1_name] = res['loser']
+        return {
+            'p1_delta': self.players[p1_name]['rating'] - r1_old,
+            'p2_delta': self.players[p2_name]['rating'] - r2_old
+        }
 
 class ThunderData:
     def __init__(self):
@@ -422,7 +435,7 @@ class ThunderData:
             final_matches.extend(merged)
         return final_matches
 
-    def _update_player_stats(self, stat_dict, player_name, p1_sets, p2_sets, is_p1, opponent, is_fillin, division, date_str, week_num, season_name, details="", rich_stats=None, match_id=""):
+    def _update_player_stats(self, stat_dict, player_name, p1_sets, p2_sets, is_p1, opponent, is_fillin, division, date_str, week_num, season_name, details="", rich_stats=None, match_id="", delta=0, sheet_name="Unknown", row_index="?"):
         if stat_dict is None: return 
         if player_name not in stat_dict: stat_dict[player_name] = {'regular': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'fillin': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'combined': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}}
         buckets = [stat_dict[player_name]['combined']]; 
@@ -433,7 +446,13 @@ class ThunderData:
             stats['matches'] += 1; stats['sets_won'] += my_sets; stats['sets_lost'] += op_sets
             if result == "Win": stats['wins'] += 1
             else: stats['losses'] += 1
-            stats['history'].append({'season': season_name, 'week': week_num, 'date': date_str, 'opponent': opponent, 'result': result, 'score': f"{my_sets}-{op_sets}", 'type': 'Fill-in' if is_fillin else 'Regular', 'division': division, 'details': details, 'rich_stats': rich_stats, 'match_id': match_id})
+            stats['history'].append({
+                'season': season_name, 'week': week_num, 'date': date_str, 
+                'opponent': opponent, 'result': result, 'score': f"{my_sets}-{op_sets}", 
+                'type': 'Fill-in' if is_fillin else 'Regular', 'division': division, 
+                'details': details, 'rich_stats': rich_stats, 'match_id': match_id,
+                'delta': delta, 'sheet_name': sheet_name, 'row_index': row_index
+            })
 
     def refresh_data(self):
         logger.info("⚡️ Fetching and Processing Data...")
@@ -451,7 +470,7 @@ class ThunderData:
                 if season_name not in self.weekly_matches: self.weekly_matches[season_name] = {}
                 try:
                     records = self._get_safe_records(worksheet)
-                    for row in records:
+                    for i, row in enumerate(records):
                         row_vals = [str(v).lower() for v in row.values()]
                         if any("doubles" in v for v in row_vals): continue
                         p1 = self._clean_name(self._get_val(row, ['Name 1', 'Player 1', 'Name'])); p2 = self._clean_name(self._get_val(row, ['Name 2', 'Player 2']))
@@ -468,7 +487,16 @@ class ThunderData:
                         if not parsed_date: parsed_date = datetime.date(1900, 1, 1)
                         try: s1 = int(self._get_val(row, ['Sets 1', 'S1', 'Sets'])); s2 = int(self._get_val(row, ['Sets 2', 'S2']))
                         except: continue
-                        raw_match_queue.append({'p1': p1, 'p2': p2, 's1': s1, 's2': s2, 'date': parsed_date, 'season': season_name, 'week': week_num, 'div': div, 'p1_fill': p1_fill, 'p2_fill': p2_fill, 'game_history': '', 'rich_stats': None, 'manual_override': False})
+                        raw_match_queue.append({
+                            'p1': p1, 'p2': p2, 's1': s1, 's2': s2, 
+                            'date': parsed_date, 'season': season_name, 
+                            'week': week_num, 'div': div, 
+                            'p1_fill': p1_fill, 'p2_fill': p2_fill, 
+                            'game_history': '', 'rich_stats': None, 
+                            'manual_override': False,
+                            'sheet_name': worksheet.title,
+                            'row_index': str(i + 2) # +2 because index starts at 0 and row 1 is headers
+                        })
                 except: pass
                 
         if self.db:
@@ -502,7 +530,15 @@ class ThunderData:
                         
                     rich = d.get('richStats', {})
                     rich['total_duration'] = d.get('total_duration', '00:00'); rich['play_duration'] = d.get('play_duration', '00:00'); rich['set_scores'] = d.get('set_scores', [])
-                    raw_match_queue.append({'p1': p1, 'p2': p2, 's1': s1, 's2': s2, 'date': parsed_date, 'season': season_name, 'week': week_val, 'div': d.get('division', 'Unknown'), 'p1_fill': False, 'p2_fill': False, 'game_history': d.get('game_scores_history', ''), 'rich_stats': rich, 'manual_override': d.get('manual_override', False)})
+                    raw_match_queue.append({
+                        'p1': p1, 'p2': p2, 's1': s1, 's2': s2, 
+                        'date': parsed_date, 'season': season_name, 
+                        'week': week_val, 'div': d.get('division', 'Unknown'), 
+                        'p1_fill': False, 'p2_fill': False, 
+                        'game_history': d.get('game_scores_history', ''), 
+                        'rich_stats': rich, 'manual_override': d.get('manual_override', False),
+                        'sheet_name': 'Live Match Data', 'row_index': 'Firebase'
+                    })
             except: pass
 
         logger.info(f"📊 FINAL LOADED SEASONS LIST: {self.seasons_list}")
@@ -561,12 +597,29 @@ class ThunderData:
                         self.rating_engine.players[p]['rd'] = overrides_dict[p]['rd']
                         player_overrides_applied.add(p)
 
-            if m['date'] > RATING_START_DATE: self.rating_engine.update_match(m['p1'], m['p2'], m['s1'], m['s2'])
+            p1_delta = 0
+            p2_delta = 0
+            if m['date'] > RATING_START_DATE: 
+                deltas = self.rating_engine.update_match(m['p1'], m['p2'], m['s1'], m['s2'])
+                p1_delta = deltas.get('p1_delta', 0)
+                p2_delta = deltas.get('p2_delta', 0)
             
-            for p, sets_for, sets_against, is_p1, opp, fill in [(m['p1'], m['s1'], m['s2'], True, m['p2'], m['p1_fill']), (m['p2'], m['s1'], m['s2'], False, m['p1'], m['p2_fill'])]:
-                self._update_player_stats(self.season_stats.get(m['season'], {}), p, sets_for, sets_against, is_p1, opp, fill, m['div'], d_str, m['week'], m['season'], m.get('game_history', ''), m.get('rich_stats'), match_id)
-                self._update_player_stats(self.all_players, p, sets_for, sets_against, is_p1, opp, fill, m['div'], d_str, m['week'], m['season'], m.get('game_history', ''), m.get('rich_stats'), match_id)
+            for p, sets_for, sets_against, is_p1, opp, fill, delta in [
+                (m['p1'], m['s1'], m['s2'], True, m['p2'], m['p1_fill'], p1_delta), 
+                (m['p2'], m['s2'], m['s1'], False, m['p1'], m['p2_fill'], p2_delta)
+            ]:
+                self._update_player_stats(
+                    self.season_stats.get(m['season'], {}), p, sets_for, sets_against, is_p1, opp, fill, 
+                    m['div'], d_str, m['week'], m['season'], m.get('game_history', ''), m.get('rich_stats'), 
+                    match_id, delta, m.get('sheet_name', 'Unknown'), m.get('row_index', '?')
+                )
+                self._update_player_stats(
+                    self.all_players, p, sets_for, sets_against, is_p1, opp, fill, 
+                    m['div'], d_str, m['week'], m['season'], m.get('game_history', ''), m.get('rich_stats'), 
+                    match_id, delta, m.get('sheet_name', 'Unknown'), m.get('row_index', '?')
+                )
                 player_set.add(p)
+
             if str(m['week']) != "Unknown":
                 if m['season'] not in self.weekly_matches: self.weekly_matches[m['season']] = {}
                 wk = str(m['week']); 
@@ -725,7 +778,14 @@ class ThunderData:
                         seen.add(match_hash); score = m.get('score', '0-0')
                         try: s1, s2 = map(int, score.split('-'))
                         except: s1, s2 = 0, 0
-                        results.append({'id': match_hash, 'date': date_str, 'division': m_div, 'season': m_season, 'week': m_week, 'home_players': [p_name], 'away_players': [opp], 'score': score, 's1': s1, 's2': s2, 'match_id': match_id})
+                        results.append({
+                            'id': match_hash, 'date': date_str, 'division': m_div, 
+                            'season': m_season, 'week': m_week, 
+                            'home_players': [p_name], 'away_players': [opp], 
+                            'score': score, 's1': s1, 's2': s2, 'match_id': match_id,
+                            'sheet_name': m.get('sheet_name', 'Unknown'),
+                            'row_index': m.get('row_index', '?')
+                        })
         return results
 
     def admin_search_history(self, query_text, season_filter=None, div_filter=None, week_filter=None, date_filter=None):
@@ -900,31 +960,6 @@ class ThunderData:
             return True
         except: return False
 
-    def admin_resolve_report(self, report_id, action, admin_email="Unknown"):
-        if not self.db: return False
-        try:
-            report_ref = self.db.collection('match_reports').document(report_id)
-            doc = report_ref.get()
-            if doc.exists:
-                report = doc.to_dict()
-                if action == 'approve': 
-                    res = self.db.collection('match_corrections').add({'p1': report['p1'], 'p2': report['p2'], 'date': report['date'], 's1': report['suggested_s1'], 's2': report['suggested_s2'], 'timestamp': firestore.SERVER_TIMESTAMP})
-                    report_ref.update({'status': 'Approved'})
-                    self._log_audit(admin_email, 'APPROVE_REPORT', f"Approved match correction from user report.", {"correction_id": res[1].id})
-                    self.refresh_data()
-                elif action == 'reject': 
-                    report_ref.update({'status': 'Rejected'})
-                    self._log_audit(admin_email, 'REJECT_REPORT', f"Rejected user match report.", {})
-                return True
-                
-            feed_ref = self.db.collection('feedback').document(report_id)
-            if feed_ref.get().exists:
-                if action == 'approve': feed_ref.update({'status': 'Resolved'})
-                elif action == 'reject': feed_ref.update({'status': 'Dismissed'})
-                return True
-            return False
-        except: return False
-
     def record_donation(self, intent_id, name, amount):
         if not self.db: return False
         try:
@@ -939,14 +974,25 @@ class ThunderData:
         try:
             current_month = datetime.datetime.now().strftime("%Y-%m")
             docs = self.db.collection('donations').where('month', '==', current_month).stream()
-            donors = {}
+            donors = []
+            grouped_donors = {}
             for d in docs:
                 data = d.to_dict()
-                n = data.get('name', 'Anonymous')
-                if n.lower() != 'anonymous': donors[n] = donors.get(n, 0) + float(data.get('amount', 0))
-            if not donors: return []
-            sorted_donors = sorted(donors.items(), key=lambda item: item[1], reverse=True)[:limit]
-            return [{'name': name, 'amount': amount} for name, amount in sorted_donors]
+                n = data.get('name', 'Anonymous').strip()
+                if not n: n = 'Anonymous'
+                amt = float(data.get('amount', 0))
+                
+                # Anonymous stay separate, named donors pool together
+                if n.lower() == 'anonymous':
+                    donors.append({'name': 'Anonymous', 'amount': amt})
+                else:
+                    grouped_donors[n] = grouped_donors.get(n, 0) + amt
+            
+            for k, v in grouped_donors.items():
+                donors.append({'name': k, 'amount': v})
+                
+            donors.sort(key=lambda x: x['amount'], reverse=True)
+            return donors[:limit]
         except: return []
 
     def get_notices(self):
@@ -997,7 +1043,6 @@ class ThunderData:
         except Exception as e:
             return False
 
-    # --- NEW: ADMIN CHAT LOGIC ---
     def get_admin_messages(self):
         if not self.db: return []
         try:
@@ -1023,3 +1068,45 @@ class ThunderData:
             })
             return True
         except Exception as e: return False
+
+    # --- GLICKO-2 MATH DIAGNOSTICS ---
+    def admin_glicko_math(self, p1, p2, s1, s2):
+        r1 = self.rating_engine.get_rating(p1)
+        r2 = self.rating_engine.get_rating(p2)
+        
+        mu1, phi1, vol1 = (r1['rating'] - 1500) / SCALE, r1['rd'] / SCALE, r1['vol']
+        mu2, phi2, vol2 = (r2['rating'] - 1500) / SCALE, r2['rd'] / SCALE, r2['vol']
+        
+        def g(p): return 1.0 / math.sqrt(1.0 + 3.0 * p**2 / (math.pi**2))
+        def E(m, mj, pj): return 1.0 / (1.0 + math.exp(-g(pj) * (m - mj)))
+        
+        E_1 = E(mu1, mu2, phi2)
+        E_2 = E(mu2, mu1, phi1)
+        
+        dummy_w = {'rating': r1['rating'], 'rd': r1['rd'], 'vol': r1['vol']}
+        dummy_l = {'rating': r2['rating'], 'rd': r2['rd'], 'vol': r2['vol']}
+        
+        if int(s1) > int(s2):
+            res = calculate_match(dummy_w, dummy_l, int(s1), int(s2))
+            new_r1 = res['winner']['rating']
+            new_r2 = res['loser']['rating']
+        elif int(s2) > int(s1):
+            res = calculate_match(dummy_l, dummy_w, int(s2), int(s1))
+            new_r2 = res['winner']['rating']
+            new_r1 = res['loser']['rating']
+        else:
+            new_r1 = r1['rating']
+            new_r2 = r2['rating']
+            
+        return {
+            'p1': {
+                'name': p1, 'old_rating': round(r1['rating'], 1), 'old_rd': round(r1['rd'], 1), 
+                'expected_win_pct': round(E_1 * 100, 1), 'new_rating': round(new_r1, 1), 
+                'delta': round(new_r1 - r1['rating'], 1)
+            },
+            'p2': {
+                'name': p2, 'old_rating': round(r2['rating'], 1), 'old_rd': round(r2['rd'], 1), 
+                'expected_win_pct': round(E_2 * 100, 1), 'new_rating': round(new_r2, 1), 
+                'delta': round(new_r2 - r2['rating'], 1)
+            }
+        }
