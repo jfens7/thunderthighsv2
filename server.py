@@ -297,7 +297,7 @@ def add_admin_message():
     return jsonify({"success": db.add_admin_message(data.get('message'), session.get('admin_email'))})
 
 
-# --- NOTICEBOARD ENDPOINTS ---
+# --- NOTICEBOARD & BROADCAST ENDPOINTS ---
 @app.route('/api/notices')
 def get_notices(): 
     return jsonify(db.get_notices()) if db else jsonify([])
@@ -314,6 +314,12 @@ def add_notice():
 def delete_notice():
     if not db: return jsonify({"success": False})
     return jsonify({"success": db.admin_delete_notice(request.json.get('notice_id'), session.get('admin_email'))})
+
+@app.route('/api/admin/contacts')
+@login_required
+def get_contacts():
+    if not db: return jsonify({"emails": "", "phones": ""})
+    return jsonify(db.get_contact_lists())
 
 
 # --- SUPER ADMIN ONLY ENDPOINTS ---

@@ -113,18 +113,14 @@ class RatingEngine:
             self.players[p1_name] = res['winner']
             self.players[p2_name] = res['loser']
             # --- THE STRICT PLAYER SANITY CLAMPS ---
-            # Winner rating cannot drop below what they started with
             self.players[p1_name]['rating'] = max(r1_old, self.players[p1_name]['rating'])
-            # Loser rating cannot go higher than what they started with
             self.players[p2_name]['rating'] = min(r2_old, self.players[p2_name]['rating'])
         else: 
             res = calculate_match(p2_stats, p1_stats, s2, s1)
             self.players[p2_name] = res['winner']
             self.players[p1_name] = res['loser']
             # --- THE STRICT PLAYER SANITY CLAMPS ---
-            # Winner rating cannot drop below what they started with
             self.players[p2_name]['rating'] = max(r2_old, self.players[p2_name]['rating'])
-            # Loser rating cannot go higher than what they started with
             self.players[p1_name]['rating'] = min(r1_old, self.players[p1_name]['rating'])
             
         return {
@@ -286,6 +282,10 @@ class ThunderData:
             elif action == 'WIPE_LIVE':
                 if payload.get('schedule_id') and payload.get('fixture_data'):
                     self.db.collection('fixture_schedule').document(payload.get('schedule_id')).set(payload.get('fixture_data'))
+            elif action == 'BULK_DATE_FIX':
+                # Fully mapped to correctly delete the exact rule that forced the date
+                if 'rule_id' in payload:
+                    self.db.collection('bulk_date_rules').document(payload['rule_id']).delete()
 
             doc_ref.update({'status': 'undone', 'undone_by': super_admin_email})
             self.refresh_data()
@@ -357,7 +357,8 @@ class ThunderData:
                 'season': season, 'division': division, 'week': week, 'date': new_date,
                 'author': admin_email, 'timestamp': firestore.SERVER_TIMESTAMP
             })
-            self._log_audit(admin_email, 'BULK_DATE_FIX', f"Smart-mapped all missing matches for {season} {division} Week {week} to {new_date}.", {})
+            # Injecting the rule_id so the UNDO payload can find it
+            self._log_audit(admin_email, 'BULK_DATE_FIX', f"Smart-mapped all missing matches for {season} {division} Week {week} to {new_date}.", {"rule_id": rule_id})
             self.refresh_data()
             return True
         except: return False
@@ -761,11 +762,9 @@ class ThunderData:
         print("\n=== 🗣️ FEEDBACK RECEIVED 🗣️ ===")
         print(f"Type: {category}")
         print(f"From: {contact}")
-        
         if not self.db: 
             print("❌ ERROR: No database connection found!")
             return False
-            
         try:
             res = self.db.collection('feedback').add({
                 'type': category, 
@@ -785,11 +784,9 @@ class ThunderData:
         print("\n=== 🚨 MATCH REPORT RECEIVED 🚨 ===")
         print(f"Match: {p1} vs {p2}")
         print(f"Reported By: {reporter}")
-        
         if not self.db: 
             print("❌ ERROR: No database connection found!")
             return False
-            
         try:
             res = self.db.collection('match_reports').add({
                 'match_id': match_id,
@@ -814,14 +811,33 @@ class ThunderData:
         if not self.db: return False
         try: safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower(); self.db.collection('player_ranks').document(safe_id).set({'name': player_name, 'rank': int(rank)}); return True
         except: return False
+
+    def admin_resolve_report(self, doc_id, action, admin_email="Unknown"):
+        if not self.db: return False
+        try:
+            new_status = 'Resolved' if action == 'approve' else 'Dismissed'
+            
+            doc_ref = self.db.collection('match_reports').document(doc_id)
+            if doc_ref.get().exists:
+                doc_ref.update({'status': new_status})
+                self._log_audit(admin_email, 'RESOLVE_INBOX', f"Marked Match Report {doc_id} as {new_status}.", {})
+                return True
+                
+            fb_ref = self.db.collection('feedback').document(doc_id)
+            if fb_ref.get().exists:
+                fb_ref.update({'status': new_status})
+                self._log_audit(admin_email, 'RESOLVE_INBOX', f"Marked Feedback {doc_id} as {new_status}.", {})
+                return True
+                
+            return False
+        except Exception as e:
+            print(f"❌ Error resolving report: {e}")
+            return False
         
     def admin_get_reports(self):
         if not self.db: return []
         try: 
             reports = []
-            
-            # THE FIX: We pull all reports and manually stringify the Date/Time objects
-            # This completely bypasses the internal Python -> JSON crash
             m_docs = self.db.collection('match_reports').stream()
             for d in m_docs:
                 data = d.to_dict()
@@ -854,8 +870,6 @@ class ThunderData:
                 return 0
                 
             reports.sort(key=safe_ts, reverse=True)
-            
-            # --- PREVENT THE JSON CRASH ---
             for r in reports:
                 if 'timestamp' in r:
                     r['timestamp'] = str(r['timestamp']) 
@@ -1171,6 +1185,41 @@ class ThunderData:
             })
             return True
         except Exception as e: return False
+
+    def get_contact_lists(self):
+        if not self.sheet_results: return {"emails": "", "phones": ""}
+        try:
+            ws = self.sheet_results.worksheet("Member info")
+            records = ws.get_all_records()
+            emails = []
+            phones = []
+            
+            for row in records:
+                email_val = ""
+                phone_val = ""
+                
+                for k, v in row.items():
+                    kl = str(k).lower()
+                    if 'email' in kl and not email_val:
+                        email_val = str(v).strip()
+                    if ('phone' in kl or 'mobile' in kl or 'number' in kl) and not phone_val:
+                        phone_val = str(v).strip()
+
+                if email_val and '@' in email_val:
+                    emails.append(email_val)
+                
+                if phone_val:
+                    clean_phone = re.sub(r'[^\d\+\s]', '', phone_val)
+                    if len(clean_phone) >= 8:
+                        phones.append(clean_phone)
+            
+            return {
+                "emails": ", ".join(list(set(emails))),
+                "phones": ", ".join(list(set(phones)))
+            }
+        except Exception as e:
+            logger.error(f"Failed to fetch contacts: {e}")
+            return {"emails": "", "phones": ""}
 
     def admin_glicko_math(self, p1, p2, s1, s2):
         r1 = self.rating_engine.get_rating(p1)

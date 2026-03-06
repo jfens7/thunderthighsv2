@@ -162,6 +162,89 @@
         } catch(e) { alert("Network error."); }
     }
 
+    // --- INBOX AND FEEDBACK LOGIC (RESTORED!) ---
+    window.loadPendingReports = async function() {
+        const mList = document.getElementById('matchReportsList');
+        const fList = document.getElementById('feedbackList');
+        const mBadge = document.getElementById('match-badge');
+        const fBadge = document.getElementById('feedback-badge');
+        
+        if(mList) mList.innerHTML = '<div class="text-center py-10 text-slate-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
+        if(fList) fList.innerHTML = '<div class="text-center py-10 text-slate-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
+        
+        try {
+            const res = await fetch('/api/admin/reports');
+            const reports = await res.json();
+            
+            let mHtml = ""; let fHtml = "";
+            let mCount = 0; let fCount = 0;
+            
+            reports.forEach(r => {
+                if (r.type === 'FEEDBACK') {
+                    fCount++;
+                    fHtml += `
+                    <div class="bg-slate-800 p-4 rounded-lg border border-blue-500/20 shadow-lg mb-3">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <span class="text-xs font-bold text-blue-400 bg-blue-900/30 px-2 py-1 rounded border border-blue-500/20 mr-2">${r.title}</span>
+                                <span class="text-xs text-slate-400 font-mono">${r.date}</span>
+                            </div>
+                            <div class="text-xs text-slate-500">From: <span class="text-slate-300 font-bold">${r.reporter}</span></div>
+                        </div>
+                        <div class="bg-black/30 border border-white/5 rounded p-3 mb-3 whitespace-pre-wrap text-sm text-slate-300">${r.problem}</div>
+                        <div class="flex gap-2 border-t border-white/5 pt-3">
+                            <button onclick="window.resolveReport('${r.id}', 'approve')" class="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors shadow-lg"><i class="fa-solid fa-check mr-1"></i> Mark Resolved</button>
+                            <button onclick="window.resolveReport('${r.id}', 'reject')" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors shadow-lg"><i class="fa-solid fa-trash mr-1"></i> Dismiss</button>
+                        </div>
+                    </div>`;
+                } else {
+                    mCount++;
+                    mHtml += `
+                    <div class="bg-slate-800 p-4 rounded-lg border border-yellow-500/20 shadow-lg mb-3">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <span class="text-xs font-bold text-yellow-500 bg-yellow-900/30 px-2 py-1 rounded border border-yellow-500/20 mr-2">SCORE ERROR</span>
+                                <span class="text-xs text-slate-400 font-mono">${r.date}</span>
+                            </div>
+                            <div class="text-xs text-slate-500 flex items-center gap-2">
+                                <span class="bg-slate-700 text-white px-2 py-0.5 rounded font-mono">ID: ${r.match_id || 'N/A'}</span>
+                                <span>Reported by: <span class="text-slate-300 font-bold">${r.reporter}</span></span>
+                            </div>
+                        </div>
+                        <div class="text-lg font-bold text-white mb-2">${r.title}</div>
+                        <div class="bg-red-900/20 border border-red-500/20 rounded p-3 mb-3 whitespace-pre-wrap text-sm text-red-200">${r.problem}</div>
+                        <div class="flex items-center gap-4 mb-3">
+                            <div class="text-sm text-slate-400">Suggested Fix:</div>
+                            <div class="bg-black/30 border border-white/10 px-3 py-1 rounded text-white font-mono font-bold">${r.suggested_s1} - ${r.suggested_s2}</div>
+                        </div>
+                        <div class="flex gap-2 border-t border-white/5 pt-3">
+                            <button onclick="window.resolveReport('${r.id}', 'approve')" class="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors shadow-lg"><i class="fa-solid fa-check mr-1"></i> Approve Fix</button>
+                            <button onclick="window.resolveReport('${r.id}', 'reject')" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors shadow-lg"><i class="fa-solid fa-xmark mr-1"></i> Reject</button>
+                        </div>
+                    </div>`;
+                }
+            });
+            
+            if(mList) mList.innerHTML = mHtml || '<div class="text-slate-600 text-center py-10 italic">No match errors reported.</div>';
+            if(fList) fList.innerHTML = fHtml || '<div class="text-slate-600 text-center py-10 italic">No new feedback.</div>';
+            if(mBadge) { mBadge.innerText = mCount; mCount > 0 ? mBadge.classList.remove('hidden') : mBadge.classList.add('hidden'); }
+            if(fBadge) { fBadge.innerText = fCount; fCount > 0 ? fBadge.classList.remove('hidden') : fBadge.classList.add('hidden'); }
+        } catch(e) {}
+    };
+
+    window.resolveReport = async function(id, action) {
+        if(!confirm(`Are you sure you want to ${action} this?`)) return;
+        try {
+            const res = await fetch('/api/admin/resolve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ report_id: id, action: action })
+            });
+            const data = await res.json();
+            if(data.success) { window.loadPendingReports(); } else { alert("Error resolving item."); }
+        } catch(e) { alert("Network error."); }
+    };
+
     // --- GLICKO DIAGNOSTICS LOGIC ---
     window.runDiagnostics = async function() {
         const p1 = document.getElementById('diag-p1-search').value;
@@ -284,7 +367,6 @@
             const data = await res.json();
             
             if(data.success) {
-                // Find all cards that share this exact season, division, and week combo
                 const allCards = document.querySelectorAll('.date-card');
                 let removedCount = 0;
                 
@@ -318,7 +400,6 @@
         }
     };
 
-    // Keep regular history edit intact for other tabs
     window.adminSaveHistoryEdit = async function(p1, p2, oldDate, id) {
         const s1 = document.getElementById(`s1-${id}`).value;
         const s2 = document.getElementById(`s2-${id}`).value;
@@ -444,7 +525,11 @@
             logs.forEach(l => {
                 const isUndone = l.status === 'undone';
                 const bgClass = isUndone ? 'bg-slate-800/30 border-dashed opacity-50' : 'bg-slate-800';
-                const undoBtn = (!isUndone && !['MERGE_PLAYER', 'ADD_NOTICE', 'DELETE_NOTICE', 'SET_FORMAT', 'FORCE_REFRESH'].includes(l.action)) ? `<button onclick="window.undoAction('${l.id}')" class="text-[10px] bg-red-600 hover:bg-red-500 text-white font-bold px-2 py-1 rounded transition ml-auto shadow">UNDO</button>` : '';
+                
+                // NEW: Exclude RESOLVE_INBOX from the UNDO button logic
+                const noUndoActions = ['MERGE_PLAYER', 'ADD_NOTICE', 'DELETE_NOTICE', 'SET_FORMAT', 'FORCE_REFRESH', 'RESOLVE_INBOX'];
+                const undoBtn = (!isUndone && !noUndoActions.includes(l.action)) ? `<button onclick="window.undoAction('${l.id}')" class="text-[10px] bg-red-600 hover:bg-red-500 text-white font-bold px-2 py-1 rounded transition ml-auto shadow">UNDO</button>` : '';
+                
                 html += `
                 <div class="${bgClass} border border-white/5 p-3 rounded-lg flex flex-col md:flex-row md:items-center gap-3">
                     <div class="flex flex-col gap-1">
@@ -627,52 +712,32 @@
         } catch(e) { alert("Network Error"); }
     };
 
-    try {
-        const migrationRef = collection(db, "Migration_Review");
-        onSnapshot(migrationRef, (snapshot) => {
-            const list = document.getElementById("migration-list");
-            const countBadge = document.getElementById("review-count");
-            if(!list) return;
-
-            list.innerHTML = "";
-            if(countBadge) countBadge.innerText = snapshot.size;
-
-            if(snapshot.empty) {
-                list.innerHTML = `<div class="text-center text-slate-500 py-10 italic border border-white/5 rounded-lg bg-slate-900/50">Queue Empty.</div>`;
+    window.copyContactList = async function(type) {
+        const btn = document.getElementById(`btn-copy-${type}`);
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Fetching Sheet...';
+        
+        try {
+            const res = await fetch('/api/admin/contacts');
+            const data = await res.json();
+            
+            if (!data[type] || data[type] === "") {
+                alert(`Could not find any ${type} in the "Member info" tab. Check the column headers!`);
+                btn.innerHTML = originalText;
                 return;
             }
-
-            snapshot.forEach(docSnap => {
-                const m = docSnap.data();
-                const id = docSnap.id;
-                const p1 = m.home_players?.[0] || m.raw_p1 || "";
-                const p2 = m.away_players?.[0] || m.raw_p2 || "";
-                
-                const card = document.createElement("div");
-                card.className = "bg-slate-800 p-4 rounded-lg border border-white/10 flex flex-col md:flex-row gap-4 items-center animate-fade-in mb-3 shadow-lg";
-                card.innerHTML = `
-                    <div class="flex-1 w-full">
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="text-xs font-bold text-red-400 bg-red-900/30 px-2 py-1 rounded border border-red-500/20 uppercase">${m.issues ? m.issues.join(", ") : "Issue"}</span>
-                            <span class="text-xs text-slate-500 font-mono border border-white/10 px-2 py-1 rounded">${m.season}</span>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
-                            <input type="text" id="p1-${id}" value="${p1}" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-white text-sm">
-                            <input type="text" id="p2-${id}" value="${p2}" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-white text-sm">
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <input type="number" id="s1-${id}" value="${m.live_home_sets}" class="w-16 bg-black/30 border border-white/10 rounded px-2 py-1 text-white text-sm text-center">
-                            <span class="text-slate-500 font-bold">-</span>
-                            <input type="number" id="s2-${id}" value="${m.live_away_sets}" class="w-16 bg-black/30 border border-white/10 rounded px-2 py-1 text-white text-sm text-center">
-                        </div>
-                    </div>
-                    <div class="flex flex-row md:flex-col gap-2 w-full md:w-32 border-t md:border-t-0 md:border-l border-white/5 pt-3 md:pt-0 md:pl-3">
-                        <button onclick="window.approveMigration('${id}')" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded text-sm flex-1 transition-colors shadow-lg"><i class="fa-solid fa-check mr-1"></i> Fix</button>
-                        <button onclick="window.denyMigration('${id}')" class="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded text-sm flex-1 transition-colors shadow-lg"><i class="fa-solid fa-trash mr-1"></i> Drop</button>
-                    </div>
-                `;
-                list.appendChild(card);
+            
+            navigator.clipboard.writeText(data[type]).then(() => {
+                const msg = document.getElementById('copy-success-msg');
+                msg.innerText = `✅ Copied ${data[type].split(',').length} ${type} to clipboard! Ready to paste.`;
+                msg.classList.remove('hidden');
+                setTimeout(() => msg.classList.add('hidden'), 4000);
+                btn.innerHTML = originalText;
             });
-        });
-    } catch(e) {}
+            
+        } catch(e) {
+            alert("Network error fetching contacts.");
+            btn.innerHTML = originalText;
+        }
+    }
 </script>
