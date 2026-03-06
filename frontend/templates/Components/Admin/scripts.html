@@ -52,7 +52,6 @@
         if (tabId === 'notices') window.loadAdminNotices();
         if (tabId === 'chat') window.loadAdminChat();
         
-        // Auto-load player directory if opening the players or diagnostics tab
         if (['players', 'diagnostics'].includes(tabId) && playerDirectoryData.length === 0) {
             window.loadPlayerDirectory();
         }
@@ -60,7 +59,6 @@
         if (tabId === 'audit') { window.loadAuditLogs(); window.loadAdminUsers(); window.loadTrafficStats(); }
     };
 
-    // --- SEARCHABLE DROPDOWNS (GENERALIZED) ---
     let playerDirectoryData = [];
     window.loadPlayerDirectory = async function() {
         try {
@@ -103,14 +101,10 @@
         });
     }
 
-    // Attach search inputs to the correct tools
     document.addEventListener('DOMContentLoaded', () => {
-        // Player Editor Overrides & Merge
         attachPlayerSearch('override-search', 'override-suggestions', 'override-id');
         attachPlayerSearch('merge-bad-search', 'merge-bad-suggestions');
         attachPlayerSearch('merge-good-search', 'merge-good-suggestions');
-        
-        // Diagnostics Tool Searches
         attachPlayerSearch('diag-p1-search', 'diag-p1-suggestions');
         attachPlayerSearch('diag-p2-search', 'diag-p2-suggestions');
     });
@@ -119,21 +113,16 @@
         const id = document.getElementById('override-id').value;
         const rating = document.getElementById('override-score').value;
         const isRetro = document.getElementById('override-retro').checked;
-        
         if(!id || !rating) return alert("Please select a player and provide a rating.");
-        
         try {
             const res = await fetch('/api/admin/override_rating', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ player_id: id, rating: rating, retroactive: isRetro })
             });
             const data = await res.json();
             if(data.success) { 
                 alert(`✅ Successfully applied rating override.`); 
-                document.getElementById('override-id').value = '';
-                document.getElementById('override-search').value = '';
-                document.getElementById('override-score').value = '';
+                document.getElementById('override-id').value = ''; document.getElementById('override-search').value = ''; document.getElementById('override-score').value = '';
             } else { alert("❌ Error applying rating override."); }
         } catch(e) { alert("Network error."); }
     };
@@ -141,28 +130,23 @@
     window.submitPlayerMerge = async function() {
         const bad = document.getElementById('merge-bad-search').value;
         const good = document.getElementById('merge-good-search').value;
-        
         if(!bad || !good) return alert("Please select both names.");
         if(bad.toLowerCase() === good.toLowerCase()) return alert("Names must be different.");
-        
         if(!confirm(`⚠️ DANGER: You are about to PERMANENTLY merge "${bad}" into "${good}". \n\nAll history for "${bad}" will be transferred, and the original profile will be deleted. Are you sure?`)) return;
-        
         try {
             const res = await fetch('/api/admin/merge', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ bad_name: bad, good_name: good })
             });
             const data = await res.json();
             if(data.success) {
                 alert(`✅ Successfully merged profiles!`);
-                document.getElementById('merge-bad-search').value = '';
-                document.getElementById('merge-good-search').value = '';
+                document.getElementById('merge-bad-search').value = ''; document.getElementById('merge-good-search').value = '';
             } else alert("❌ Error merging players.");
         } catch(e) { alert("Network error."); }
     }
 
-    // --- INBOX AND FEEDBACK LOGIC (RESTORED!) ---
+    // --- INBOX AND FEEDBACK LOGIC ---
     window.loadPendingReports = async function() {
         const mList = document.getElementById('matchReportsList');
         const fList = document.getElementById('feedbackList');
@@ -236,8 +220,7 @@
         if(!confirm(`Are you sure you want to ${action} this?`)) return;
         try {
             const res = await fetch('/api/admin/resolve', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ report_id: id, action: action })
             });
             const data = await res.json();
@@ -260,8 +243,7 @@
         
         try {
             const res = await fetch('/api/admin/glicko_calc', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ p1: p1, p2: p2, s1: s1, s2: s2 })
             });
             const d = await res.json();
@@ -295,12 +277,7 @@
                     </div>`;
                 };
 
-                resultsBox.innerHTML = `
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        ${renderPlayerMath(math.p1)}
-                        ${renderPlayerMath(math.p2)}
-                    </div>
-                `;
+                resultsBox.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">${renderPlayerMath(math.p1)}${renderPlayerMath(math.p2)}</div>`;
                 resultsBox.classList.remove('hidden');
             }
         } catch(e) { alert("Network Error"); } finally {
@@ -320,11 +297,7 @@
             const errors = await res.json();
             
             if(dBadge) { dBadge.innerText = errors.length; errors.length > 0 ? dBadge.classList.remove('hidden') : dBadge.classList.add('hidden'); }
-            
-            if(errors.length === 0) {
-                dList.innerHTML = '<div class="text-slate-600 text-center py-10 italic">Awesome! No missing dates found.</div>';
-                return;
-            }
+            if(errors.length === 0) { dList.innerHTML = '<div class="text-slate-600 text-center py-10 italic">Awesome! No missing dates found.</div>'; return; }
             
             let html = "";
             errors.forEach(m => {
@@ -355,13 +328,11 @@
         const newDate = document.getElementById(`fix-date-${id}`).value;
         if (!newDate) return alert("Please enter a valid date.");
         
-        btnElement.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-        btnElement.disabled = true;
+        btnElement.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; btnElement.disabled = true;
         
         try {
             const res = await fetch('/api/admin/bulk_fix_date', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ season: season, division: division, week: week, date: newDate })
             });
             const data = await res.json();
@@ -369,35 +340,21 @@
             if(data.success) {
                 const allCards = document.querySelectorAll('.date-card');
                 let removedCount = 0;
-                
                 allCards.forEach(card => {
                     if (card.dataset.season === season && card.dataset.div === division && card.dataset.week === week) {
-                        card.style.transition = "all 0.3s ease";
-                        card.style.opacity = "0";
-                        card.style.transform = "translateX(20px)";
-                        setTimeout(() => card.remove(), 300);
-                        removedCount++;
+                        card.style.transition = "all 0.3s ease"; card.style.opacity = "0"; card.style.transform = "translateX(20px)";
+                        setTimeout(() => card.remove(), 300); removedCount++;
                     }
                 });
-                
                 const dBadge = document.getElementById('date-badge');
                 if(dBadge) {
-                    let count = parseInt(dBadge.innerText) || 0;
-                    count = Math.max(0, count - removedCount);
-                    dBadge.innerText = count;
-                    if(count === 0) {
-                        dBadge.classList.add('hidden');
-                        document.getElementById('dateErrorsList').innerHTML = '<div class="text-slate-600 text-center py-10 italic">Awesome! No missing dates found.</div>';
-                    }
+                    let count = parseInt(dBadge.innerText) || 0; count = Math.max(0, count - removedCount); dBadge.innerText = count;
+                    if(count === 0) { dBadge.classList.add('hidden'); document.getElementById('dateErrorsList').innerHTML = '<div class="text-slate-600 text-center py-10 italic">Awesome! No missing dates found.</div>'; }
                 }
             } else { 
-                alert("❌ Failed to set bulk date fix."); 
-                btnElement.innerHTML = 'FIX'; btnElement.disabled = false;
+                alert("❌ Failed to set bulk date fix."); btnElement.innerHTML = 'FIX'; btnElement.disabled = false;
             }
-        } catch(e) { 
-            alert("Network Error"); 
-            btnElement.innerHTML = 'FIX'; btnElement.disabled = false;
-        }
+        } catch(e) { alert("Network Error"); btnElement.innerHTML = 'FIX'; btnElement.disabled = false; }
     };
 
     window.adminSaveHistoryEdit = async function(p1, p2, oldDate, id) {
@@ -406,11 +363,9 @@
         const newDate = document.getElementById(`date-${id}`).value;
         
         if(!confirm(`OVERRIDE MATCH:\n\nPlayers: ${p1} vs ${p2}\nNew Score: ${s1}-${s2}\nNew Date: ${newDate}\n\nProceed?`)) return;
-        
         try {
             const res = await fetch('/api/admin/update_match', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ p1: p1, p2: p2, date: oldDate, s1: s1, s2: s2, new_date: newDate })
             });
             const data = await res.json();
@@ -419,7 +374,6 @@
         } catch(e) { alert("Network Error"); }
     };
 
-    // --- OTHER ADMIN FUNCTIONS (Chat, Notices, Audit, etc) ---
     window.loadAdminChat = async function() {
         const list = document.getElementById('adminChatList');
         if(!list) return;
@@ -429,21 +383,17 @@
             if(messages.length === 0) { list.innerHTML = '<div class="text-slate-500 text-center py-8 italic">No notes yet.</div>'; return; }
             list.innerHTML = messages.map(m => `
                 <div class="bg-slate-900/50 p-4 rounded-lg border border-white/5 relative">
-                    <div class="flex justify-between items-center mb-2 border-b border-white/5 pb-2">
-                        <span class="text-xs font-bold text-indigo-400"><i class="fa-solid fa-user-shield mr-1"></i>${m.author}</span>
-                        <span class="text-[10px] text-slate-500 font-mono">${m.time_str}</span>
-                    </div>
+                    <div class="flex justify-between items-center mb-2 border-b border-white/5 pb-2"><span class="text-xs font-bold text-indigo-400"><i class="fa-solid fa-user-shield mr-1"></i>${m.author}</span><span class="text-[10px] text-slate-500 font-mono">${m.time_str}</span></div>
                     <div class="text-sm text-slate-300 whitespace-pre-wrap">${m.message}</div>
                 </div>
             `).join('');
-        } catch(e) { console.error(e); }
+        } catch(e) {}
     };
 
     window.postAdminMessage = async function() {
         const input = document.getElementById('admin-chat-input');
         const msg = input.value.trim();
         if(!msg) return;
-        
         try {
             const res = await fetch('/api/admin/add_message', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) });
             const data = await res.json();
@@ -464,18 +414,7 @@
                 if(n.type === 'Update') badgeColor = 'bg-sky-500/20 text-sky-400 border border-sky-500/30';
                 if(n.type === 'Event') badgeColor = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30';
                 if(n.type === 'Alert') badgeColor = 'bg-red-500/20 text-red-400 border border-red-500/30';
-                return `
-                <div class="bg-slate-800 p-4 rounded-xl border border-white/5 flex justify-between items-start gap-4">
-                    <div>
-                        <div class="flex items-center gap-2 mb-1">
-                            <span class="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest ${badgeColor}">${n.type}</span>
-                            <span class="text-xs text-slate-500 font-mono">${n.date_str}</span>
-                        </div>
-                        <h4 class="text-white font-bold text-lg leading-tight mb-2">${n.title}</h4>
-                        <p class="text-sm text-slate-400 line-clamp-2">${n.message}</p>
-                    </div>
-                    <button onclick="window.deleteNotice('${n.id}')" class="bg-red-900/30 hover:bg-red-600 text-red-500 hover:text-white border border-red-500/20 px-3 py-2 rounded-lg transition-colors shrink-0"><i class="fa-solid fa-trash"></i></button>
-                </div>`;
+                return `<div class="bg-slate-800 p-4 rounded-xl border border-white/5 flex justify-between items-start gap-4"><div><div class="flex items-center gap-2 mb-1"><span class="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest ${badgeColor}">${n.type}</span><span class="text-xs text-slate-500 font-mono">${n.date_str}</span></div><h4 class="text-white font-bold text-lg leading-tight mb-2">${n.title}</h4><p class="text-sm text-slate-400 line-clamp-2">${n.message}</p></div><button onclick="window.deleteNotice('${n.id}')" class="bg-red-900/30 hover:bg-red-600 text-red-500 hover:text-white border border-red-500/20 px-3 py-2 rounded-lg transition-colors shrink-0"><i class="fa-solid fa-trash"></i></button></div>`;
             }).join('');
         } catch(e) {}
     };
@@ -485,7 +424,6 @@
         const type = document.getElementById('notice-type').value;
         const msg = document.getElementById('notice-message').value;
         if(!title || !msg) return alert("Title and Message are required.");
-        
         try {
             const res = await fetch('/api/admin/add_notice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title, type: type, message: msg }) });
             const data = await res.json();
@@ -526,20 +464,10 @@
                 const isUndone = l.status === 'undone';
                 const bgClass = isUndone ? 'bg-slate-800/30 border-dashed opacity-50' : 'bg-slate-800';
                 
-                // NEW: Exclude RESOLVE_INBOX from the UNDO button logic
-                const noUndoActions = ['MERGE_PLAYER', 'ADD_NOTICE', 'DELETE_NOTICE', 'SET_FORMAT', 'FORCE_REFRESH', 'RESOLVE_INBOX'];
+                const noUndoActions = ['MERGE_PLAYER', 'ADD_NOTICE', 'DELETE_NOTICE', 'SET_FORMAT', 'FORCE_REFRESH', 'RESOLVE_INBOX', 'SMS_BROADCAST'];
                 const undoBtn = (!isUndone && !noUndoActions.includes(l.action)) ? `<button onclick="window.undoAction('${l.id}')" class="text-[10px] bg-red-600 hover:bg-red-500 text-white font-bold px-2 py-1 rounded transition ml-auto shadow">UNDO</button>` : '';
                 
-                html += `
-                <div class="${bgClass} border border-white/5 p-3 rounded-lg flex flex-col md:flex-row md:items-center gap-3">
-                    <div class="flex flex-col gap-1">
-                        <div class="flex items-center gap-2"><span class="text-[9px] bg-slate-700 text-white px-2 py-0.5 rounded uppercase font-bold tracking-widest">${l.action}</span><span class="text-[10px] text-slate-400 font-mono">${l.time_str}</span></div>
-                        <div class="text-sm font-bold text-white">${l.description}</div>
-                        <div class="text-[10px] text-slate-500">Authorized by: <span class="text-slate-300">${l.admin}</span></div>
-                    </div>
-                    ${undoBtn}
-                    ${isUndone ? `<div class="ml-auto text-[10px] text-red-500 font-bold uppercase tracking-widest border border-red-500/30 px-2 py-1 rounded bg-red-900/20">REVERSED BY ${l.undone_by}</div>` : ''}
-                </div>`;
+                html += `<div class="${bgClass} border border-white/5 p-3 rounded-lg flex flex-col md:flex-row md:items-center gap-3"><div class="flex flex-col gap-1"><div class="flex items-center gap-2"><span class="text-[9px] bg-slate-700 text-white px-2 py-0.5 rounded uppercase font-bold tracking-widest">${l.action}</span><span class="text-[10px] text-slate-400 font-mono">${l.time_str}</span></div><div class="text-sm font-bold text-white">${l.description}</div><div class="text-[10px] text-slate-500">Authorized by: <span class="text-slate-300">${l.admin}</span></div></div>${undoBtn}${isUndone ? `<div class="ml-auto text-[10px] text-red-500 font-bold uppercase tracking-widest border border-red-500/30 px-2 py-1 rounded bg-red-900/20">REVERSED BY ${l.undone_by}</div>` : ''}</div>`;
             });
             list.innerHTML = html;
         } catch(e) {}
@@ -566,12 +494,8 @@
                 const roleBadge = isPending ? '<span class="text-yellow-500 bg-yellow-900/30 border border-yellow-500/30 px-2 py-0.5 rounded text-[9px] uppercase font-bold">Pending</span>' : `<span class="text-blue-400 bg-blue-900/30 border border-blue-500/30 px-2 py-0.5 rounded text-[9px] uppercase font-bold">${u.role}</span>`;
                 let actions = '';
                 if(u.role !== 'super_admin') {
-                    if(isPending) {
-                        actions = `<button onclick="window.manageUser('${u.email}', 'approve')" class="text-green-500 hover:text-green-400 text-sm"><i class="fa-solid fa-check"></i></button>
-                                   <button onclick="window.manageUser('${u.email}', 'delete')" class="text-red-500 hover:text-red-400 text-sm"><i class="fa-solid fa-trash"></i></button>`;
-                    } else {
-                        actions = `<button onclick="window.manageUser('${u.email}', 'revoke')" class="text-red-400 hover:text-red-300 text-[10px] font-bold uppercase border border-red-500/30 px-2 py-1 rounded">Revoke Access</button>`;
-                    }
+                    if(isPending) { actions = `<button onclick="window.manageUser('${u.email}', 'approve')" class="text-green-500 hover:text-green-400 text-sm"><i class="fa-solid fa-check"></i></button><button onclick="window.manageUser('${u.email}', 'delete')" class="text-red-500 hover:text-red-400 text-sm"><i class="fa-solid fa-trash"></i></button>`; } 
+                    else { actions = `<button onclick="window.manageUser('${u.email}', 'revoke')" class="text-red-400 hover:text-red-300 text-[10px] font-bold uppercase border border-red-500/30 px-2 py-1 rounded">Revoke Access</button>`; }
                 }
                 html += `<div class="bg-black/30 border border-white/5 p-3 rounded-lg flex items-center justify-between"><div><div class="text-sm font-bold text-white mb-1 truncate max-w-[150px] md:max-w-xs" title="${u.email}">${u.email}</div>${roleBadge}</div><div class="flex items-center gap-3">${actions}</div></div>`;
             });
@@ -587,12 +511,11 @@
             if(data.success) window.loadAdminUsers();
         } catch(e) {}
     }
-
 </script>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, query, onSnapshot, doc, deleteDoc, updateDoc, getDoc, getDocs, setDoc, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getFirestore, collection, query, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
     const firebaseConfig = { apiKey: "AIzaSyDq05wFsKLHtt8G0Z5yLOG9pIk9UX24S4o", authDomain: "gctta-stats-live.firebaseapp.com", projectId: "gctta-stats-live", storageBucket: "gctta-stats-live.firebasestorage.app", messagingSenderId: "1070856258556", appId: "1:1070856258556:web:be438e04c1941abc3c6879" };
     const app = initializeApp(firebaseConfig);
@@ -600,11 +523,7 @@
 
     window.setFormatOverride = async function(fixtureId, formatType) {
         try {
-            const res = await fetch('/api/admin/set_fixture_format', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fixture_id: fixtureId, format_type: formatType })
-            });
+            const res = await fetch('/api/admin/set_fixture_format', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fixture_id: fixtureId, format_type: formatType }) });
             const data = await res.json();
             if(!data.success) alert("Failed to save format override.");
         } catch(e) { console.error("Network error saving format."); }
@@ -614,62 +533,20 @@
         onSnapshot(query(collection(db, "fixture_schedule")), (snapshot) => {
             const liveList = document.getElementById("live-list");
             const scheduledList = document.getElementById("scheduled-list");
-            let liveCount = 0;
-            let liveHtml = "";
-            let schedHtml = "";
+            let liveCount = 0; let liveHtml = ""; let schedHtml = "";
             
             snapshot.forEach((doc) => {
-                const m = doc.data();
-                const id = doc.id;
-                
+                const m = doc.data(); const id = doc.id;
                 const p1 = (m.home_players && m.home_players.length > 0) ? m.home_players[0] : m.home_team;
                 const p2 = (m.away_players && m.away_players.length > 0) ? m.away_players[0] : m.away_team;
                 
                 if (m.match_status === "Live" || m.match_status === "Paused" || m.live_home_score > 0 || m.live_away_score > 0) {
-                    liveCount++;
-                    const s1 = m.live_home_sets || 0;
-                    const s2 = m.live_away_sets || 0;
-                    
-                    liveHtml += `
-                    <div class="bg-slate-800 p-5 rounded-xl border border-blue-500/30 shadow-lg relative overflow-hidden mb-4">
-                        <div class="absolute top-0 right-0 bg-blue-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-lg animate-pulse">ACTIVE NOW</div>
-                        <div class="flex justify-between items-center mb-3 mt-1">
-                            <span class="text-xs text-slate-400 font-mono">Table ${m.table} • ${m.division}</span>
-                        </div>
-                        <div class="text-xl font-black text-white mb-4">${p1} <span class="text-slate-500 mx-2 text-sm">vs</span> ${p2}</div>
-                        
-                        <div class="flex items-center gap-4 bg-black/40 p-4 rounded-xl border border-white/5 mb-4 shadow-inner">
-                            <div class="text-xs text-slate-400 font-bold uppercase tracking-widest">Adjust Final Score:</div>
-                            <input type="number" id="live-s1-${id}" value="${s1}" class="w-14 bg-slate-900 border border-white/10 text-white font-bold font-mono text-center rounded py-2 focus:border-blue-500 outline-none text-lg">
-                            <span class="text-slate-500 font-black">-</span>
-                            <input type="number" id="live-s2-${id}" value="${s2}" class="w-14 bg-slate-900 border border-white/10 text-white font-bold font-mono text-center rounded py-2 focus:border-blue-500 outline-none text-lg">
-                        </div>
-                        
-                        <div class="flex gap-3">
-                            <button onclick="window.forceFinishLive('${id}', '${p1.replace(/'/g, "\\'")}', '${p2.replace(/'/g, "\\'")}')" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm transition-transform hover:scale-[1.02] shadow-[0_0_15px_rgba(37,99,235,0.4)] flex items-center justify-center gap-2"><i class="fa-solid fa-flag-checkered"></i> Force Finish</button>
-                            <button onclick="window.wipeLiveMatch('${id}')" class="bg-red-900/50 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 font-bold py-2.5 px-4 rounded-lg text-sm transition-colors" title="Wipe Error"><i class="fa-solid fa-trash"></i></button>
-                        </div>
-                    </div>`;
+                    liveCount++; const s1 = m.live_home_sets || 0; const s2 = m.live_away_sets || 0;
+                    liveHtml += `<div class="bg-slate-800 p-5 rounded-xl border border-blue-500/30 shadow-lg relative overflow-hidden mb-4"><div class="absolute top-0 right-0 bg-blue-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-lg animate-pulse">ACTIVE NOW</div><div class="flex justify-between items-center mb-3 mt-1"><span class="text-xs text-slate-400 font-mono">Table ${m.table} • ${m.division}</span></div><div class="text-xl font-black text-white mb-4">${p1} <span class="text-slate-500 mx-2 text-sm">vs</span> ${p2}</div><div class="flex items-center gap-4 bg-black/40 p-4 rounded-xl border border-white/5 mb-4 shadow-inner"><div class="text-xs text-slate-400 font-bold uppercase tracking-widest">Adjust Final Score:</div><input type="number" id="live-s1-${id}" value="${s1}" class="w-14 bg-slate-900 border border-white/10 text-white font-bold font-mono text-center rounded py-2 focus:border-blue-500 outline-none text-lg"><span class="text-slate-500 font-black">-</span><input type="number" id="live-s2-${id}" value="${s2}" class="w-14 bg-slate-900 border border-white/10 text-white font-bold font-mono text-center rounded py-2 focus:border-blue-500 outline-none text-lg"></div><div class="flex gap-3"><button onclick="window.forceFinishLive('${id}', '${p1.replace(/'/g, "\\'")}', '${p2.replace(/'/g, "\\'")}')" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm transition-transform hover:scale-[1.02] shadow-[0_0_15px_rgba(37,99,235,0.4)] flex items-center justify-center gap-2"><i class="fa-solid fa-flag-checkered"></i> Force Finish</button><button onclick="window.wipeLiveMatch('${id}')" class="bg-red-900/50 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 font-bold py-2.5 px-4 rounded-lg text-sm transition-colors" title="Wipe Error"><i class="fa-solid fa-trash"></i></button></div></div>`;
                 } 
                 else if (m.match_status === "Scheduled" || !m.match_status) {
                     const formatVal = m.format_override || "Auto";
-                    schedHtml += `
-                    <div class="bg-slate-800/80 p-4 rounded-xl border border-white/5 shadow relative">
-                        <div class="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1 border-b border-white/5 pb-1 flex justify-between">
-                            <span>Table ${m.table}</span>
-                            <span class="text-blue-400">${m.division}</span>
-                        </div>
-                        <div class="font-bold text-white text-sm mt-2">${m.home_team} <br><span class="text-slate-500 text-xs font-normal">vs</span><br> ${m.away_team}</div>
-                        
-                        <div class="mt-4 pt-3 border-t border-white/5">
-                            <label class="block text-[9px] text-slate-500 uppercase font-bold mb-1">Match Format</label>
-                            <select onchange="window.setFormatOverride('${id}', this.value)" class="w-full bg-slate-900 border border-white/10 text-slate-300 font-bold text-xs rounded py-2 px-2 focus:border-blue-500 outline-none">
-                                <option value="Auto" ${formatVal === 'Auto' ? 'selected' : ''}>Auto-Detect</option>
-                                <option value="2v2" ${formatVal === '2v2' ? 'selected' : ''}>Force 2v2 (5 Matches)</option>
-                                <option value="3v3" ${formatVal === '3v3' ? 'selected' : ''}>Force 3v3 (11 Matches)</option>
-                            </select>
-                        </div>
-                    </div>`;
+                    schedHtml += `<div class="bg-slate-800/80 p-4 rounded-xl border border-white/5 shadow relative"><div class="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1 border-b border-white/5 pb-1 flex justify-between"><span>Table ${m.table}</span><span class="text-blue-400">${m.division}</span></div><div class="font-bold text-white text-sm mt-2">${m.home_team} <br><span class="text-slate-500 text-xs font-normal">vs</span><br> ${m.away_team}</div><div class="mt-4 pt-3 border-t border-white/5"><label class="block text-[9px] text-slate-500 uppercase font-bold mb-1">Match Format</label><select onchange="window.setFormatOverride('${id}', this.value)" class="w-full bg-slate-900 border border-white/10 text-slate-300 font-bold text-xs rounded py-2 px-2 focus:border-blue-500 outline-none"><option value="Auto" ${formatVal === 'Auto' ? 'selected' : ''}>Auto-Detect</option><option value="2v2" ${formatVal === '2v2' ? 'selected' : ''}>Force 2v2 (5 Matches)</option><option value="3v3" ${formatVal === '3v3' ? 'selected' : ''}>Force 3v3 (11 Matches)</option></select></div></div>`;
                 }
             });
             
@@ -685,30 +562,19 @@
         const s1 = document.getElementById(`live-s1-${id}`).value;
         const s2 = document.getElementById(`live-s2-${id}`).value;
         if(!confirm(`FORCE FINISH MATCH:\n\n${p1} vs ${p2}\nFinal Score: ${s1} - ${s2}\n\nThis will submit the match to history and clear it from the iPad. Proceed?`)) return;
-        
         try {
-            const res = await fetch('/api/admin/force_finish_live', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: id, s1: s1, s2: s2 })
-            });
+            const res = await fetch('/api/admin/force_finish_live', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, s1: s1, s2: s2 }) });
             const data = await res.json();
-            if(data.success) alert("✅ Match forced finished and successfully submitted to history!");
-            else alert("❌ Error finishing match.");
+            if(data.success) alert("✅ Match forced finished and successfully submitted to history!"); else alert("❌ Error finishing match.");
         } catch(e) { alert("Network Error"); }
     };
 
     window.wipeLiveMatch = async function(id) {
         if(!confirm(`WIPE MATCH:\n\nAre you sure you want to completely erase this match and reset the iPad to Scheduled?`)) return;
         try {
-            const res = await fetch('/api/admin/wipe_live', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: id })
-            });
+            const res = await fetch('/api/admin/wipe_live', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id }) });
             const data = await res.json();
-            if(data.success) alert("🗑️ Match wiped successfully!");
-            else alert("❌ Error wiping match.");
+            if(data.success) alert("🗑️ Match wiped successfully!"); else alert("❌ Error wiping match.");
         } catch(e) { alert("Network Error"); }
     };
 
@@ -716,28 +582,55 @@
         const btn = document.getElementById(`btn-copy-${type}`);
         const originalText = btn.innerHTML;
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Fetching Sheet...';
-        
         try {
             const res = await fetch('/api/admin/contacts');
             const data = await res.json();
-            
             if (!data[type] || data[type] === "") {
-                alert(`Could not find any ${type} in the "Member info" tab. Check the column headers!`);
-                btn.innerHTML = originalText;
-                return;
+                alert(`Could not find any ${type} in the "Member info" tab. Check the column headers!`); btn.innerHTML = originalText; return;
             }
-            
             navigator.clipboard.writeText(data[type]).then(() => {
                 const msg = document.getElementById('copy-success-msg');
                 msg.innerText = `✅ Copied ${data[type].split(',').length} ${type} to clipboard! Ready to paste.`;
-                msg.classList.remove('hidden');
-                setTimeout(() => msg.classList.add('hidden'), 4000);
+                msg.classList.remove('hidden'); setTimeout(() => msg.classList.add('hidden'), 4000);
                 btn.innerHTML = originalText;
             });
-            
+        } catch(e) { alert("Network error fetching contacts."); btn.innerHTML = originalText; }
+    }
+
+    // --- BRAND NEW: API AUTOMATION FUNCTION ---
+    window.sendSmsBroadcast = async function() {
+        const msgText = document.getElementById('broadcast-input').value.trim();
+        if (!msgText) return alert("You must write a custom message before sending!");
+        
+        if (!confirm(`🚨 DANGER ZONE 🚨\n\nYou are about to send a mass SMS to EVERY phone number in the Google Sheet. This will use real API credits.\n\nProceed?`)) return;
+
+        const btn = document.getElementById('btn-send-sms');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> CONTACTING API...';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch('/api/admin/send_sms', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: msgText })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                const succ = document.getElementById('sms-success-msg');
+                succ.innerText = `✅ SUCCESS! ${data.message}`;
+                succ.classList.remove('hidden');
+                document.getElementById('broadcast-input').value = '';
+                setTimeout(() => succ.classList.add('hidden'), 5000);
+            } else {
+                alert(`❌ API ERROR: ${data.error}`);
+            }
         } catch(e) {
-            alert("Network error fetching contacts.");
+            alert("❌ FATAL ERROR: Could not connect to backend server.");
+        } finally {
             btn.innerHTML = originalText;
+            btn.disabled = false;
         }
     }
 </script>

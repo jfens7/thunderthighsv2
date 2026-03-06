@@ -52,7 +52,6 @@ try:
     atexit.register(lambda: scheduler.shutdown())
 except Exception as e: pass
 
-# --- SECURITY & TRAFFIC TRACKING DECORATORS ---
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -117,7 +116,6 @@ def admin():
     return render_template('admin.html', email=session.get('admin_email'), role=session.get('admin_role'))
 
 
-# --- PUBLIC DATA ENDPOINTS ---
 @app.route('/api/players')
 def get_players(): return jsonify(list(db.get_all_players().keys())) if db else jsonify([])
 
@@ -145,46 +143,29 @@ def get_rankings(season, division): return jsonify(db.get_division_rankings(seas
 @app.route('/api/week/<season>/<week>')
 def get_week_results(season, week): return jsonify(db.get_matches_by_week(season, week)) if db else jsonify([])
 
-
-# --- SUBMISSION ENDPOINTS (WITH ERROR CODES) ---
 @app.route('/api/feedback', methods=['POST'])
 def submit_feedback():
     if not db: return jsonify({"success": False, "code": 500, "message": "Database connection offline"}), 500
     data = request.json
-    
-    if not data.get('message') or not data.get('contact'):
-        return jsonify({"success": False, "code": 400, "message": "Missing required fields"}), 400
-        
+    if not data.get('message') or not data.get('contact'): return jsonify({"success": False, "code": 400, "message": "Missing required fields"}), 400
     success = db.user_submit_feedback(data.get('type'), data.get('message'), data.get('contact'), data.get('context'))
-    if success:
-        return jsonify({"success": True, "code": 200, "message": "Feedback securely saved to Firebase Database."}), 200
-    else:
-        return jsonify({"success": False, "code": 500, "message": "Firebase rejected the write operation."}), 500
+    if success: return jsonify({"success": True, "code": 200, "message": "Feedback securely saved to Firebase Database."}), 200
+    else: return jsonify({"success": False, "code": 500, "message": "Firebase rejected the write operation."}), 500
 
 @app.route('/api/report', methods=['POST'])
 def submit_report():
     if not db: return jsonify({"success": False, "code": 500, "message": "Database connection offline"}), 500
     data = request.json
-    
     success = db.user_submit_report(data.get('match_id'), data.get('p1'), data.get('p2'), data.get('date'), data.get('reporter'), data.get('problem'), data.get('suggested_home'), data.get('suggested_away'))
-    
-    if success:
-        return jsonify({"success": True, "code": 200, "message": "Match Report securely saved to Firebase Database."}), 200
-    else:
-        return jsonify({"success": False, "code": 500, "message": "Firebase rejected the write operation."}), 500
+    if success: return jsonify({"success": True, "code": 200, "message": "Match Report securely saved to Firebase Database."}), 200
+    else: return jsonify({"success": False, "code": 500, "message": "Firebase rejected the write operation."}), 500
 
-
-# --- DONATION ENDPOINTS ---
 @app.route('/api/create-payment-intent', methods=['POST'])
 def create_payment():
     try:
         data = request.json
         amount = int(float(data.get('amount', 5.00)) * 100) 
-        intent = stripe.PaymentIntent.create(
-            amount=amount, 
-            currency='aud', 
-            automatic_payment_methods={'enabled': True}
-        )
+        intent = stripe.PaymentIntent.create(amount=amount, currency='aud', automatic_payment_methods={'enabled': True})
         return jsonify({'clientSecret': intent.client_secret})
     except Exception as e: return jsonify(error=str(e)), 403
 
@@ -201,8 +182,6 @@ def top_donors():
     res = db.get_top_donors()
     return jsonify(res)
 
-
-# --- ADMIN ACTIONS (LOGGED) ---
 @app.route('/api/admin/traffic')
 @login_required
 def admin_traffic(): return jsonify(db.get_traffic_stats()) if db else jsonify({'views': 0, 'uniques': 0})
@@ -283,7 +262,6 @@ def glicko_calc():
     res = db.admin_glicko_math(data.get('p1'), data.get('p2'), data.get('s1'), data.get('s2'))
     return jsonify({"success": True, "data": res})
 
-# --- ADMIN NOTES / CHAT ENDPOINTS ---
 @app.route('/api/admin/messages')
 @login_required
 def get_admin_messages():
@@ -296,8 +274,6 @@ def add_admin_message():
     data = request.json
     return jsonify({"success": db.add_admin_message(data.get('message'), session.get('admin_email'))})
 
-
-# --- NOTICEBOARD & BROADCAST ENDPOINTS ---
 @app.route('/api/notices')
 def get_notices(): 
     return jsonify(db.get_notices()) if db else jsonify([])
@@ -321,8 +297,17 @@ def get_contacts():
     if not db: return jsonify({"emails": "", "phones": ""})
     return jsonify(db.get_contact_lists())
 
+# --- NEW: CLICKSEND API ROUTE ---
+@app.route('/api/admin/send_sms', methods=['POST'])
+@login_required
+def send_sms():
+    if not db: return jsonify({"success": False, "error": "Database offline"})
+    data = request.json
+    msg = data.get('message')
+    if not msg: return jsonify({"success": False, "error": "Message cannot be empty."})
+    result = db.admin_send_sms_broadcast(msg, session.get('admin_email', 'Unknown'))
+    return jsonify(result)
 
-# --- SUPER ADMIN ONLY ENDPOINTS ---
 @app.route('/api/admin/audit_logs')
 @super_admin_required
 def audit_logs(): return jsonify(db.get_audit_logs()) if db else jsonify([])
