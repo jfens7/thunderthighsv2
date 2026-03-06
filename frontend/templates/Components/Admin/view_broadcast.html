@@ -1,0 +1,57 @@
+<div class="space-y-6 animate-fade-in w-full max-w-4xl mx-auto">
+    <div class="flex items-center gap-3 mb-6">
+        <div class="bg-sky-600/20 p-2 rounded-lg border border-sky-500/30">
+            <i class="fa-solid fa-tower-broadcast text-sky-500 text-xl shadow-[0_0_10px_rgba(14,165,233,0.5)]"></i>
+        </div>
+        <div>
+            <h2 class="text-2xl font-black text-white leading-none">Club Broadcast Tool</h2>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Generate perfectly formatted announcements for Facebook, Email, or WhatsApp.</p>
+        </div>
+    </div>
+
+    <div class="bg-slate-800 p-6 rounded-xl border border-white/5 shadow-lg">
+        <label class="text-xs font-bold text-slate-500 uppercase block mb-2">Announcement Subject / Details</label>
+        <textarea id="broadcast-input" rows="4" class="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-sky-500 outline-none mb-4" placeholder="e.g. Week 12 matches have just been calculated and synced to the database!"></textarea>
+
+        <div class="bg-black/30 border border-white/10 p-4 rounded-lg mb-6">
+            <div class="text-[10px] text-slate-500 uppercase font-bold mb-2">Live Preview</div>
+            <div id="broadcast-preview" class="text-sm text-slate-300 whitespace-pre-wrap font-mono">
+📢 GCTTA Database Update 📢
+
+[Your message will appear here]
+
+Check out your updated ratings, win percentages, and division standings below! 👇
+🔗 https://gctta-stats.com.au
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <button onclick="window.copyBroadcast('facebook')" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-transform hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2">
+                <i class="fa-brands fa-facebook"></i> Copy for Facebook
+            </button>
+            <button onclick="window.copyBroadcast('whatsapp')" class="bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg transition-transform hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2">
+                <i class="fa-brands fa-whatsapp"></i> Copy for WhatsApp
+            </button>
+            <button onclick="window.copyBroadcast('email')" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-lg transition-transform hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2">
+                <i class="fa-solid fa-envelope"></i> Copy for Email
+            </button>
+        </div>
+        <div id="copy-success-msg" class="text-center text-emerald-400 font-bold text-sm mt-4 hidden animate-pulse">✅ Copied to clipboard! You can now paste it directly into your app.</div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('broadcast-input').addEventListener('input', function() {
+        const msg = this.value || '[Your message will appear here]';
+        document.getElementById('broadcast-preview').innerText = `📢 GCTTA Database Update 📢\n\n${msg}\n\nCheck out your updated ratings, win percentages, and division standings below! 👇\n🔗 https://gctta-stats.com.au`;
+    });
+
+    window.copyBroadcast = function(type) {
+        const text = document.getElementById('broadcast-preview').innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            const msg = document.getElementById('copy-success-msg');
+            msg.classList.remove('hidden');
+            setTimeout(() => msg.classList.add('hidden'), 3000);
+        });
+    }
+</script>

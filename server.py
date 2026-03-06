@@ -146,20 +146,32 @@ def get_rankings(season, division): return jsonify(db.get_division_rankings(seas
 def get_week_results(season, week): return jsonify(db.get_matches_by_week(season, week)) if db else jsonify([])
 
 
-# --- SUBMISSION ENDPOINTS ---
+# --- SUBMISSION ENDPOINTS (WITH ERROR CODES) ---
 @app.route('/api/feedback', methods=['POST'])
 def submit_feedback():
-    if not db: return jsonify({"success": False}), 500
+    if not db: return jsonify({"success": False, "code": 500, "message": "Database connection offline"}), 500
     data = request.json
+    
+    if not data.get('message') or not data.get('contact'):
+        return jsonify({"success": False, "code": 400, "message": "Missing required fields"}), 400
+        
     success = db.user_submit_feedback(data.get('type'), data.get('message'), data.get('contact'), data.get('context'))
-    return jsonify({"success": success})
+    if success:
+        return jsonify({"success": True, "code": 200, "message": "Feedback securely saved to Firebase Database."}), 200
+    else:
+        return jsonify({"success": False, "code": 500, "message": "Firebase rejected the write operation."}), 500
 
 @app.route('/api/report', methods=['POST'])
 def submit_report():
-    if not db: return jsonify({"success": False}), 500
+    if not db: return jsonify({"success": False, "code": 500, "message": "Database connection offline"}), 500
     data = request.json
+    
     success = db.user_submit_report(data.get('match_id'), data.get('p1'), data.get('p2'), data.get('date'), data.get('reporter'), data.get('problem'), data.get('suggested_home'), data.get('suggested_away'))
-    return jsonify({"success": success})
+    
+    if success:
+        return jsonify({"success": True, "code": 200, "message": "Match Report securely saved to Firebase Database."}), 200
+    else:
+        return jsonify({"success": False, "code": 500, "message": "Firebase rejected the write operation."}), 500
 
 
 # --- DONATION ENDPOINTS ---
@@ -221,6 +233,13 @@ def update_match():
     d = request.json
     return jsonify({"success": db.admin_update_historical_match(d.get('p1'), d.get('p2'), d.get('date'), d.get('s1'), d.get('s2'), d.get('new_date'), session.get('admin_email'))})
 
+@app.route('/api/admin/bulk_fix_date', methods=['POST'])
+@login_required
+def bulk_fix_date():
+    if not db: return jsonify({"success": False})
+    d = request.json
+    return jsonify({"success": db.admin_bulk_fix_date(d.get('season'), d.get('division'), d.get('week'), d.get('date'), session.get('admin_email'))})
+
 @app.route('/api/admin/merge', methods=['POST'])
 @login_required
 def merge_players():
@@ -231,7 +250,7 @@ def merge_players():
 @login_required
 def override_rating():
     if not db: return jsonify({"success": False})
-    return jsonify({"success": db.admin_override_rating(request.json.get('player_id'), request.json.get('rating'), session.get('admin_email'))})
+    return jsonify({"success": db.admin_override_rating(request.json.get('player_id'), request.json.get('rating'), request.json.get('retroactive', True), session.get('admin_email'))})
 
 @app.route('/api/admin/force_finish_live', methods=['POST'])
 @login_required

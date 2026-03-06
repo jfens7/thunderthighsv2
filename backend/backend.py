@@ -88,9 +88,11 @@ SUPER_ADMIN_EMAIL = "jakobwill7@gmail.com"
 
 class RatingEngine:
     def __init__(self): self.players = {} 
+    
     def get_rating(self, name):
         if name not in self.players: self.players[name] = {'rating': DEFAULT_RATING, 'rd': DEFAULT_RD, 'vol': DEFAULT_VOL}
         return self.players[name]
+        
     def set_seed(self, name, rating, rd=None, vol=None):
         try:
             r_val = float(rating); rd_val = float(rd) if rd and str(rd).strip() else DEFAULT_RD; vol_val = float(vol) if vol and str(vol).strip() else DEFAULT_VOL
@@ -98,20 +100,33 @@ class RatingEngine:
             if rd_val < 0: rd_val = DEFAULT_RD
             self.players[name] = {'rating': r_val, 'rd': rd_val, 'vol': vol_val}
         except ValueError: pass
+        
     def update_match(self, p1_name, p2_name, s1, s2):
         if s1 == s2: return {'p1_delta': 0, 'p2_delta': 0}
         p1_stats = self.get_rating(p1_name)
         p2_stats = self.get_rating(p2_name)
         r1_old = p1_stats['rating']
         r2_old = p2_stats['rating']
+        
         if s1 > s2: 
             res = calculate_match(p1_stats, p2_stats, s1, s2)
             self.players[p1_name] = res['winner']
             self.players[p2_name] = res['loser']
+            # --- THE STRICT PLAYER SANITY CLAMPS ---
+            # Winner rating cannot drop below what they started with
+            self.players[p1_name]['rating'] = max(r1_old, self.players[p1_name]['rating'])
+            # Loser rating cannot go higher than what they started with
+            self.players[p2_name]['rating'] = min(r2_old, self.players[p2_name]['rating'])
         else: 
             res = calculate_match(p2_stats, p1_stats, s2, s1)
             self.players[p2_name] = res['winner']
             self.players[p1_name] = res['loser']
+            # --- THE STRICT PLAYER SANITY CLAMPS ---
+            # Winner rating cannot drop below what they started with
+            self.players[p2_name]['rating'] = max(r2_old, self.players[p2_name]['rating'])
+            # Loser rating cannot go higher than what they started with
+            self.players[p1_name]['rating'] = min(r1_old, self.players[p1_name]['rating'])
+            
         return {
             'p1_delta': self.players[p1_name]['rating'] - r1_old,
             'p2_delta': self.players[p2_name]['rating'] - r2_old
@@ -240,6 +255,7 @@ class ThunderData:
                 data['id'] = d.id
                 ts = data.get('timestamp')
                 data['time_str'] = ts.strftime("%d/%m/%Y %H:%M:%S") if ts else "Unknown Time"
+                data['timestamp'] = str(ts)
                 logs.append(data)
             return logs
         except: return []
@@ -298,22 +314,53 @@ class ThunderData:
 
     def _generate_player_id(self): return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(6))
 
+    def _slugify(self, text):
+        return re.sub(r'[^a-z0-9]', '', str(text).lower())
+
+    def _extract_week(self, text):
+        match = re.search(r'\d+', str(text))
+        return match.group() if match else str(text).strip().lower()
+
     def _load_calculated_dates(self):
         self.date_lookup = {}; self.date_to_week_map = {}
         try:
-            records = self.sheet_results.worksheet("Calculated_Dates").get_all_records()
-            if self.db: batch = self.db.batch(); batch_count = 0
-            for row in records:
-                s = str(row.get('Season','')).strip()
-                d = str(row.get('Division','')).strip()
-                w = str(row.get('Week','')).strip()
-                raw_date = str(row.get('Date',''))
-                parsed = self._parse_date(raw_date)
-                if parsed: 
-                    lookup_key = f"{s.lower()}|{d.lower()}|{w}"
-                    self.date_lookup[lookup_key] = parsed
-                    self.date_to_week_map[f"{s.lower()}|{parsed.strftime('%Y-%m-%d')}"] = w
+            if self.sheet_results:
+                records = self.sheet_results.worksheet("Calculated_Dates").get_all_records()
+                for row in records:
+                    s = self._slugify(row.get('Season', ''))
+                    d = self._slugify(row.get('Division', ''))
+                    w = self._extract_week(row.get('Week', ''))
+                    raw_date = str(row.get('Date',''))
+                    parsed = self._parse_date(raw_date)
+                    if parsed: 
+                        lookup_key = f"{s}|{d}|{w}"
+                        self.date_lookup[lookup_key] = parsed
+                        self.date_to_week_map[f"{s}|{parsed.strftime('%Y-%m-%d')}"] = w
+            
+            if self.db:
+                rules = self.db.collection('bulk_date_rules').stream()
+                for r in rules:
+                    d_rule = r.to_dict()
+                    s = self._slugify(d_rule.get('season', ''))
+                    div = self._slugify(d_rule.get('division', ''))
+                    w = self._extract_week(d_rule.get('week', ''))
+                    parsed = self._parse_date(d_rule.get('date'))
+                    if parsed:
+                        self.date_lookup[f"{s}|{div}|{w}"] = parsed
         except Exception as e: pass
+
+    def admin_bulk_fix_date(self, season, division, week, new_date, admin_email="Unknown"):
+        if not self.db: return False
+        try:
+            rule_id = f"{self._slugify(season)}_{self._slugify(division)}_{self._extract_week(week)}"
+            self.db.collection('bulk_date_rules').document(rule_id).set({
+                'season': season, 'division': division, 'week': week, 'date': new_date,
+                'author': admin_email, 'timestamp': firestore.SERVER_TIMESTAMP
+            })
+            self._log_audit(admin_email, 'BULK_DATE_FIX', f"Smart-mapped all missing matches for {season} {division} Week {week} to {new_date}.", {})
+            self.refresh_data()
+            return True
+        except: return False
 
     def _load_aliases(self):
         self.alias_map = {}
@@ -441,7 +488,11 @@ class ThunderData:
         buckets = [stat_dict[player_name]['combined']]; 
         if is_fillin: buckets.append(stat_dict[player_name]['fillin'])
         else: buckets.append(stat_dict[player_name]['regular'])
-        my_sets = p1_sets if is_p1 else p2_sets; op_sets = p2_sets if is_p1 else p1_sets; result = "Win" if my_sets > op_sets else "Loss"
+        
+        my_sets = p1_sets if is_p1 else p2_sets
+        op_sets = p2_sets if is_p1 else p1_sets
+        result = "Win" if my_sets > op_sets else "Loss"
+        
         for stats in buckets:
             stats['matches'] += 1; stats['sets_won'] += my_sets; stats['sets_lost'] += op_sets
             if result == "Win": stats['wins'] += 1
@@ -457,6 +508,7 @@ class ThunderData:
     def refresh_data(self):
         logger.info("⚡️ Fetching and Processing Data...")
         self.all_players = {}; self.season_stats = {}; self.seasons_list = ["Career"]; self.divisions_list = set(); self.weekly_matches = {}; self.rating_engine = RatingEngine() 
+        
         if self.sheet_results: self._load_calculated_dates(); self._load_aliases(); self._load_seed_ratings()
         raw_match_queue = [] 
         
@@ -477,13 +529,17 @@ class ThunderData:
                         if not p1 or not p2: continue
                         div = str(self._get_val(row, ['Division', 'Div'], 'Unknown')).strip(); self.divisions_list.add(div)
                         p1_fill = "S" in str(self._get_val(row, ['PS 1', 'Pos 1', 'Pos'])).upper(); p2_fill = "S" in str(self._get_val(row, ['PS 2', 'Pos 2'])).upper()
-                        round_val = self._get_val(row, ['Round', 'Rd', 'Week']); week_num = "Unknown"
-                        if round_val:
-                            try: week_num = int(re.search(r'\d+', str(round_val)).group())
-                            except: pass
-                        raw_date = self._get_val(row, ['Date', 'Match Date']); parsed_date = self._parse_date(raw_date)
-                        if (not parsed_date) and str(week_num) != "Unknown": 
-                            parsed_date = self.date_lookup.get(f"{season_name.lower()}|{div.lower()}|{week_num}")
+                        
+                        round_val = self._get_val(row, ['Round', 'Rd', 'Week'])
+                        week_num = self._extract_week(round_val) if round_val else "unknown"
+                        
+                        raw_date = self._get_val(row, ['Date', 'Match Date'])
+                        parsed_date = self._parse_date(raw_date)
+                        
+                        if (not parsed_date) and str(week_num) != "unknown": 
+                            lookup_key = f"{self._slugify(season_name)}|{self._slugify(div)}|{week_num}"
+                            parsed_date = self.date_lookup.get(lookup_key)
+                            
                         if not parsed_date: parsed_date = datetime.date(1900, 1, 1)
                         try: s1 = int(self._get_val(row, ['Sets 1', 'S1', 'Sets'])); s2 = int(self._get_val(row, ['Sets 2', 'S2']))
                         except: continue
@@ -495,7 +551,7 @@ class ThunderData:
                             'game_history': '', 'rich_stats': None, 
                             'manual_override': False,
                             'sheet_name': worksheet.title,
-                            'row_index': str(i + 2) # +2 because index starts at 0 and row 1 is headers
+                            'row_index': str(i + 2) 
                         })
                 except: pass
                 
@@ -523,10 +579,11 @@ class ThunderData:
                                 else: t2+=1
                             except: pass
                         s1=t1; s2=t2
-                    week_val = d.get('week', 'Unknown')
-                    if str(week_val) == "Unknown" and parsed_date: 
-                        key = f"{season_name.lower()}|{parsed_date.strftime('%Y-%m-%d')}"
-                        week_val = self.date_to_week_map.get(key, "Unknown")
+                        
+                    week_val = self._extract_week(d.get('week', 'Unknown'))
+                    if str(week_val) == "unknown" and parsed_date: 
+                        key = f"{self._slugify(season_name)}|{parsed_date.strftime('%Y-%m-%d')}"
+                        week_val = self.date_to_week_map.get(key, "unknown")
                         
                     rich = d.get('richStats', {})
                     rich['total_duration'] = d.get('total_duration', '00:00'); rich['play_duration'] = d.get('play_duration', '00:00'); rich['set_scores'] = d.get('set_scores', [])
@@ -620,7 +677,7 @@ class ThunderData:
                 )
                 player_set.add(p)
 
-            if str(m['week']) != "Unknown":
+            if str(m['week']) != "unknown":
                 if m['season'] not in self.weekly_matches: self.weekly_matches[m['season']] = {}
                 wk = str(m['week']); 
                 if wk not in self.weekly_matches[m['season']]: self.weekly_matches[m['season']][wk] = []
@@ -701,16 +758,40 @@ class ThunderData:
         except: return False
 
     def user_submit_feedback(self, category, text, contact, context="Not provided"):
-        if not self.db: return False
+        print("\n=== 🗣️ FEEDBACK RECEIVED 🗣️ ===")
+        print(f"Type: {category}")
+        print(f"From: {contact}")
+        
+        if not self.db: 
+            print("❌ ERROR: No database connection found!")
+            return False
+            
         try:
-            self.db.collection('feedback').add({'type': category, 'message': text, 'contact': contact, 'context': context, 'timestamp': firestore.SERVER_TIMESTAMP, 'status': 'New'})
+            res = self.db.collection('feedback').add({
+                'type': category, 
+                'message': text, 
+                'contact': contact, 
+                'context': context, 
+                'timestamp': firestore.SERVER_TIMESTAMP, 
+                'status': 'New'
+            })
+            print(f"✅ SUCCESS: Saved to Firestore! Document ID: {res[1].id}\n")
             return True
-        except: return False
+        except Exception as e:
+            print(f"❌ FATAL FIRESTORE ERROR: {str(e)}\n")
+            return False
 
     def user_submit_report(self, match_id, p1, p2, date, reporter, problem, suggested_home, suggested_away):
-        if not self.db: return False
+        print("\n=== 🚨 MATCH REPORT RECEIVED 🚨 ===")
+        print(f"Match: {p1} vs {p2}")
+        print(f"Reported By: {reporter}")
+        
+        if not self.db: 
+            print("❌ ERROR: No database connection found!")
+            return False
+            
         try:
-            self.db.collection('match_reports').add({
+            res = self.db.collection('match_reports').add({
                 'match_id': match_id,
                 'p1': p1, 'p2': p2, 'date': date,
                 'reporter': reporter, 'problem': problem,
@@ -718,8 +799,10 @@ class ThunderData:
                 'timestamp': firestore.SERVER_TIMESTAMP,
                 'status': 'Pending'
             })
+            print(f"✅ SUCCESS: Saved to Firestore! Document ID: {res[1].id}\n")
             return True
         except Exception as e:
+            print(f"❌ FATAL FIRESTORE ERROR: {str(e)}\n")
             return False
 
     def admin_get_ranks(self):
@@ -736,35 +819,51 @@ class ThunderData:
         if not self.db: return []
         try: 
             reports = []
-            m_docs = self.db.collection('match_reports').where('status', '==', 'Pending').stream()
+            
+            # THE FIX: We pull all reports and manually stringify the Date/Time objects
+            # This completely bypasses the internal Python -> JSON crash
+            m_docs = self.db.collection('match_reports').stream()
             for d in m_docs:
                 data = d.to_dict()
-                reports.append({
-                    'id': d.id, 'type': 'MATCH_ERROR', 'reporter': data.get('reporter', 'Unknown'),
-                    'date': data.get('date', 'Unknown Date'), 'title': f"{data.get('p1', '')} vs {data.get('p2', '')}",
-                    'problem': data.get('problem', ''), 'suggested_s1': data.get('suggested_s1', ''),
-                    'suggested_s2': data.get('suggested_s2', ''), 'match_id': data.get('match_id', ''),
-                    'timestamp': data.get('timestamp')
-                })
-            f_docs = self.db.collection('feedback').where('status', '==', 'New').stream()
+                if data.get('status', '').lower() == 'pending':
+                    reports.append({
+                        'id': d.id, 'type': 'MATCH_ERROR', 'reporter': data.get('reporter', 'Unknown'),
+                        'date': data.get('date', 'Unknown Date'), 'title': f"{data.get('p1', '')} vs {data.get('p2', '')}",
+                        'problem': data.get('problem', ''), 'suggested_s1': data.get('suggested_s1', ''),
+                        'suggested_s2': data.get('suggested_s2', ''), 'match_id': data.get('match_id', ''),
+                        'timestamp': data.get('timestamp')
+                    })
+                    
+            f_docs = self.db.collection('feedback').stream()
             for d in f_docs:
                 data = d.to_dict()
-                ts = data.get('timestamp')
-                reports.append({
-                    'id': d.id, 'type': 'FEEDBACK', 'reporter': data.get('contact', 'Anonymous'),
-                    'date': ts.strftime('%d/%m/%Y') if hasattr(ts, 'strftime') else 'Recent',
-                    'title': f"Feedback: {data.get('type', 'General')}",
-                    'problem': f"Context: {data.get('context', '')}\n\nMessage: {data.get('message', '')}",
-                    'suggested_s1': '', 'suggested_s2': '', 'match_id': '', 'timestamp': ts
-                })
+                if data.get('status', '').lower() == 'new':
+                    ts = data.get('timestamp')
+                    reports.append({
+                        'id': d.id, 'type': 'FEEDBACK', 'reporter': data.get('contact', 'Anonymous'),
+                        'date': ts.strftime('%d/%m/%Y') if hasattr(ts, 'strftime') else 'Recent',
+                        'title': f"Feedback: {data.get('type', 'General')}",
+                        'problem': f"Context: {data.get('context', '')}\n\nMessage: {data.get('message', '')}",
+                        'suggested_s1': '', 'suggested_s2': '', 'match_id': '', 'timestamp': ts
+                    })
+                    
             def safe_ts(x):
                 ts = x.get('timestamp')
                 if hasattr(ts, 'timestamp'): return ts.timestamp()
                 if isinstance(ts, (int, float)): return ts
                 return 0
+                
             reports.sort(key=safe_ts, reverse=True)
+            
+            # --- PREVENT THE JSON CRASH ---
+            for r in reports:
+                if 'timestamp' in r:
+                    r['timestamp'] = str(r['timestamp']) 
+                    
             return reports
-        except Exception as e: return []
+        except Exception as e: 
+            print(f"❌ ERROR LOADING REPORTS: {str(e)}")
+            return []
 
     def admin_get_date_errors(self):
         results = []; seen = set()
@@ -875,20 +974,23 @@ class ThunderData:
             except: pass
         self.refresh_data(); return True
 
-    def admin_override_rating(self, player_id, new_rating, admin_email="Unknown"):
+    def admin_override_rating(self, player_id, new_rating, retroactive=True, admin_email="Unknown"):
         if not self.db: return False
         try:
             player_name = self.id_to_name.get(player_id)
             if not player_name: return False
             
             safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()
+            date_to_use = "1900-01-01" if retroactive else datetime.datetime.now().strftime("%Y-%m-%d")
+            
             self.db.collection('rating_overrides').document(safe_id).set({
                 'name': player_name,
                 'rating': float(new_rating),
-                'date_str': datetime.datetime.now().strftime("%Y-%m-%d"),
+                'date_str': date_to_use,
                 'timestamp': firestore.SERVER_TIMESTAMP
             })
-            self._log_audit(admin_email, 'OVERRIDE_RATING', f"Forced {player_name}'s rating to {new_rating} and reset RD to 75.", {"name": player_name})
+            log_desc = f"Set {player_name}'s seed rating to {new_rating} (Retroactive: {retroactive})."
+            self._log_audit(admin_email, 'OVERRIDE_RATING', log_desc, {"name": player_name})
             self.refresh_data()
             return True
         except Exception as e:
@@ -982,7 +1084,6 @@ class ThunderData:
                 if not n: n = 'Anonymous'
                 amt = float(data.get('amount', 0))
                 
-                # Anonymous stay separate, named donors pool together
                 if n.lower() == 'anonymous':
                     donors.append({'name': 'Anonymous', 'amount': amt})
                 else:
@@ -1005,6 +1106,7 @@ class ThunderData:
                 data['id'] = d.id
                 ts = data.get('timestamp')
                 data['date_str'] = ts.strftime('%B %Y') if ts else 'Recent'
+                data['timestamp'] = str(ts)
                 res.append(data)
             return res
         except Exception as e:
@@ -1053,6 +1155,7 @@ class ThunderData:
                 data['id'] = d.id
                 ts = data.get('timestamp')
                 data['time_str'] = ts.strftime('%d/%m/%Y %H:%M') if ts else 'Just now'
+                data['timestamp'] = str(ts)
                 res.append(data)
             return res
         except Exception as e:
@@ -1069,7 +1172,6 @@ class ThunderData:
             return True
         except Exception as e: return False
 
-    # --- GLICKO-2 MATH DIAGNOSTICS ---
     def admin_glicko_math(self, p1, p2, s1, s2):
         r1 = self.rating_engine.get_rating(p1)
         r2 = self.rating_engine.get_rating(p2)

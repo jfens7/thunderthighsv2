@@ -25,6 +25,12 @@
                     <label class="text-xs font-bold text-slate-500 uppercase block mb-1">New Rating Score</label>
                     <input type="number" id="override-score" placeholder="e.g. 1500" class="w-full bg-black/40 border border-white/10 rounded px-4 py-3 text-white focus:ring-2 focus:ring-purple-500 outline-none font-mono">
                 </div>
+                
+                <div class="mt-2 flex items-center gap-2 bg-black/20 p-2 rounded border border-white/5">
+                    <input type="checkbox" id="override-retro" checked class="w-4 h-4 accent-purple-500 cursor-pointer">
+                    <label for="override-retro" class="text-[10px] font-bold uppercase tracking-widest text-slate-400 cursor-pointer">Apply Retroactively (Rebalances past opponents)</label>
+                </div>
+
                 <button onclick="window.submitRatingOverride()" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg transition-transform hover:scale-[1.02] shadow-[0_0_15px_rgba(168,85,247,0.4)] mt-2">APPLY OVERRIDE</button>
             </div>
         </div>
