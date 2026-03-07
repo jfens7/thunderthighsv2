@@ -468,7 +468,8 @@
             const data = await res.json(); 
             if (data.error) { alert("Player not found."); return; } 
             
-            window.currentProfileData = data; document.getElementById('playerRatingBadge').innerText = `Rating: ${Math.round(data.rating)}`; 
+            window.currentProfileData = data; 
+            document.getElementById('playerRatingBadge').innerText = `Rating: ${Math.round(data.rating)} (±${Math.round(data.rd || 140)})`; 
             
             if (!pc) { pc = document.createElement('div'); pc.id = 'petermanContainer'; pc.className = 'mt-3 md:mt-4 flex justify-center md:justify-start w-full'; const pNameEl = document.getElementById('playerName'); if (pNameEl && pNameEl.parentElement) { pNameEl.parentElement.appendChild(pc); } }
             if (data.peterman_id) { pc.innerHTML = `<a href="https://petermanratings.com/profile.php?profile-id=${data.peterman_id}" target="_blank" title="Peterman Ratings" class="bg-indigo-950/40 border border-indigo-500/20 text-indigo-300/70 hover:text-indigo-200 hover:bg-indigo-900/60 transition px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center gap-2 w-max mx-auto md:mx-0 opacity-60 hover:opacity-100 grayscale hover:grayscale-0"><img src="/static/peterman.png" class="h-3 w-auto opacity-70" alt="Peterman"> View Peterman Rating</a>`; } else { pc.innerHTML = ''; }
@@ -588,7 +589,10 @@
                             <div class="hidden md:block truncate text-base">${p.name}</div>
                         </div>
                     </div>
-                    <div class="hidden md:block text-center font-mono text-yellow-500 font-bold">${Math.round(p.rating_val)}</div>
+                    <div class="hidden md:flex flex-col items-center justify-center w-full">
+                        <div class="font-mono text-yellow-500 font-bold leading-none">${Math.round(p.rating_val)} <span class="text-[10px] text-slate-500">±${Math.round(p.sigma)}</span></div>
+                        <div class="text-[9px] text-slate-600 font-mono mt-1 leading-none" title="Volatility">v${(p.vol || 0.06).toFixed(3)}</div>
+                    </div>
                     <div class="text-center text-slate-300 text-sm md:text-base">${stats.matches}</div>
                     <div class="text-center text-green-400 font-bold text-sm md:text-base">${stats.wins}</div>
                     <div class="text-center text-red-400 text-sm md:text-base">${stats.losses}</div>

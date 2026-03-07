@@ -68,14 +68,15 @@ class RatingEngine:
     def __init__(self): self.players = {} 
     
     def get_rating(self, name):
-        if name not in self.players: self.players[name] = {'rating': DEFAULT_RATING, 'rd': DEFAULT_RD, 'vol': 0}
+        if name not in self.players: self.players[name] = {'rating': DEFAULT_RATING, 'rd': DEFAULT_RD, 'vol': 0.06}
         return self.players[name]
         
     def set_seed(self, name, rating, rd=None, vol=None):
         try:
             r_val = float(rating); rd_val = float(rd) if rd and str(rd).strip() else DEFAULT_RD
             if rd_val < 0: rd_val = DEFAULT_RD
-            self.players[name] = {'rating': r_val, 'rd': rd_val, 'vol': 0}
+            v_val = float(vol) if vol is not None else 0.06
+            self.players[name] = {'rating': r_val, 'rd': rd_val, 'vol': v_val}
         except ValueError: pass
         
     def update_match(self, p1_name, p2_name, s1, s2):
@@ -494,7 +495,12 @@ class ThunderData:
             try:
                 for doc in self.db.collection('rating_overrides').stream():
                     d = doc.to_dict()
-                    overrides_dict[d.get('name')] = {'rating': float(d.get('rating', 1500)), 'rd': 75.0, 'date': d.get('date_str', '1900-01-01')}
+                    overrides_dict[d.get('name')] = {
+                        'rating': float(d.get('rating', 1500)), 
+                        'rd': float(d.get('rd', 75.0)), 
+                        'vol': float(d.get('vol', 0.06)),
+                        'date': d.get('date_str', '1900-01-01')
+                    }
             except Exception as e: pass
 
         player_set = set(); player_overrides_applied = set()
@@ -506,7 +512,10 @@ class ThunderData:
                 if p in overrides_dict and p not in player_overrides_applied:
                     if d_str_fmt >= overrides_dict[p]['date']:
                         if p not in self.rating_engine.players: self.rating_engine.get_rating(p)
-                        self.rating_engine.players[p]['rating'] = overrides_dict[p]['rating']; self.rating_engine.players[p]['rd'] = overrides_dict[p]['rd']; player_overrides_applied.add(p)
+                        self.rating_engine.players[p]['rating'] = overrides_dict[p]['rating']
+                        self.rating_engine.players[p]['rd'] = overrides_dict[p]['rd']
+                        self.rating_engine.players[p]['vol'] = overrides_dict[p]['vol']
+                        player_overrides_applied.add(p)
 
             p1_delta = 0; p2_delta = 0
             if m['date'] > RATING_START_DATE: 
@@ -525,7 +534,10 @@ class ThunderData:
         
         for p, over in overrides_dict.items():
             if p not in player_overrides_applied:
-                if p in self.rating_engine.players: self.rating_engine.players[p]['rating'] = over['rating']; self.rating_engine.players[p]['rd'] = over['rd']
+                if p in self.rating_engine.players: 
+                    self.rating_engine.players[p]['rating'] = over['rating']
+                    self.rating_engine.players[p]['rd'] = over['rd']
+                    self.rating_engine.players[p]['vol'] = over['vol']
 
         logger.info(f"👤 Total Unique Players Loaded: {len(player_set)}")
         self._update_master_roster(); self._sync_to_firebase()
@@ -553,7 +565,7 @@ class ThunderData:
             fill_hist = [m for m in stats['fillin']['history'] if m['division'] == division]
             if not reg_hist and not fill_hist: continue 
             def calc_summary(history): wins = sum(1 for m in history if m['result'] == "Win"); return {'wins': wins, 'losses': len(history) - wins, 'matches': len(history)}
-            ranking_list.append({'name': player_name, 'rating_val': int(rat['rating']), 'sigma': int(rat['rd']), 'regular': calc_summary(reg_hist), 'fillin': calc_summary(fill_hist)})
+            ranking_list.append({'name': player_name, 'rating_val': int(rat['rating']), 'sigma': int(rat['rd']), 'vol': rat.get('vol', 0.06), 'regular': calc_summary(reg_hist), 'fillin': calc_summary(fill_hist)})
         return ranking_list
         
     def get_player_stats(self, player_name, season="Career", division="All", week="All", start_date=None, end_date=None):
@@ -568,7 +580,7 @@ class ThunderData:
             disp_hist = list(hist); disp_hist.reverse()
             return {'matches': len(hist), 'wins': wins, 'losses': len(hist)-wins, 'win_rate': f"{win_rate}%", 'match_history': disp_hist}
         peterman_id = self.all_players.get(player_name, {}).get('peterman_id', '')
-        return {'name': player_name, 'rating': int(rat['rating']), 'combined': format_bucket(raw['combined']), 'peterman_id': peterman_id}
+        return {'name': player_name, 'rating': int(rat['rating']), 'rd': int(rat['rd']), 'vol': rat.get('vol', 0.06), 'combined': format_bucket(raw['combined']), 'peterman_id': peterman_id}
 
     def get_system_config(self):
         if not self.db: return {"tournament_mode_active": False}
@@ -749,7 +761,7 @@ class ThunderData:
             player_name = self.id_to_name.get(player_id)
             if not player_name: return False
             safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower(); date_to_use = "1900-01-01" if retroactive else datetime.datetime.now().strftime("%Y-%m-%d")
-            self.db.collection('rating_overrides').document(safe_id).set({'name': player_name, 'rating': float(new_rating), 'date_str': date_to_use, 'timestamp': firestore.SERVER_TIMESTAMP})
+            self.db.collection('rating_overrides').document(safe_id).set({'name': player_name, 'rating': float(new_rating), 'rd': 75.0, 'vol': 0.06, 'date_str': date_to_use, 'timestamp': firestore.SERVER_TIMESTAMP}, merge=True)
             self._log_audit(admin_email, 'OVERRIDE_RATING', f"Set {player_name}'s seed rating to {new_rating} (Retroactive: {retroactive}).", {"name": player_name})
             self.refresh_data(); return True
         except: return False
@@ -765,10 +777,10 @@ class ThunderData:
             batch = self.db.batch()
             today_str = datetime.datetime.now().strftime("%Y-%m-%d")
             
-            for row in all_values[1:]: # Skip headers
-                if len(row) >= 2: # Check at least length 2
+            for row in all_values[1:]: 
+                if len(row) >= 2:
                     name = self._clean_name(row[0])
-                    rating_str = str(row[1]).strip() # Pulled from Column B (index 1)
+                    rating_str = str(row[1]).strip() 
                     
                     if not name or not rating_str: continue
                     try:
@@ -784,12 +796,13 @@ class ThunderData:
                         'rating': rating_val,
                         'date_str': today_str,
                         'rd': 140.0,
+                        'vol': 0.06,
                         'timestamp': firestore.SERVER_TIMESTAMP
                     }, merge=True)
                     
                     total_count += 1
                     batch_count += 1
-                    if batch_count >= 400: # Max write batch limit is 500
+                    if batch_count >= 400: 
                         batch.commit()
                         batch = self.db.batch()
                         batch_count = 0
@@ -798,8 +811,6 @@ class ThunderData:
                 batch.commit()
                 
             self._log_audit(admin_email, 'BULK_IMPORT_RATINGS', f"Pulled {total_count} ratings from 'Ratings crap' sheet as of {today_str}.", {})
-            
-            # REMOVED self.refresh_data() here to avoid hitting the Google Sheets API limits.
             
             return {"success": True, "count": total_count}
             
