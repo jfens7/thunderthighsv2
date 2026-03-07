@@ -36,35 +36,24 @@ def calculate_match(w, l, s1, s2):
     total_sets = s1 + s2
     if total_sets == 0: return {'winner': w, 'loser': l}
     
-    # 1. Match Set Modifier (3-0 is 1.0x, 3-2 is 0.8x)
     w_score = 0.75 + 0.25 * ((s1 - s2) / total_sets)
     l_score = 1.0 - w_score
     
-    # 2. Ratings Central Base-10 Probability Curve
-    # A 500 point gap = ~95% win probability
     E_w = 1.0 / (1.0 + 10.0 ** ((l['rating'] - w['rating']) / 400.0))
     E_l = 1.0 - E_w
     
-    # 3. Variance Protection Dampener
-    # If the opponent is brand new (High RD), we protect the established player
-    # by dampening the points exchanged.
     w_dampener = 50.0 / max(50.0, l['rd'] * 0.5)
     l_dampener = 50.0 / max(50.0, w['rd'] * 0.5)
     
-    # 4. K-Factor (Elasticity)
-    # High RD = massive point swings for new players. Low RD = steady swings. Floor is 50.
     K_w = max(50.0, w['rd'] * 0.8)
     K_l = max(50.0, l['rd'] * 0.8)
     
-    # 5. Final Calculation
     w_shift = K_w * w_dampener * (w_score - E_w)
     l_shift = K_l * l_dampener * (l_score - E_l)
     
     w['rating'] += w_shift
     l['rating'] += l_shift
     
-    # 6. Reduce Uncertainty (RD)
-    # As they play more matches, they become more established.
     w['rd'] = max(50.0, w['rd'] - 4.0)
     l['rd'] = max(50.0, l['rd'] - 4.0)
     
@@ -878,27 +867,22 @@ class ThunderData:
             emails = []; phones = []; preview = []
             
             for row in raw_data[1:]:
-                if not any(str(cell).strip() for cell in row):
-                    continue
+                if not any(str(cell).strip() for cell in row): continue
                     
                 email_val = ""; phone_val = ""; name_val = "Unknown Player"
                 allow_sms = not has_send_col 
                 
                 for idx, cell_val in enumerate(row):
                     if idx >= len(headers): break
-                    col_name = headers[idx]
-                    val_str = str(cell_val).strip()
+                    col_name = headers[idx]; val_str = str(cell_val).strip()
                     
                     if col_name in ['name', 'player', 'player name', 'full name', 'first name'] and name_val == "Unknown Player":
                         if val_str: name_val = val_str
-                    if 'email' in col_name and not email_val:
-                        email_val = val_str
-                    if ('phone' in col_name or 'mobile' in col_name or 'number' in col_name) and not phone_val:
-                        phone_val = val_str
+                    if 'email' in col_name and not email_val: email_val = val_str
+                    if ('phone' in col_name or 'mobile' in col_name or 'number' in col_name) and not phone_val: phone_val = val_str
                         
                     if 'send' in col_name:
-                        val_lower = val_str.lower()
-                        if val_lower in ['yes', 'y', 'true']: allow_sms = True
+                        if val_str.lower() in ['yes', 'y', 'true']: allow_sms = True
                         else: allow_sms = False
                             
                 if email_val and '@' in email_val: emails.append(email_val)
@@ -907,7 +891,17 @@ class ThunderData:
                     clean_phone = re.sub(r'[^\d\+\s]', '', phone_val)
                     if len(clean_phone) >= 8: 
                         phones.append(clean_phone)
-                        preview.append({"name": name_val, "phone": clean_phone})
+                        
+                        main_div = "Unknown Div"
+                        clean_name_key = self._clean_name(name_val)
+                        if clean_name_key in self.all_players:
+                            div_counts = {}
+                            for h in self.all_players[clean_name_key].get('combined', {}).get('history', []):
+                                div_counts[h['division']] = div_counts.get(h['division'], 0) + 1
+                            if div_counts:
+                                main_div = max(div_counts, key=div_counts.get)
+
+                        preview.append({"name": name_val, "phone": clean_phone, "division": main_div})
                     
             return {"emails": ", ".join(list(set(emails))), "phones": ", ".join(list(set(phones))), "preview": preview}
             
@@ -915,22 +909,24 @@ class ThunderData:
             logger.error(f"Error fetching contacts: {e}")
             return {"emails": "", "phones": "", "preview": [], "error": str(e)}
 
-    def admin_send_sms_broadcast(self, message_body, admin_email="Unknown"):
+    def admin_send_sms_broadcast(self, message_body, target_phones=None, admin_email="Unknown"):
         contacts = self.get_contact_lists()
         raw_phones = contacts.get("phones", "")
         if not raw_phones: return {"success": False, "error": "No valid opted-in phone numbers found in the Google Sheet."}
         
-        phone_list = [p.strip() for p in raw_phones.split(",") if p.strip()]
-        if not phone_list: return {"success": False, "error": "No valid opted-in phone numbers found."}
+        allowed_phone_list = [p.strip() for p in raw_phones.split(",") if p.strip()]
+        
+        if target_phones is not None:
+            phone_list = [p for p in target_phones if p in allowed_phone_list]
+        else:
+            phone_list = allowed_phone_list
+            
+        if not phone_list: return {"success": False, "error": "No valid opted-in phone numbers matched your selection."}
             
         username = "jakobwill7@gmail.com"
         api_key = "76F26417-8DEB-E47E-8056-B86E519B4445"
         
-        # 1. STRIP ALL EMOJIS AND NON-STANDARD ASCII FROM THE MESSAGE
-        # This prevents the 70-character Unicode limit bug from triggering
         clean_body = re.sub(r'[^\x20-\x7E\n\r]+', '', message_body)
-        
-        # 2. SHORTENED TEMPLATE WITHOUT EMOJIS (Total length = exactly 64 characters + custom body)
         final_message = f"GCTTA Update: {clean_body}\n\nView stats: gctta-stats.com.au\nReply STOP to opt out"
         
         messages = []
@@ -956,8 +952,8 @@ class ThunderData:
             res_data = json.loads(response.read().decode('utf-8'))
             
             if res_data.get('http_code') == 200:
-                self._log_audit(admin_email, 'SMS_BROADCAST', f"Sent Mass SMS to {len(phone_list)} members via API.", {})
-                return {"success": True, "message": f"Successfully sent SMS to {len(phone_list)} members!"}
+                self._log_audit(admin_email, 'SMS_BROADCAST', f"Sent Mass SMS to {len(phone_list)} selected members via API.", {})
+                return {"success": True, "message": f"Successfully sent SMS to {len(phone_list)} selected members!"}
             else:
                 return {"success": False, "error": f"ClickSend API Error: {res_data}"}
         except Exception as e:
@@ -986,21 +982,17 @@ class ThunderData:
         dummy_1 = {'rating': r1['rating'], 'rd': r1['rd'], 'vol': 0}
         dummy_2 = {'rating': r2['rating'], 'rd': r2['rd'], 'vol': 0}
         
-        # Base-10 probability curve
         E_1 = 1.0 / (1.0 + 10.0 ** ((dummy_2['rating'] - dummy_1['rating']) / 400.0))
         E_2 = 1.0 - E_1
         
         if int(s1) > int(s2):
             res = calculate_match(dummy_1, dummy_2, int(s1), int(s2))
-            new_r1 = res['winner']['rating']
-            new_r2 = res['loser']['rating']
+            new_r1 = res['winner']['rating']; new_r2 = res['loser']['rating']
         elif int(s2) > int(s1):
             res = calculate_match(dummy_2, dummy_1, int(s2), int(s1))
-            new_r2 = res['winner']['rating']
-            new_r1 = res['loser']['rating']
+            new_r2 = res['winner']['rating']; new_r1 = res['loser']['rating']
         else:
-            new_r1 = r1['rating']
-            new_r2 = r2['rating']
+            new_r1 = r1['rating']; new_r2 = r2['rating']
             
         return {
             'p1': {'name': p1, 'old_rating': round(r1['rating'], 1), 'old_rd': round(r1['rd'], 1), 'expected_win_pct': round(E_1 * 100, 1), 'new_rating': round(new_r1, 1), 'delta': round(new_r1 - r1['rating'], 1)},

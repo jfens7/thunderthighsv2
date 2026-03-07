@@ -32,10 +32,16 @@
         </button>
 
         <div id="sms-preview-box" class="hidden mb-6 bg-black/40 border border-white/10 rounded-lg p-4">
-            <div class="flex justify-between items-center mb-3 border-b border-white/10 pb-2">
-                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Active SMS Recipients (<span id="preview-count" class="text-emerald-400">0</span>)</span>
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4 border-b border-white/10 pb-3">
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Selected Recipients (<span id="preview-count" class="text-emerald-400 font-bold text-sm">0</span>)</span>
+                <div class="flex items-center gap-2 w-full md:w-auto">
+                    <select id="sms-div-filter" onchange="window.filterSmsList()" class="bg-slate-900 border border-white/10 text-xs text-slate-300 rounded px-2 py-1.5 outline-none focus:border-sky-500 flex-1 md:flex-none">
+                        <option value="All">All Divisions</option>
+                    </select>
+                    <button onclick="window.toggleAllSms()" class="bg-slate-700 hover:bg-slate-600 border border-white/10 text-xs font-bold text-white px-3 py-1.5 rounded transition shrink-0 shadow">Toggle Visible</button>
+                </div>
             </div>
-            <div id="preview-list" class="max-h-[150px] overflow-y-auto custom-scrollbar space-y-2 text-sm text-slate-300">
+            <div id="preview-list" class="max-h-[250px] overflow-y-auto custom-scrollbar space-y-2 text-sm text-slate-300 pr-2">
                 </div>
         </div>
 
@@ -58,7 +64,7 @@ View stats: gctta-stats.com.au
 Reply STOP to opt out</div>
         </div>
 
-        <button onclick="window.sendSmsBroadcast()" id="btn-send-sms" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-lg py-4 rounded-xl transition-transform hover:scale-[1.02] shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2">
+        <button onclick="window.sendSmsBroadcast()" id="btn-send-sms" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-lg py-4 rounded-xl transition-transform hover:scale-[1.02] shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2 disabled:opacity-50">
             <i class="fa-solid fa-paper-plane"></i> SEND MASS SMS NOW
         </button>
         
@@ -69,21 +75,14 @@ Reply STOP to opt out</div>
 
 <script>
     document.getElementById('broadcast-input').addEventListener('input', function() {
-        // Strip emojis and non-standard ASCII characters instantly as the user types
         this.value = this.value.replace(/[^\x20-\x7E\n\r]/g, '');
-        
         const msg = this.value || '[Your message will appear here]';
         const counter = document.getElementById('char-counter');
         
         counter.innerText = `${this.value.length} / 95 chars`;
-        
-        if (this.value.length >= 85) {
-            counter.className = "text-red-400 font-mono font-bold text-[10px] bg-red-900/30 px-2 py-1 rounded border border-red-500/30";
-        } else {
-            counter.className = "text-sky-400 font-mono text-[10px] bg-sky-900/30 px-2 py-1 rounded border border-sky-500/30";
-        }
+        if (this.value.length >= 85) counter.className = "text-red-400 font-mono font-bold text-[10px] bg-red-900/30 px-2 py-1 rounded border border-red-500/30";
+        else counter.className = "text-sky-400 font-mono text-[10px] bg-sky-900/30 px-2 py-1 rounded border border-sky-500/30";
 
-        // Cleaned up prefix and suffix without emojis
         document.getElementById('broadcast-preview').innerText = `GCTTA Update: ${msg}\n\nView stats: gctta-stats.com.au\nReply STOP to opt out`;
     });
 </script>

@@ -85,11 +85,9 @@ def activate_ghost_mode():
 @app.route('/')
 def index(): return render_template('index.html')
 
-# --- UPDATED INSTANT LOGIN BYPASS ---
 @app.route('/login')
 def login(): 
-    if session.get('admin_logged_in'):
-        return redirect(url_for('admin'))
+    if session.get('admin_logged_in'): return redirect(url_for('admin'))
     return render_template('login.html')
 
 @app.route('/api/auth/google', methods=['POST'])
@@ -97,22 +95,17 @@ def auth_google():
     if not db: return jsonify({"success": False, "error": "Database offline"})
     token = request.json.get('token')
     user_data = db.verify_admin_token(token)
-    
     if not user_data: return jsonify({"success": False, "error": "Invalid Token"})
-    
     if user_data['role'] in ['admin', 'super_admin']:
         session.permanent = True 
         session['admin_logged_in'] = True
         session['admin_email'] = user_data['email']
         session['admin_role'] = user_data['role']
         return jsonify({"success": True})
-    else:
-        return jsonify({"success": False, "error": "Your account is pending Super Admin approval."})
+    else: return jsonify({"success": False, "error": "Your account is pending Super Admin approval."})
 
 @app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('index'))
+def logout(): session.clear(); return redirect(url_for('index'))
 
 @app.route('/admin')
 def admin(): 
@@ -133,8 +126,7 @@ def get_player_stats(player_name):
     if not db: return jsonify({"error": "Offline"}), 500
     if player_name not in db.all_players:
         for real_name in db.all_players.keys():
-            if real_name.lower() == player_name.lower():
-                player_name = real_name; break
+            if real_name.lower() == player_name.lower(): player_name = real_name; break
     season = request.args.get('season', 'Career')
     division = request.args.get('division', 'All')
     stats = db.get_player_stats(player_name, season, division)
@@ -166,8 +158,7 @@ def submit_report():
 @app.route('/api/create-payment-intent', methods=['POST'])
 def create_payment():
     try:
-        data = request.json
-        amount = int(float(data.get('amount', 5.00)) * 100) 
+        amount = int(float(request.json.get('amount', 5.00)) * 100) 
         intent = stripe.PaymentIntent.create(amount=amount, currency='aud', automatic_payment_methods={'enabled': True})
         return jsonify({'clientSecret': intent.client_secret})
     except Exception as e: return jsonify(error=str(e)), 403
@@ -180,10 +171,7 @@ def record_donation():
     return jsonify({"success": success})
 
 @app.route('/api/top_donors')
-def top_donors():
-    if not db: return jsonify([])
-    res = db.get_top_donors()
-    return jsonify(res)
+def top_donors(): return jsonify(db.get_top_donors()) if db else jsonify([])
 
 @app.route('/api/admin/traffic')
 @login_required
@@ -205,8 +193,7 @@ def resolve_report():
 
 @app.route('/api/admin/history')
 @login_required
-def search_history():
-    return jsonify(db.admin_search_history(request.args.get('q', ''))) if db else jsonify([])
+def search_history(): return jsonify(db.admin_search_history(request.args.get('q', ''))) if db else jsonify([])
 
 @app.route('/api/admin/update_match', methods=['POST'])
 @login_required
@@ -250,8 +237,7 @@ def wipe_live():
 @login_required
 def set_fixture_format():
     if not db: return jsonify({"success": False})
-    data = request.json
-    return jsonify({"success": db.admin_set_fixture_format(data.get('fixture_id'), data.get('format_type'), session.get('admin_email'))})
+    return jsonify({"success": db.admin_set_fixture_format(request.json.get('fixture_id'), request.json.get('format_type'), session.get('admin_email'))})
 
 @app.route('/api/admin/player_directory')
 @login_required
@@ -267,19 +253,16 @@ def glicko_calc():
 
 @app.route('/api/admin/messages')
 @login_required
-def get_admin_messages():
-    return jsonify(db.get_admin_messages()) if db else jsonify([])
+def get_admin_messages(): return jsonify(db.get_admin_messages()) if db else jsonify([])
 
 @app.route('/api/admin/add_message', methods=['POST'])
 @login_required
 def add_admin_message():
     if not db: return jsonify({"success": False})
-    data = request.json
-    return jsonify({"success": db.add_admin_message(data.get('message'), session.get('admin_email'))})
+    return jsonify({"success": db.add_admin_message(request.json.get('message'), session.get('admin_email'))})
 
 @app.route('/api/notices')
-def get_notices(): 
-    return jsonify(db.get_notices()) if db else jsonify([])
+def get_notices(): return jsonify(db.get_notices()) if db else jsonify([])
 
 @app.route('/api/admin/add_notice', methods=['POST'])
 @login_required
@@ -296,25 +279,23 @@ def delete_notice():
 
 @app.route('/api/admin/contacts')
 @login_required
-def get_contacts():
-    if not db: return jsonify({"emails": "", "phones": ""})
-    return jsonify(db.get_contact_lists())
+def get_contacts(): return jsonify(db.get_contact_lists()) if db else jsonify({"emails": "", "phones": ""})
 
+# --- UPDATED: This now accepts targeted phone lists! ---
 @app.route('/api/admin/send_sms', methods=['POST'])
 @login_required
 def send_sms():
     if not db: return jsonify({"success": False, "error": "Database offline"})
     data = request.json
     msg = data.get('message')
+    phones = data.get('phones') 
     if not msg: return jsonify({"success": False, "error": "Message cannot be empty."})
-    result = db.admin_send_sms_broadcast(msg, session.get('admin_email', 'Unknown'))
+    result = db.admin_send_sms_broadcast(msg, phones, session.get('admin_email', 'Unknown'))
     return jsonify(result)
 
 @app.route('/api/admin/donations')
 @login_required
-def admin_donations():
-    if not db: return jsonify([])
-    return jsonify(db.admin_get_all_donations())
+def admin_donations(): return jsonify(db.admin_get_all_donations()) if db else jsonify([])
 
 @app.route('/api/admin/audit_logs')
 @super_admin_required
