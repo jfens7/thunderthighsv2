@@ -753,6 +753,55 @@ class ThunderData:
             self._log_audit(admin_email, 'OVERRIDE_RATING', f"Set {player_name}'s seed rating to {new_rating} (Retroactive: {retroactive}).", {"name": player_name})
             self.refresh_data(); return True
         except: return False
+        
+    def admin_bulk_pull_ratings(self, admin_email="Unknown"):
+        if not self.db or not self.sheet_results: return {"success": False, "error": "Database or Sheet offline"}
+        try:
+            ws = self.sheet_results.worksheet("Ratings crap")
+            all_values = ws.get_all_values()
+            
+            count = 0
+            batch = self.db.batch()
+            today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+            
+            for row in all_values[1:]: # Skip headers
+                if len(row) >= 3:
+                    name = self._clean_name(row[0])
+                    rating_str = str(row[2]).strip()
+                    
+                    if not name or not rating_str: continue
+                    try:
+                        rating_val = float(rating_str)
+                    except ValueError:
+                        continue # Ignore rows with text in rating column
+                    
+                    safe_id = re.sub(r'[^a-zA-Z0-9]', '_', name).lower()
+                    
+                    # Store as of today with standard deviation 140
+                    override_ref = self.db.collection('rating_overrides').document(safe_id)
+                    batch.set(override_ref, {
+                        'name': name,
+                        'rating': rating_val,
+                        'date_str': today_str,
+                        'rd': 140.0,
+                        'timestamp': firestore.SERVER_TIMESTAMP
+                    }, merge=True)
+                    
+                    count += 1
+                    if count >= 400: # Max write batch limit is 500, playing safe with 400
+                        batch.commit()
+                        batch = self.db.batch()
+                        count = 0
+            
+            if count > 0:
+                batch.commit()
+                
+            self._log_audit(admin_email, 'BULK_IMPORT_RATINGS', f"Pulled ratings from 'Ratings crap' sheet as of {today_str}.", {})
+            self.refresh_data()
+            return {"success": True, "count": "all valid"}
+            
+        except Exception as e:
+            return {"success": False, "error": str(e)}
             
     def admin_force_finish_live(self, schedule_id, s1, s2, admin_email="Unknown"):
         if not self.db: return False

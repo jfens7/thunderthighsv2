@@ -90,6 +90,32 @@
             else { alert("❌ Error applying rating override."); }
         } catch(e) { alert("Network error."); }
     };
+    
+    window.bulkSetRatings = async function() {
+        if(!confirm("⚠️ Are you sure you want to pull ALL ratings from the 'Ratings crap' sheet and apply them as of today? This will overwrite current ratings and set their RD to 140.")) return;
+        
+        const btn = event.currentTarget;
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> PULLING RATINGS...';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch('/api/admin/bulk_pull_ratings', { method: 'POST' });
+            const data = await res.json();
+            
+            if(data.success) {
+                alert(`✅ Successfully imported all valid ratings!`);
+                window.loadPlayerDirectory();
+            } else {
+                alert(`❌ Failed: ${data.error}`);
+            }
+        } catch(e) {
+            alert("Network error.");
+        } finally {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+        }
+    };
 
     window.submitPlayerMerge = async function() {
         const bad = document.getElementById('merge-bad-search').value; const good = document.getElementById('merge-good-search').value;

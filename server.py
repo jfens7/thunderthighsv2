@@ -221,6 +221,12 @@ def override_rating():
     if not db: return jsonify({"success": False})
     return jsonify({"success": db.admin_override_rating(request.json.get('player_id'), request.json.get('rating'), request.json.get('retroactive', True), session.get('admin_email'))})
 
+@app.route('/api/admin/bulk_pull_ratings', methods=['POST'])
+@login_required
+def bulk_pull_ratings():
+    if not db: return jsonify({"success": False})
+    return jsonify(db.admin_bulk_pull_ratings(session.get('admin_email', 'Unknown')))
+
 @app.route('/api/admin/force_finish_live', methods=['POST'])
 @login_required
 def force_finish_live():
