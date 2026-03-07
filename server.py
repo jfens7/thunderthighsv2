@@ -287,7 +287,6 @@ def delete_notice():
 @login_required
 def get_contacts(): return jsonify(db.get_contact_lists()) if db else jsonify({"emails": "", "phones": ""})
 
-# --- UPDATED: This now accepts targeted phone lists! ---
 @app.route('/api/admin/send_sms', methods=['POST'])
 @login_required
 def send_sms():

@@ -760,7 +760,8 @@ class ThunderData:
             ws = self.sheet_results.worksheet("Ratings crap")
             all_values = ws.get_all_values()
             
-            count = 0
+            total_count = 0
+            batch_count = 0
             batch = self.db.batch()
             today_str = datetime.datetime.now().strftime("%Y-%m-%d")
             
@@ -773,11 +774,10 @@ class ThunderData:
                     try:
                         rating_val = float(rating_str)
                     except ValueError:
-                        continue # Ignore rows with text in rating column
+                        continue 
                     
                     safe_id = re.sub(r'[^a-zA-Z0-9]', '_', name).lower()
                     
-                    # Store as of today with standard deviation 140
                     override_ref = self.db.collection('rating_overrides').document(safe_id)
                     batch.set(override_ref, {
                         'name': name,
@@ -787,18 +787,19 @@ class ThunderData:
                         'timestamp': firestore.SERVER_TIMESTAMP
                     }, merge=True)
                     
-                    count += 1
-                    if count >= 400: # Max write batch limit is 500, playing safe with 400
+                    total_count += 1
+                    batch_count += 1
+                    if batch_count >= 400: # Max write batch limit is 500
                         batch.commit()
                         batch = self.db.batch()
-                        count = 0
+                        batch_count = 0
             
-            if count > 0:
+            if batch_count > 0:
                 batch.commit()
                 
-            self._log_audit(admin_email, 'BULK_IMPORT_RATINGS', f"Pulled ratings from 'Ratings crap' sheet as of {today_str}.", {})
+            self._log_audit(admin_email, 'BULK_IMPORT_RATINGS', f"Pulled {total_count} ratings from 'Ratings crap' sheet as of {today_str}.", {})
             self.refresh_data()
-            return {"success": True, "count": "all valid"}
+            return {"success": True, "count": total_count}
             
         except Exception as e:
             return {"success": False, "error": str(e)}
