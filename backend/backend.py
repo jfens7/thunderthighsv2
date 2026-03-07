@@ -413,13 +413,16 @@ class ThunderData:
             final_matches.extend(merged)
         return final_matches
 
-    def _update_player_stats(self, stat_dict, player_name, p1_sets, p2_sets, is_p1, opponent, is_fillin, division, date_str, week_num, season_name, details="", rich_stats=None, match_id="", delta=0, sheet_name="Unknown", row_index="?"):
+    # --- BUG FIX: Removed the "Double Flip" logic. It now directly accepts the correct sets! ---
+    def _update_player_stats(self, stat_dict, player_name, my_sets, op_sets, is_p1, opponent, is_fillin, division, date_str, week_num, season_name, details="", rich_stats=None, match_id="", delta=0, sheet_name="Unknown", row_index="?"):
         if stat_dict is None: return 
         if player_name not in stat_dict: stat_dict[player_name] = {'regular': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'fillin': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'combined': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}}
-        buckets = [stat_dict[player_name]['combined']]; 
+        buckets = [stat_dict[player_name]['combined']]
         if is_fillin: buckets.append(stat_dict[player_name]['fillin'])
         else: buckets.append(stat_dict[player_name]['regular'])
-        my_sets = p1_sets if is_p1 else p2_sets; op_sets = p2_sets if is_p1 else p1_sets; result = "Win" if my_sets > op_sets else "Loss"
+        
+        result = "Win" if my_sets > op_sets else "Loss"
+        
         for stats in buckets:
             stats['matches'] += 1; stats['sets_won'] += my_sets; stats['sets_lost'] += op_sets
             if result == "Win": stats['wins'] += 1
@@ -871,12 +874,10 @@ class ThunderData:
         try: self.db.collection('admin_messages').add({'message': message, 'author': admin_email, 'timestamp': firestore.SERVER_TIMESTAMP}); return True
         except: return False
 
-    # --- BRAND NEW: LIGHTNING FAST GET_ALL_VALUES + PREVIEW UI LOGIC ---
     def get_contact_lists(self):
         if not self.sheet_results: return {"emails": "", "phones": "", "preview": [], "error": "No sheet connection"}
         try:
             ws = self.sheet_results.worksheet("Member info")
-            # LIGHTNING READ: 100x faster than get_all_records, ignores infinite empty rows
             raw_data = ws.get_all_values()
             
             if not raw_data or len(raw_data) < 2:
@@ -885,20 +886,13 @@ class ThunderData:
             headers = [str(h).lower().strip() for h in raw_data[0]]
             has_send_col = any('send' in h for h in headers)
             
-            emails = []
-            phones = []
-            preview = []
+            emails = []; phones = []; preview = []
             
             for row in raw_data[1:]:
-                # Skip entirely blank rows to save time
                 if not any(str(cell).strip() for cell in row):
                     continue
                     
-                email_val = ""
-                phone_val = ""
-                name_val = "Unknown Player"
-                
-                # STRICT GATEKEEPER: Blank = NO.
+                email_val = ""; phone_val = ""; name_val = "Unknown Player"
                 allow_sms = not has_send_col 
                 
                 for idx, cell_val in enumerate(row):
@@ -906,41 +900,27 @@ class ThunderData:
                     col_name = headers[idx]
                     val_str = str(cell_val).strip()
                     
-                    # Capture the Name for the Verification UI
                     if col_name in ['name', 'player', 'player name', 'full name', 'first name'] and name_val == "Unknown Player":
                         if val_str: name_val = val_str
-                    
-                    # Capture Emails
                     if 'email' in col_name and not email_val:
                         email_val = val_str
-                        
-                    # Capture Phones
                     if ('phone' in col_name or 'mobile' in col_name or 'number' in col_name) and not phone_val:
                         phone_val = val_str
                         
-                    # Check "Send" column permission
                     if 'send' in col_name:
                         val_lower = val_str.lower()
-                        if val_lower in ['yes', 'y', 'true']:
-                            allow_sms = True
-                        else:
-                            allow_sms = False
+                        if val_lower in ['yes', 'y', 'true']: allow_sms = True
+                        else: allow_sms = False
                             
-                if email_val and '@' in email_val: 
-                    emails.append(email_val)
+                if email_val and '@' in email_val: emails.append(email_val)
                 
                 if phone_val and allow_sms:
                     clean_phone = re.sub(r'[^\d\+\s]', '', phone_val)
                     if len(clean_phone) >= 8: 
                         phones.append(clean_phone)
-                        # Append to the visual preview list for the Admin Panel
                         preview.append({"name": name_val, "phone": clean_phone})
                     
-            return {
-                "emails": ", ".join(list(set(emails))), 
-                "phones": ", ".join(list(set(phones))), 
-                "preview": preview
-            }
+            return {"emails": ", ".join(list(set(emails))), "phones": ", ".join(list(set(phones))), "preview": preview}
             
         except Exception as e:
             logger.error(f"Error fetching contacts: {e}")
