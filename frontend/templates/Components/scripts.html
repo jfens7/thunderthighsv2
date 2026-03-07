@@ -502,7 +502,7 @@
             if (data.error) { alert("Player not found."); return; } 
             
             window.currentProfileData = data;
-            document.getElementById('playerRatingBadge').innerText = `Rating: ${data.rating}`; 
+            document.getElementById('playerRatingBadge').innerText = `Rating: ${Math.round(data.rating)}`; 
             
             if (!pc) {
                 pc = document.createElement('div');
@@ -690,14 +690,26 @@
                 if(!stats || stats.matches === 0) return; 
                 const winPct = Math.round((stats.wins / stats.matches) * 100); 
                 
-                // CHANGED: grid-cols-6 on mobile, grid-cols-7 on desktop. Rating column is hidden on mobile.
+                // --- THIS CREATES THE AWESOME STACKED NAMES ON MOBILE ---
+                let nameParts = p.name.trim().split(' ');
+                let firstName = nameParts[0];
+                let lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+                
                 html += `
                 <div class="grid grid-cols-6 md:grid-cols-7 gap-1 md:gap-2 items-center p-3 bg-black/20 rounded-lg border border-white/5 hover:bg-white/5 transition-colors">
                     <div class="col-span-2 flex items-center gap-2 md:gap-3 overflow-hidden pr-2">
                         <div class="text-slate-500 font-mono text-xs w-4 shrink-0">${index + 1}</div>
-                        <div class="font-bold text-white truncate cursor-pointer hover:text-yellow-400 text-sm md:text-base" onclick="loadStats('${p.name.replace(/'/g, "\\'")}')" title="${p.name}">${p.name}</div>
+                        <div class="font-bold text-white cursor-pointer hover:text-yellow-400 w-full" onclick="loadStats('${p.name.replace(/'/g, "\\'")}')" title="${p.name}">
+                            <div class="md:hidden flex flex-col leading-tight">
+                                <span class="text-xs truncate">${firstName}</span>
+                                <span class="text-[9px] text-slate-400 truncate">${lastName}</span>
+                            </div>
+                            <div class="hidden md:block truncate text-base">
+                                ${p.name}
+                            </div>
+                        </div>
                     </div>
-                    <div class="hidden md:block text-center font-mono text-yellow-500 font-bold">${p.rating_val}</div>
+                    <div class="hidden md:block text-center font-mono text-yellow-500 font-bold">${Math.round(p.rating_val)}</div>
                     <div class="text-center text-slate-300 text-sm md:text-base">${stats.matches}</div>
                     <div class="text-center text-green-400 font-bold text-sm md:text-base">${stats.wins}</div>
                     <div class="text-center text-red-400 text-sm md:text-base">${stats.losses}</div>
