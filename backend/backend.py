@@ -766,9 +766,9 @@ class ThunderData:
             today_str = datetime.datetime.now().strftime("%Y-%m-%d")
             
             for row in all_values[1:]: # Skip headers
-                if len(row) >= 3:
+                if len(row) >= 2: # Check at least length 2
                     name = self._clean_name(row[0])
-                    rating_str = str(row[2]).strip()
+                    rating_str = str(row[1]).strip() # Pulled from Column B (index 1)
                     
                     if not name or not rating_str: continue
                     try:
