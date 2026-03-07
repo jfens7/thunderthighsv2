@@ -138,6 +138,11 @@ def get_rankings(season, division): return jsonify(db.get_division_rankings(seas
 @app.route('/api/week/<season>/<week>')
 def get_week_results(season, week): return jsonify(db.get_matches_by_week(season, week)) if db else jsonify([])
 
+@app.route('/api/h2h')
+def get_h2h():
+    if not db: return jsonify({"error": "Offline"}), 500
+    return jsonify(db.get_head_to_head(request.args.get('p1', ''), request.args.get('p2', '')))
+
 @app.route('/api/feedback', methods=['POST'])
 def submit_feedback():
     if not db: return jsonify({"success": False, "code": 500, "message": "Database connection offline"}), 500
@@ -287,6 +292,7 @@ def delete_notice():
 @login_required
 def get_contacts(): return jsonify(db.get_contact_lists()) if db else jsonify({"emails": "", "phones": ""})
 
+# --- UPDATED: This now accepts targeted phone lists! ---
 @app.route('/api/admin/send_sms', methods=['POST'])
 @login_required
 def send_sms():

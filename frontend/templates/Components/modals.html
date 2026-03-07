@@ -117,8 +117,8 @@
                 <select id="fb-type" class="w-full bg-black/40 border border-white/10 text-white text-sm rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer">
                     <option value="Bug Report">🐛 Report a Bug</option>
                     <option value="Feature Request">💡 Feature Request</option>
-                    <option value="Data Correction">📊 General Data Issue</option>
-                    <option value="Other">💬 Other</option>
+                    <option value="Data Correction">✏️ General Data Issue</option>
+                    <option value="Other">📦 Other</option>
                 </select>
             </div>
             <div>
@@ -144,5 +144,34 @@
         <h2 class="text-2xl font-black text-white mb-2">Premium Feature</h2>
         <p class="text-sm text-slate-400 mb-6">The Live Fixtures hub is currently locked. It is only accessible via direct tournament link or for premium members.</p>
         <button onclick="document.getElementById('coming-soon-modal').classList.add('hidden'); openDonateModal()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition shadow-lg">Support to Unlock</button>
+    </div>
+</div>
+
+<div id="compareModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] px-4 animate-fade-in">
+    <div class="bg-slate-900 border border-white/10 p-5 md:p-8 rounded-2xl w-full max-w-2xl shadow-2xl relative max-h-[90vh] flex flex-col">
+        <button onclick="closeCompareModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors z-10"><i class="fa-solid fa-xmark text-2xl"></i></button>
+        
+        <h2 class="text-2xl font-black text-white mb-6 flex items-center gap-3"><i class="fa-solid fa-bolt text-yellow-400"></i> Head-to-Head</h2>
+        
+        <div class="flex flex-col md:flex-row items-center gap-4 mb-6">
+            <div class="flex-1 bg-black/40 border border-white/5 rounded-xl p-3 text-center w-full">
+                <div class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Player 1</div>
+                <div id="h2h-p1-name" class="font-black text-white text-xl truncate"></div>
+                <input type="hidden" id="h2h-p1-hidden">
+            </div>
+            <div class="text-slate-600 font-black italic text-xl md:text-2xl">VS</div>
+            <div class="flex-1 w-full relative">
+                <div class="text-[10px] text-sky-500 font-bold uppercase tracking-widest mb-1 absolute -top-5 left-1">Search Opponent</div>
+                <input type="text" id="h2h-search" placeholder="Type name..." class="w-full bg-slate-800 border border-sky-500/50 text-white rounded-xl px-4 py-3 md:py-4 focus:ring-2 focus:ring-sky-500 outline-none text-center font-bold shadow-[0_0_15px_rgba(14,165,233,0.2)]" autocomplete="off">
+                <div id="h2h-suggestions" class="absolute z-50 left-0 right-0 top-full mt-2 bg-slate-800 border border-white/10 rounded-xl shadow-2xl max-h-48 overflow-y-auto hidden"></div>
+            </div>
+        </div>
+
+        <div id="h2h-results-area" class="flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-hide">
+            <div class="text-center py-16 text-slate-500">
+                <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/5"><i class="fa-solid fa-magnifying-glass text-2xl"></i></div>
+                <p class="font-bold text-sm">Search for an opponent to compare stats.</p>
+            </div>
+        </div>
     </div>
 </div>

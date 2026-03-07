@@ -468,8 +468,7 @@
             const data = await res.json(); 
             if (data.error) { alert("Player not found."); return; } 
             
-            window.currentProfileData = data; 
-            document.getElementById('playerRatingBadge').innerText = `Rating: ${Math.round(data.rating)} (±${Math.round(data.rd || 140)})`; 
+            window.currentProfileData = data; document.getElementById('playerRatingBadge').innerText = `Rating: ${Math.round(data.rating)}`; 
             
             if (!pc) { pc = document.createElement('div'); pc.id = 'petermanContainer'; pc.className = 'mt-3 md:mt-4 flex justify-center md:justify-start w-full'; const pNameEl = document.getElementById('playerName'); if (pNameEl && pNameEl.parentElement) { pNameEl.parentElement.appendChild(pc); } }
             if (data.peterman_id) { pc.innerHTML = `<a href="https://petermanratings.com/profile.php?profile-id=${data.peterman_id}" target="_blank" title="Peterman Ratings" class="bg-indigo-950/40 border border-indigo-500/20 text-indigo-300/70 hover:text-indigo-200 hover:bg-indigo-900/60 transition px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center gap-2 w-max mx-auto md:mx-0 opacity-60 hover:opacity-100 grayscale hover:grayscale-0"><img src="/static/peterman.png" class="h-3 w-auto opacity-70" alt="Peterman"> View Peterman Rating</a>`; } else { pc.innerHTML = ''; }
@@ -589,10 +588,7 @@
                             <div class="hidden md:block truncate text-base">${p.name}</div>
                         </div>
                     </div>
-                    <div class="hidden md:flex flex-col items-center justify-center w-full">
-                        <div class="font-mono text-yellow-500 font-bold leading-none">${Math.round(p.rating_val)} <span class="text-[10px] text-slate-500">±${Math.round(p.sigma)}</span></div>
-                        <div class="text-[9px] text-slate-600 font-mono mt-1 leading-none" title="Volatility">v${(p.vol || 0.06).toFixed(3)}</div>
-                    </div>
+                    <div class="hidden md:block text-center font-mono text-yellow-500 font-bold">${Math.round(p.rating_val)}</div>
                     <div class="text-center text-slate-300 text-sm md:text-base">${stats.matches}</div>
                     <div class="text-center text-green-400 font-bold text-sm md:text-base">${stats.wins}</div>
                     <div class="text-center text-red-400 text-sm md:text-base">${stats.losses}</div>
@@ -703,4 +699,134 @@
         };
         attachSearch('playerSearch', 'suggestions-list'); attachSearch('bigPlayerSearch', 'big-suggestions-list');
     }
+
+    window.openCompareModal = function() {
+        let p1 = window.currentProfileName;
+        if(!p1) return;
+        history.pushState({ modal: 'compareModal' }, "", "#compare");
+        document.getElementById('compareModal').classList.remove('hidden');
+        document.getElementById('h2h-p1-name').innerText = p1;
+        document.getElementById('h2h-p1-hidden').value = p1;
+        document.getElementById('h2h-search').value = '';
+        document.getElementById('h2h-results-area').innerHTML = `
+            <div class="text-center py-16 text-slate-500">
+                <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/5"><i class="fa-solid fa-magnifying-glass text-2xl"></i></div>
+                <p class="font-bold text-sm">Search for an opponent to compare stats.</p>
+            </div>`;
+        setTimeout(() => document.getElementById('h2h-search').focus(), 100);
+    };
+
+    window.closeCompareModal = function() {
+        document.getElementById('compareModal').classList.add('hidden');
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const input = document.getElementById('h2h-search');
+        const sugg = document.getElementById('h2h-suggestions');
+        if(input && sugg) {
+            input.addEventListener('input', (e) => {
+                const q = e.target.value.toLowerCase().trim();
+                sugg.innerHTML = '';
+                if(q.length < 2) { sugg.classList.add('hidden'); return; }
+                if(!window.allPlayersRaw) return;
+                const matches = window.allPlayersRaw.filter(p => p.toLowerCase().includes(q));
+                if(matches.length === 0) { sugg.innerHTML = '<div class="px-4 py-3 text-slate-500 text-sm italic">No players found</div>'; sugg.classList.remove('hidden'); return; }
+                sugg.innerHTML = matches.slice(0, 6).map(p => `<div class="px-4 py-3 hover:bg-sky-600/40 cursor-pointer text-sm text-white font-bold border-b border-white/5 transition-colors" onclick="document.getElementById('h2h-search').value='${p.replace(/'/g, "\\'")}'; document.getElementById('h2h-suggestions').classList.add('hidden'); window.executeH2H('${p.replace(/'/g, "\\'")}');">${p}</div>`).join('');
+                sugg.classList.remove('hidden');
+            });
+        }
+        document.addEventListener('click', (e) => { if(input && sugg && !input.contains(e.target) && !sugg.contains(e.target)) sugg.classList.add('hidden'); });
+    });
+
+    window.executeH2H = async function(p2) {
+        const p1 = document.getElementById('h2h-p1-hidden').value;
+        const resArea = document.getElementById('h2h-results-area');
+        resArea.innerHTML = '<div class="text-center py-20"><i class="fa-solid fa-spinner fa-spin text-4xl text-sky-500 mb-4"></i><p class="text-slate-400 font-bold uppercase tracking-widest text-xs animate-pulse">Crunching Math...</p></div>';
+        
+        try {
+            const res = await fetch(`/api/h2h?p1=${encodeURIComponent(p1)}&p2=${encodeURIComponent(p2)}`);
+            const data = await res.json();
+            
+            let html = `
+                <div class="grid grid-cols-3 items-center gap-4 mb-6">
+                    <div class="text-center bg-black/20 py-3 rounded-lg border border-white/5 shadow-inner">
+                        <div class="text-2xl md:text-3xl font-black text-white font-mono">${data.p1.rating}</div>
+                        <div class="text-[9px] md:text-[10px] text-slate-500 uppercase font-bold tracking-widest mt-1">Current Rating</div>
+                    </div>
+                    <div class="text-center flex flex-col items-center justify-center">
+                        <div class="text-sm md:text-base font-black text-yellow-500 bg-yellow-900/20 px-3 py-1.5 rounded-full border border-yellow-500/30 whitespace-nowrap shadow-lg">${data.total_matches} Matches</div>
+                    </div>
+                    <div class="text-center bg-black/20 py-3 rounded-lg border border-white/5 shadow-inner">
+                        <div class="text-2xl md:text-3xl font-black text-white font-mono">${data.p2.rating}</div>
+                        <div class="text-[9px] md:text-[10px] text-slate-500 uppercase font-bold tracking-widest mt-1">Current Rating</div>
+                    </div>
+                </div>
+
+                <div class="bg-black/30 rounded-xl p-4 md:p-5 border border-white/5 mb-6 shadow-inner">
+                    <div class="flex justify-between items-end mb-2">
+                        <div class="text-xs md:text-sm font-black text-white"><span class="text-slate-500 text-[10px] uppercase font-bold tracking-widest block mb-0.5">${data.p1.name} Win %</span>${data.p1.win_pct}%</div>
+                        <i class="fa-solid fa-scale-balanced text-slate-600 pb-1"></i>
+                        <div class="text-xs md:text-sm font-black text-white text-right"><span class="text-slate-500 text-[10px] uppercase font-bold tracking-widest block mb-0.5">${data.p2.name} Win %</span>${data.p2.win_pct}%</div>
+                    </div>
+                    <div class="w-full bg-red-500 rounded-full h-3 md:h-4 flex overflow-hidden shadow-inner">
+                        <div class="bg-sky-500 h-full transition-all duration-1000" style="width: ${data.p1.win_pct}%"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="bg-slate-800/60 p-4 md:p-5 rounded-xl border border-white/10 text-center shadow-lg relative overflow-hidden">
+                        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-sky-500 to-red-500"></div>
+                        <div class="text-[10px] text-slate-400 uppercase font-bold tracking-widest mb-2">All-Time Wins</div>
+                        <div class="flex justify-center items-end gap-2 md:gap-3">
+                            <span class="text-4xl md:text-5xl font-black text-sky-400 font-mono drop-shadow-md">${data.p1.wins}</span>
+                            <span class="text-xl text-slate-600 font-black mb-1 md:mb-2">-</span>
+                            <span class="text-4xl md:text-5xl font-black text-red-400 font-mono drop-shadow-md">${data.p2.wins}</span>
+                        </div>
+                    </div>
+                    <div class="bg-slate-800/60 p-4 md:p-5 rounded-xl border border-white/10 text-center shadow-lg relative overflow-hidden">
+                        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-sky-500 to-red-500"></div>
+                        <div class="text-[10px] text-slate-400 uppercase font-bold tracking-widest mb-2">Form (Last ${Math.min(data.total_matches, 5)})</div>
+                        <div class="flex justify-center items-end gap-2 md:gap-3">
+                            <span class="text-4xl md:text-5xl font-black text-sky-400 font-mono drop-shadow-md">${data.p1.recent_wins}</span>
+                            <span class="text-xl text-slate-600 font-black mb-1 md:mb-2">-</span>
+                            <span class="text-4xl md:text-5xl font-black text-red-400 font-mono drop-shadow-md">${data.p2.recent_wins}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><i class="fa-solid fa-list-ul"></i> Encounter History</h3>
+                <div class="space-y-2 mb-4">
+            `;
+
+            if (data.history.length === 0) {
+                html += `<div class="bg-black/20 rounded-xl p-6 text-center text-slate-500 border border-white/5 text-sm font-bold shadow-inner">These players have never played each other.</div>`;
+            } else {
+                data.history.forEach(m => {
+                    const p1Won = m.result === 'Win';
+                    const winnerName = p1Won ? data.p1.name : data.p2.name;
+                    const badgeClass = p1Won ? "bg-sky-900/30 text-sky-400 border-sky-500/30" : "bg-red-900/30 text-red-400 border-red-500/30";
+                    const indicatorClass = p1Won ? "bg-sky-500" : "bg-red-500";
+                    
+                    html += `
+                    <div class="bg-black/30 p-3 md:p-4 rounded-xl border border-white/5 flex justify-between items-center relative overflow-hidden group hover:bg-slate-800 transition-colors">
+                        <div class="absolute left-0 top-0 bottom-0 w-1 ${indicatorClass}"></div>
+                        <div class="pl-3">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-sm font-bold text-white">${winnerName} won</span>
+                                ${m.type === 'Fill-in' ? '<span class="text-[8px] bg-purple-900/40 text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/30 uppercase font-bold">Fill-in</span>' : ''}
+                            </div>
+                            <div class="text-[10px] md:text-xs text-slate-500 font-bold uppercase tracking-wider">${m.date} • ${m.division}</div>
+                        </div>
+                        <div class="font-mono font-black text-base md:text-lg ${badgeClass} border px-3 py-1 rounded-lg shadow-inner">${m.score}</div>
+                    </div>
+                    `;
+                });
+            }
+            
+            html += `</div>`;
+            resArea.innerHTML = html;
+        } catch(e) {
+            resArea.innerHTML = '<div class="text-center text-red-500 py-10 bg-red-900/20 rounded-xl border border-red-500/20 font-bold shadow-inner"><i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i><br>Failed to compute Head-to-Head stats.</div>';
+        }
+    };
 </script>

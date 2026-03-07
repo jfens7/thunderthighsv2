@@ -36,24 +36,26 @@ def calculate_match(w, l, s1, s2):
     total_sets = s1 + s2
     if total_sets == 0: return {'winner': w, 'loser': l}
     
-    w_score = 0.75 + 0.25 * ((s1 - s2) / total_sets)
+    # Win score calculation (Rewards sweeps heavily. 3-0 = 1.0, 3-2 = 0.76)
+    w_score = 0.7 + 0.3 * ((s1 - s2) / total_sets)
     l_score = 1.0 - w_score
     
+    # Expected win probability based on current ratings
     E_w = 1.0 / (1.0 + 10.0 ** ((l['rating'] - w['rating']) / 400.0))
     E_l = 1.0 - E_w
     
-    w_dampener = 50.0 / max(50.0, l['rd'] * 0.5)
-    l_dampener = 50.0 / max(50.0, w['rd'] * 0.5)
+    # Asymmetrical K-factor. Players with high RD will experience massive swings (150-200+ pts)
+    # Players with low RD will experience standard stable swings (~20-80 pts)
+    K_w = max(40.0, w['rd'] * 1.3)
+    K_l = max(40.0, l['rd'] * 1.4)
     
-    K_w = max(50.0, w['rd'] * 0.8)
-    K_l = max(50.0, l['rd'] * 0.8)
-    
-    w_shift = K_w * w_dampener * (w_score - E_w)
-    l_shift = K_l * l_dampener * (l_score - E_l)
+    w_shift = K_w * (w_score - E_w)
+    l_shift = K_l * (l_score - E_l)
     
     w['rating'] += w_shift
     l['rating'] += l_shift
     
+    # Reduce uncertainty (RD) slightly after playing a match
     w['rd'] = max(50.0, w['rd'] - 4.0)
     l['rd'] = max(50.0, l['rd'] - 4.0)
     
@@ -80,11 +82,19 @@ class RatingEngine:
         except ValueError: pass
         
     def update_match(self, p1_name, p2_name, s1, s2):
-        if s1 == s2: return {'p1_delta': 0, 'p2_delta': 0}
         p1_stats = self.get_rating(p1_name)
         p2_stats = self.get_rating(p2_name)
         r1_old = p1_stats['rating']
+        rd1_old = p1_stats['rd']
         r2_old = p2_stats['rating']
+        rd2_old = p2_stats['rd']
+        
+        if s1 == s2: 
+            return {
+                'p1_delta': 0, 'p2_delta': 0,
+                'p1_before': r1_old, 'p1_rd_before': rd1_old, 'p1_after': r1_old, 'p1_rd_after': rd1_old,
+                'p2_before': r2_old, 'p2_rd_before': rd2_old, 'p2_after': r2_old, 'p2_rd_after': rd2_old
+            }
         
         if s1 > s2: 
             res = calculate_match(p1_stats, p2_stats, s1, s2)
@@ -97,7 +107,9 @@ class RatingEngine:
             
         return {
             'p1_delta': self.players[p1_name]['rating'] - r1_old,
-            'p2_delta': self.players[p2_name]['rating'] - r2_old
+            'p2_delta': self.players[p2_name]['rating'] - r2_old,
+            'p1_before': r1_old, 'p1_rd_before': rd1_old, 'p1_after': self.players[p1_name]['rating'], 'p1_rd_after': self.players[p1_name]['rd'],
+            'p2_before': r2_old, 'p2_rd_before': rd2_old, 'p2_after': self.players[p2_name]['rating'], 'p2_rd_after': self.players[p2_name]['rd']
         }
 
 class ThunderData:
@@ -109,6 +121,7 @@ class ThunderData:
         self.all_players = {}; self.season_stats = {}; self.seasons_list = ["Career"] 
         self.divisions_list = set(); self.date_lookup = {}; self.weekly_matches = {} 
         self.player_ids = {}; self.id_to_name = {}; self.alias_map = {}; self.date_to_week_map = {} 
+        self.match_history_log = []
         self._authenticate()
 
     def _authenticate(self):
@@ -403,6 +416,7 @@ class ThunderData:
     def refresh_data(self):
         logger.info("⚡️ Fetching and Processing Data...")
         self.all_players = {}; self.season_stats = {}; self.seasons_list = ["Career"]; self.divisions_list = set(); self.weekly_matches = {}; self.rating_engine = RatingEngine() 
+        self.match_history_log = []
         if self.sheet_results: self._load_calculated_dates(); self._load_aliases(); self._load_seed_ratings()
         raw_match_queue = [] 
         
@@ -508,6 +522,7 @@ class ThunderData:
         for m in cleaned_matches:
             players = sorted([m['p1'], m['p2']]); d_str = m['date'].strftime("%d/%m/%Y") if m['date'] else "nodate"; d_str_fmt = m['date'].strftime("%Y-%m-%d") if m['date'] else "1900-01-01"
             raw_id_string = f"{d_str}_{players[0]}_{players[1]}_{m['s1']}_{m['s2']}"; match_id = hashlib.md5(raw_id_string.encode()).hexdigest()[:6].upper()
+            
             for p in [m['p1'], m['p2']]:
                 if p in overrides_dict and p not in player_overrides_applied:
                     if d_str_fmt >= overrides_dict[p]['date']:
@@ -517,9 +532,46 @@ class ThunderData:
                         self.rating_engine.players[p]['vol'] = overrides_dict[p]['vol']
                         player_overrides_applied.add(p)
 
-            p1_delta = 0; p2_delta = 0
+            deltas = {'p1_delta': 0, 'p2_delta': 0}
             if m['date'] > RATING_START_DATE: 
-                deltas = self.rating_engine.update_match(m['p1'], m['p2'], m['s1'], m['s2']); p1_delta = deltas.get('p1_delta', 0); p2_delta = deltas.get('p2_delta', 0)
+                deltas = self.rating_engine.update_match(m['p1'], m['p2'], m['s1'], m['s2'])
+            
+            p1_delta = deltas.get('p1_delta', 0)
+            p2_delta = deltas.get('p2_delta', 0)
+            
+            match_hash = f"{d_str}_{m['season']}_{m['week']}_{players[0]}_{players[1]}_{m['s1']}-{m['s2']}"
+            
+            # Snap the before/after stats for the admin panel
+            record = {
+                'id': match_hash,
+                'match_id': match_id,
+                'date': d_str,
+                'season': m['season'],
+                'week': m['week'],
+                'division': m['div'],
+                'p1': m['p1'],
+                'p2': m['p2'],
+                'home_players': [m['p1']],
+                'away_players': [m['p2']],
+                's1': m['s1'],
+                's2': m['s2'],
+                'score': f"{m['s1']}-{m['s2']}",
+                'p1_before': deltas.get('p1_before', self.rating_engine.get_rating(m['p1'])['rating']),
+                'p1_rd_before': deltas.get('p1_rd_before', self.rating_engine.get_rating(m['p1'])['rd']),
+                'p1_after': deltas.get('p1_after', self.rating_engine.get_rating(m['p1'])['rating']),
+                'p1_rd_after': deltas.get('p1_rd_after', self.rating_engine.get_rating(m['p1'])['rd']),
+                'p1_delta': p1_delta,
+                'p2_before': deltas.get('p2_before', self.rating_engine.get_rating(m['p2'])['rating']),
+                'p2_rd_before': deltas.get('p2_rd_before', self.rating_engine.get_rating(m['p2'])['rd']),
+                'p2_after': deltas.get('p2_after', self.rating_engine.get_rating(m['p2'])['rating']),
+                'p2_rd_after': deltas.get('p2_rd_after', self.rating_engine.get_rating(m['p2'])['rd']),
+                'p2_delta': p2_delta,
+                'rich_stats': m.get('rich_stats', {}),
+                'game_history': m.get('game_history', ''),
+                'sheet_name': m.get('sheet_name', 'Unknown'),
+                'row_index': m.get('row_index', '?')
+            }
+            self.match_history_log.append(record)
             
             for p, sets_for, sets_against, is_p1, opp, fill, delta in [(m['p1'], m['s1'], m['s2'], True, m['p2'], m['p1_fill'], p1_delta), (m['p2'], m['s2'], m['s1'], False, m['p1'], m['p2_fill'], p2_delta)]:
                 self._update_player_stats(self.season_stats.get(m['season'], {}), p, sets_for, sets_against, is_p1, opp, fill, m['div'], d_str, m['week'], m['season'], m.get('game_history', ''), m.get('rich_stats'), match_id, delta, m.get('sheet_name', 'Unknown'), m.get('row_index', '?'))
@@ -682,21 +734,18 @@ class ThunderData:
         return results
 
     def admin_search_history(self, query_text, season_filter=None, div_filter=None, week_filter=None, date_filter=None):
-        q_lower = query_text.lower() if query_text else ""; results = []; seen = set()
-        for p_name, data in self.all_players.items():
-            for m in data.get('combined', {}).get('history', []):
-                date = str(m.get('date', '')); opp = str(m.get('opponent', '')); m_season = str(m.get('season', '')); m_div = str(m.get('division', '')); m_week = str(m.get('week', '')); match_id = str(m.get('match_id', ''))
-                if q_lower and q_lower not in p_name.lower() and q_lower not in opp.lower() and q_lower not in date and q_lower not in match_id.lower(): continue
-                players = sorted([p_name, opp]); match_hash = f"{date}_{m_season}_{m_week}_{players[0]}_{players[1]}_{m.get('score', '0-0')}"
-                if match_hash not in seen:
-                    seen.add(match_hash); score = m.get('score', '0-0')
-                    try: s1, s2 = map(int, score.split('-'))
-                    except: s1, s2 = 0, 0
-                    results.append({'id': match_hash, 'date': date, 'division': m_div, 'season': m_season, 'week': m_week, 'home_players': [p_name], 'away_players': [opp], 'score': score, 's1': s1, 's2': s2, 'match_id': match_id})
+        q_lower = query_text.lower() if query_text else ""
+        results = []
+        for m in self.match_history_log:
+            if q_lower and q_lower not in m['p1'].lower() and q_lower not in m['p2'].lower() and q_lower not in m['date'] and q_lower not in m.get('match_id', '').lower(): continue
+            results.append(m)
+            
         def sort_key(x):
             try: return datetime.datetime.strptime(x['date'], "%d/%m/%Y")
             except: return datetime.datetime(1900, 1, 1)
-        results.sort(key=sort_key, reverse=True); return results[:150]
+            
+        results.sort(key=sort_key, reverse=True)
+        return results[:150]
 
     def admin_get_pending_approvals(self):
         if not self.db: return []
@@ -1044,4 +1093,40 @@ class ThunderData:
         return {
             'p1': {'name': p1, 'old_rating': round(r1['rating'], 1), 'old_rd': round(r1['rd'], 1), 'expected_win_pct': round(E_1 * 100, 1), 'new_rating': round(new_r1, 1), 'delta': round(new_r1 - r1['rating'], 1)},
             'p2': {'name': p2, 'old_rating': round(r2['rating'], 1), 'old_rd': round(r2['rd'], 1), 'expected_win_pct': round(E_2 * 100, 1), 'new_rating': round(new_r2, 1), 'delta': round(new_r2 - r2['rating'], 1)}
+        }
+
+    def get_head_to_head(self, p1, p2):
+        p1 = self._clean_name(p1)
+        p2 = self._clean_name(p2)
+        r1 = self.rating_engine.get_rating(p1)
+        r2 = self.rating_engine.get_rating(p2)
+        
+        E_1 = 1.0 / (1.0 + 10.0 ** ((r2['rating'] - r1['rating']) / 400.0))
+        E_2 = 1.0 - E_1
+        
+        matches = []
+        if p1 in self.all_players:
+            hist = self.all_players[p1].get('combined', {}).get('history', [])
+            for m in hist:
+                if m.get('opponent', '').lower() == p2.lower():
+                    matches.append(m)
+                    
+        def safe_date(date_str):
+            try: return datetime.datetime.strptime(date_str, "%d/%m/%Y")
+            except: return datetime.datetime(1900, 1, 1)
+            
+        matches.sort(key=lambda x: safe_date(x.get('date', '1900-01-01')), reverse=True)
+        
+        p1_wins = sum(1 for m in matches if m.get('result') == 'Win')
+        p2_wins = len(matches) - p1_wins
+        
+        recent_matches = matches[:5]
+        p1_recent = sum(1 for m in recent_matches if m.get('result') == 'Win')
+        p2_recent = len(recent_matches) - p1_recent
+        
+        return {
+            'p1': {'name': p1, 'rating': round(r1['rating']), 'wins': p1_wins, 'recent_wins': p1_recent, 'win_pct': round(E_1 * 100, 1)},
+            'p2': {'name': p2, 'rating': round(r2['rating']), 'wins': p2_wins, 'recent_wins': p2_recent, 'win_pct': round(E_2 * 100, 1)},
+            'total_matches': len(matches),
+            'history': matches
         }
