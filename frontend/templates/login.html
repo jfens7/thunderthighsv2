@@ -21,9 +21,9 @@
         <h1 class="text-2xl font-black mb-2 tracking-tight">Admin Portal</h1>
         <p class="text-sm text-slate-400 mb-8">Sign in with your authorized Google Account to access the control panel.</p>
         
-        <button id="googleSignInBtn" class="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-3 px-4 rounded-xl transition flex items-center justify-center gap-3 shadow-lg">
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5">
-            Sign in with Google
+        <button id="googleSignInBtn" disabled class="w-full bg-slate-800 text-slate-400 border border-white/5 font-bold py-3 px-4 rounded-xl transition flex items-center justify-center gap-3 shadow-lg cursor-wait">
+            <i class="fa-solid fa-circle-notch fa-spin text-lg"></i>
+            Checking session...
         </button>
 
         <div id="error-msg" class="hidden mt-4 text-red-400 text-sm font-bold bg-red-900/30 border border-red-500/20 py-2 px-3 rounded-lg"></div>
@@ -41,11 +41,23 @@
         const btn = document.getElementById('googleSignInBtn');
         const errorMsg = document.getElementById('error-msg');
 
-        // --- NEW: AUTOMATICALLY RECONNECT EXISTING SESSIONS ---
+        // Helper functions to instantly switch the button's look
+        function setButtonActive() {
+            btn.disabled = false;
+            btn.className = "w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-3 px-4 rounded-xl transition flex items-center justify-center gap-3 shadow-lg cursor-pointer";
+            btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5"> Sign in with Google';
+        }
+
+        function setButtonLoading(text) {
+            btn.disabled = true;
+            btn.className = "w-full bg-slate-800 text-slate-400 border border-white/5 font-bold py-3 px-4 rounded-xl transition flex items-center justify-center gap-3 shadow-lg cursor-wait";
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-lg"></i> ${text}`;
+        }
+
+        // --- AUTOMATICALLY RECONNECT EXISTING SESSIONS ---
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Restoring Session...';
-                btn.disabled = true;
+                setButtonLoading("Restoring Session...");
                 
                 user.getIdToken(true).then((token) => {
                     return fetch('/api/auth/google', {
@@ -58,21 +70,21 @@
                     else {
                         errorMsg.innerText = data.error;
                         errorMsg.classList.remove('hidden');
-                        btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5"> Sign in with Google';
-                        btn.disabled = false;
+                        setButtonActive();
                         signOut(auth); // Kick them out if not an approved admin
                     }
                 }).catch(e => {
-                    btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5"> Sign in with Google';
-                    btn.disabled = false;
+                    setButtonActive();
                 });
+            } else {
+                // If Firebase confirms NO user is logged in, unlock the button!
+                setButtonActive();
             }
         });
 
         // --- MANUAL LOGIN BUTTON TRIGGER ---
         btn.addEventListener('click', () => {
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Authenticating...';
-            btn.disabled = true;
+            setButtonLoading("Authenticating...");
             errorMsg.classList.add('hidden');
             
             signInWithPopup(auth, provider).then((result) => {
@@ -80,8 +92,7 @@
             }).catch(error => {
                 errorMsg.innerText = "Popup blocked or login failed.";
                 errorMsg.classList.remove('hidden');
-                btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5"> Sign in with Google';
-                btn.disabled = false;
+                setButtonActive();
             });
         });
     </script>

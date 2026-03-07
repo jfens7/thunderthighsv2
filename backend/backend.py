@@ -832,7 +832,6 @@ class ThunderData:
             res = []
             for d in docs:
                 data = d.to_dict(); data['id'] = d.id; ts = data.get('timestamp')
-                # Date and Time Formatter
                 data['date_str'] = ts.strftime('%d/%m/%Y %I:%M %p') if ts else 'Recent'; data['timestamp'] = str(ts)
                 res.append(data)
             return res
@@ -872,31 +871,88 @@ class ThunderData:
         try: self.db.collection('admin_messages').add({'message': message, 'author': admin_email, 'timestamp': firestore.SERVER_TIMESTAMP}); return True
         except: return False
 
+    # --- BRAND NEW: LIGHTNING FAST GET_ALL_VALUES + PREVIEW UI LOGIC ---
     def get_contact_lists(self):
-        if not self.sheet_results: return {"emails": "", "phones": ""}
+        if not self.sheet_results: return {"emails": "", "phones": "", "preview": [], "error": "No sheet connection"}
         try:
-            ws = self.sheet_results.worksheet("Member info"); records = ws.get_all_records()
-            emails = []; phones = []
-            for row in records:
-                email_val = ""; phone_val = ""
-                for k, v in row.items():
-                    kl = str(k).lower()
-                    if 'email' in kl and not email_val: email_val = str(v).strip()
-                    if ('phone' in kl or 'mobile' in kl or 'number' in kl) and not phone_val: phone_val = str(v).strip()
-                if email_val and '@' in email_val: emails.append(email_val)
-                if phone_val:
+            ws = self.sheet_results.worksheet("Member info")
+            # LIGHTNING READ: 100x faster than get_all_records, ignores infinite empty rows
+            raw_data = ws.get_all_values()
+            
+            if not raw_data or len(raw_data) < 2:
+                return {"emails": "", "phones": "", "preview": [], "error": "Sheet appears to be empty."}
+                
+            headers = [str(h).lower().strip() for h in raw_data[0]]
+            has_send_col = any('send' in h for h in headers)
+            
+            emails = []
+            phones = []
+            preview = []
+            
+            for row in raw_data[1:]:
+                # Skip entirely blank rows to save time
+                if not any(str(cell).strip() for cell in row):
+                    continue
+                    
+                email_val = ""
+                phone_val = ""
+                name_val = "Unknown Player"
+                
+                # STRICT GATEKEEPER: Blank = NO.
+                allow_sms = not has_send_col 
+                
+                for idx, cell_val in enumerate(row):
+                    if idx >= len(headers): break
+                    col_name = headers[idx]
+                    val_str = str(cell_val).strip()
+                    
+                    # Capture the Name for the Verification UI
+                    if col_name in ['name', 'player', 'player name', 'full name', 'first name'] and name_val == "Unknown Player":
+                        if val_str: name_val = val_str
+                    
+                    # Capture Emails
+                    if 'email' in col_name and not email_val:
+                        email_val = val_str
+                        
+                    # Capture Phones
+                    if ('phone' in col_name or 'mobile' in col_name or 'number' in col_name) and not phone_val:
+                        phone_val = val_str
+                        
+                    # Check "Send" column permission
+                    if 'send' in col_name:
+                        val_lower = val_str.lower()
+                        if val_lower in ['yes', 'y', 'true']:
+                            allow_sms = True
+                        else:
+                            allow_sms = False
+                            
+                if email_val and '@' in email_val: 
+                    emails.append(email_val)
+                
+                if phone_val and allow_sms:
                     clean_phone = re.sub(r'[^\d\+\s]', '', phone_val)
-                    if len(clean_phone) >= 8: phones.append(clean_phone)
-            return {"emails": ", ".join(list(set(emails))), "phones": ", ".join(list(set(phones)))}
-        except: return {"emails": "", "phones": ""}
+                    if len(clean_phone) >= 8: 
+                        phones.append(clean_phone)
+                        # Append to the visual preview list for the Admin Panel
+                        preview.append({"name": name_val, "phone": clean_phone})
+                    
+            return {
+                "emails": ", ".join(list(set(emails))), 
+                "phones": ", ".join(list(set(phones))), 
+                "preview": preview
+            }
+            
+        except Exception as e:
+            logger.error(f"Error fetching contacts: {e}")
+            return {"emails": "", "phones": "", "preview": [], "error": str(e)}
 
     def admin_send_sms_broadcast(self, message_body, admin_email="Unknown"):
         contacts = self.get_contact_lists()
         raw_phones = contacts.get("phones", "")
-        if not raw_phones: return {"success": False, "error": "No phone numbers found in the Google Sheet."}
+        if not raw_phones: return {"success": False, "error": "No valid opted-in phone numbers found in the Google Sheet."}
         
         phone_list = [p.strip() for p in raw_phones.split(",") if p.strip()]
-        if not phone_list: return {"success": False, "error": "No valid phone numbers found."}
+        if not phone_list: return {"success": False, "error": "No valid opted-in phone numbers found."}
             
         username = "jakobwill7@gmail.com"
         api_key = "76F26417-8DEB-E47E-8056-B86E519B4445"
@@ -934,7 +990,6 @@ class ThunderData:
             logger.error(f"SMS Broadcast Failed: {e}")
             return {"success": False, "error": str(e)}
             
-    # --- BRAND NEW: FINANCIAL PULLER ---
     def admin_get_all_donations(self):
         if not self.db: return []
         try:

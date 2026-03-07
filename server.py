@@ -85,8 +85,12 @@ def activate_ghost_mode():
 @app.route('/')
 def index(): return render_template('index.html')
 
+# --- UPDATED INSTANT LOGIN BYPASS ---
 @app.route('/login')
-def login(): return render_template('login.html')
+def login(): 
+    if session.get('admin_logged_in'):
+        return redirect(url_for('admin'))
+    return render_template('login.html')
 
 @app.route('/api/auth/google', methods=['POST'])
 def auth_google():
@@ -306,7 +310,6 @@ def send_sms():
     result = db.admin_send_sms_broadcast(msg, session.get('admin_email', 'Unknown'))
     return jsonify(result)
 
-# --- NEW: DONATIONS LEDGER ROUTE ---
 @app.route('/api/admin/donations')
 @login_required
 def admin_donations():

@@ -12,7 +12,7 @@
     <div class="bg-slate-800 p-6 rounded-xl border border-sky-500/30 shadow-lg mb-6 relative overflow-hidden">
         <div class="absolute top-0 right-0 bg-sky-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-lg">Contact Database</div>
         <h3 class="text-lg font-black text-white mb-1"><i class="fa-solid fa-address-book text-sky-400 mr-2"></i> Player Directory</h3>
-        <p class="text-xs text-slate-400 mb-4">Automatically pulls the latest emails and numbers from the "Member info" Google Sheet tab.</p>
+        <p class="text-xs text-slate-400 mb-4">Instantly pulls from the "Member info" Google Sheet tab.</p>
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <button onclick="window.copyContactList('emails')" id="btn-copy-emails" class="bg-black/40 hover:bg-black/60 border border-white/10 text-white font-bold py-3 rounded-lg transition-all flex items-center justify-center gap-2 w-full">
@@ -27,6 +27,18 @@
     <div class="bg-slate-800 p-6 rounded-xl border border-white/5 shadow-lg relative overflow-hidden border-t-4 border-t-emerald-500">
         <div class="absolute top-0 right-0 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-lg"><i class="fa-solid fa-bolt"></i> Live API</div>
         
+        <button onclick="window.verifySmsList()" id="btn-verify-sms" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-black text-sm py-4 rounded-xl transition-all flex items-center justify-center gap-2 mb-4 border border-white/10 shadow-lg">
+            <i class="fa-solid fa-users-viewfinder text-sky-400"></i> LOAD & VERIFY OPT-IN LIST FIRST
+        </button>
+
+        <div id="sms-preview-box" class="hidden mb-6 bg-black/40 border border-white/10 rounded-lg p-4">
+            <div class="flex justify-between items-center mb-3 border-b border-white/10 pb-2">
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Active SMS Recipients (<span id="preview-count" class="text-emerald-400">0</span>)</span>
+            </div>
+            <div id="preview-list" class="max-h-[150px] overflow-y-auto custom-scrollbar space-y-2 text-sm text-slate-300">
+                </div>
+        </div>
+
         <label class="text-xs font-bold text-slate-500 uppercase block mb-2 mt-2">Custom Message Body</label>
         <textarea id="broadcast-input" rows="3" class="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-emerald-500 outline-none mb-4" placeholder="e.g. Week 12 matches have just been calculated and synced to the database!"></textarea>
 

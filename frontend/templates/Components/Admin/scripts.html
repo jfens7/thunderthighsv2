@@ -1,7 +1,6 @@
 <script>
     console.log("✅ Admin UI Script Loaded");
 
-    // --- FORCE REFRESH LOGIC ---
     window.forceRefresh = async function() {
         if(!confirm("Force the server to pull the latest data from the Master Google Sheet? This may take a few seconds.")) return;
         const btn = event.currentTarget || document.querySelector('button[onclick="window.forceRefresh()"]');
@@ -41,7 +40,6 @@
         if (tabId === 'chat') window.loadAdminChat();
         if (tabId === 'donations') window.loadDonations();
         
-        // NEW: Automatically loads divisions for the History Filter dropdown
         if (tabId === 'history') {
             const histDivFilter = document.getElementById('hist-div-filter');
             if (histDivFilter && histDivFilter.options.length <= 1) {
@@ -106,7 +104,6 @@
         } catch(e) { alert("Network error."); }
     }
 
-    // --- BRAND NEW: ADVANCED HISTORY SEARCH ENGINE ---
     window.searchHistory = async function() {
         const q = document.getElementById('history-search').value.trim();
         const divFilter = document.getElementById('hist-div-filter')?.value || 'All';
@@ -118,11 +115,9 @@
         list.innerHTML = '<div class="text-center py-10 text-indigo-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
         
         try {
-            // Backend already naturally sorts the matches chronologically (most recent first)
             const res = await fetch(`/api/admin/history?q=${encodeURIComponent(q)}`);
             let matches = await res.json();
             
-            // Client-Side Advanced Filtering
             if (divFilter !== 'All') {
                 matches = matches.filter(m => m.division.toLowerCase() === divFilter.toLowerCase());
             }
@@ -392,13 +387,11 @@
             const res = await fetch('/api/admin/donations');
             const data = await res.json();
 
-            let total = 0;
-            let html = '';
+            let total = 0; let html = '';
 
             if (data.length === 0) {
                 list.innerHTML = '<div class="text-slate-500 text-center py-10 italic">No donations recorded yet.</div>';
-                if(totalEl) totalEl.innerText = '$0.00';
-                if(countEl) countEl.innerText = '0';
+                if(totalEl) totalEl.innerText = '$0.00'; if(countEl) countEl.innerText = '0';
                 return;
             }
 
@@ -420,10 +413,91 @@
             if(totalEl) totalEl.innerText = '$' + total.toFixed(2);
             if(countEl) countEl.innerText = data.length;
 
-        } catch (e) {
-            list.innerHTML = '<div class="text-red-400 text-center py-10">Error loading donations.</div>';
-        }
+        } catch (e) { list.innerHTML = '<div class="text-red-400 text-center py-10">Error loading donations.</div>'; }
     };
+    
+    // --- VERIFICATION VISUALIZER AND FALLBACK COPY METHOD ---
+    window.verifySmsList = async function() {
+        const btn = document.getElementById('btn-verify-sms'); 
+        const originalText = btn.innerHTML; 
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Scanning Sheet...';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch('/api/admin/contacts'); 
+            const data = await res.json();
+
+            if (data.error) {
+                alert(`Error reading sheet: ${data.error}`);
+            } else {
+                document.getElementById('sms-preview-box').classList.remove('hidden');
+                
+                if (data.preview && data.preview.length > 0) {
+                    document.getElementById('preview-count').innerText = data.preview.length;
+                    let html = '';
+                    data.preview.forEach(p => {
+                        html += `<div class="flex justify-between bg-slate-800/50 px-3 py-1.5 rounded border border-white/5"><span class="font-bold">${p.name}</span><span class="font-mono text-emerald-400 text-xs mt-0.5">${p.phone}</span></div>`;
+                    });
+                    document.getElementById('preview-list').innerHTML = html;
+                } else {
+                    document.getElementById('preview-count').innerText = "0";
+                    document.getElementById('preview-list').innerHTML = '<div class="text-red-400 italic text-xs py-2">No active players found. Make sure the "Send" column exists and has "Yes" for the players you want to text.</div>';
+                }
+            }
+        } catch(e) { 
+            console.error(e);
+            alert(`Network error contacting server.`); 
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
+
+    window.copyContactList = async function(type) {
+        const btn = document.getElementById(`btn-copy-${type}`); 
+        const originalText = btn.innerHTML; 
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Fetching...';
+        
+        try {
+            const res = await fetch('/api/admin/contacts'); 
+            const data = await res.json();
+            
+            if (!data || !data[type] || data[type] === "") { 
+                alert(`Could not find any ${type} in the "Member info" tab. Check the column headers!`); 
+                btn.innerHTML = originalText; 
+                return; 
+            }
+            
+            const textToCopy = data[type];
+            
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(textToCopy);
+            } else {
+                let textArea = document.createElement("textarea");
+                textArea.value = textToCopy;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-999999px";
+                textArea.style.top = "-999999px";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try { document.execCommand('copy'); } 
+                catch (err) { alert("Copy failed. Please try on a secure HTTPS connection or localhost."); }
+                textArea.remove();
+            }
+
+            const msg = document.getElementById('copy-success-msg'); 
+            msg.innerText = `✅ Copied ${textToCopy.split(',').length} ${type} to clipboard! Ready to paste.`;
+            msg.classList.remove('hidden'); 
+            setTimeout(() => msg.classList.add('hidden'), 4000); 
+            btn.innerHTML = originalText;
+
+        } catch(e) { 
+            console.error(e);
+            alert(`Network error fetching contacts.`); 
+            btn.innerHTML = originalText; 
+        }
+    }
 </script>
 
 <script type="module">
@@ -436,9 +510,7 @@
 
     window.setFormatOverride = async function(fixtureId, formatType) {
         try {
-            const res = await fetch('/api/admin/set_fixture_format', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fixture_id: fixtureId, format_type: formatType }) });
-            const data = await res.json();
-            if(!data.success) alert("Failed to save format override.");
+            const res = await fetch('/api/admin/set_fixture_format', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fixture_id: fixtureId, formatType: formatType }) });
         } catch(e) {}
     };
 
@@ -487,23 +559,14 @@
         } catch(e) { alert("Network Error"); }
     };
 
-    window.copyContactList = async function(type) {
-        const btn = document.getElementById(`btn-copy-${type}`); const originalText = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Fetching Sheet...';
-        try {
-            const res = await fetch('/api/admin/contacts'); const data = await res.json();
-            if (!data[type] || data[type] === "") { alert(`Could not find any ${type} in the "Member info" tab. Check the column headers!`); btn.innerHTML = originalText; return; }
-            navigator.clipboard.writeText(data[type]).then(() => {
-                const msg = document.getElementById('copy-success-msg'); msg.innerText = `✅ Copied ${data[type].split(',').length} ${type} to clipboard! Ready to paste.`;
-                msg.classList.remove('hidden'); setTimeout(() => msg.classList.add('hidden'), 4000); btn.innerHTML = originalText;
-            });
-        } catch(e) { alert("Network error fetching contacts."); btn.innerHTML = originalText; }
-    }
-
     window.sendSmsBroadcast = async function() {
         const msgText = document.getElementById('broadcast-input').value.trim();
         if (!msgText) return alert("You must write a custom message before sending!");
-        if (!confirm(`🚨 DANGER ZONE 🚨\n\nYou are about to send a mass SMS to EVERY phone number in the Google Sheet. This will use real API credits.\n\nProceed?`)) return;
-        const btn = document.getElementById('btn-send-sms'); const originalText = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> CONTACTING API...'; btn.disabled = true;
+        if (!confirm(`🚨 DANGER ZONE 🚨\n\nYou are about to send a mass SMS to EVERY valid phone number marked "Yes" in the Google Sheet. This will use real API credits.\n\nProceed?`)) return;
+        
+        const btn = document.getElementById('btn-send-sms'); const originalText = btn.innerHTML; 
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> CONTACTING API...'; btn.disabled = true;
+        
         try {
             const res = await fetch('/api/admin/send_sms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msgText }) });
             const data = await res.json();
