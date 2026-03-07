@@ -926,7 +926,12 @@ class ThunderData:
         username = "jakobwill7@gmail.com"
         api_key = "76F26417-8DEB-E47E-8056-B86E519B4445"
         
-        final_message = f"📢 GCTTA Database Update 📢\n\n{message_body}\n\nCheck out your updated ratings, win percentages, and division standings below! 👇\n🔗 https://gctta-stats.com.au\n\nReply STOP to opt out."
+        # 1. STRIP ALL EMOJIS AND NON-STANDARD ASCII FROM THE MESSAGE
+        # This prevents the 70-character Unicode limit bug from triggering
+        clean_body = re.sub(r'[^\x20-\x7E\n\r]+', '', message_body)
+        
+        # 2. SHORTENED TEMPLATE WITHOUT EMOJIS (Total length = exactly 64 characters + custom body)
+        final_message = f"GCTTA Update: {clean_body}\n\nView stats: gctta-stats.com.au\nReply STOP to opt out"
         
         messages = []
         for phone in phone_list:
@@ -975,7 +980,6 @@ class ThunderData:
             logger.error(f"Error fetching all donations: {e}")
             return []
 
-    # --- CUSTOM MATH IN DIAGNOSTICS CALCULATOR ---
     def admin_glicko_math(self, p1, p2, s1, s2):
         r1 = self.rating_engine.get_rating(p1); r2 = self.rating_engine.get_rating(p2)
         

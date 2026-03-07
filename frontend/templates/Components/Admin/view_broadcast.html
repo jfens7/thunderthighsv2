@@ -39,19 +39,23 @@
                 </div>
         </div>
 
-        <label class="text-xs font-bold text-slate-500 uppercase block mb-2 mt-2">Custom Message Body</label>
-        <textarea id="broadcast-input" rows="3" class="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-emerald-500 outline-none mb-4" placeholder="e.g. Week 12 matches have just been calculated and synced to the database!"></textarea>
+        <label class="text-xs font-bold text-slate-500 uppercase flex justify-between items-center mb-2 mt-2">
+            <span>Custom Message Body (No Emojis)</span>
+            <span id="char-counter" class="text-sky-400 font-mono text-[10px] bg-sky-900/30 px-2 py-1 rounded border border-sky-500/30">0 / 95 chars</span>
+        </label>
+        
+        <textarea id="broadcast-input" maxlength="95" rows="3" class="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-emerald-500 outline-none mb-2" placeholder="e.g. Week 12 matches have just been calculated!"></textarea>
+        
+        <div class="text-[10px] text-yellow-500 mb-6 bg-yellow-900/20 border border-yellow-500/20 p-3 rounded leading-relaxed">
+            <i class="fa-solid fa-triangle-exclamation mr-1"></i> <strong>STRICT SMS MODE ACTIVE:</strong> Emojis and special characters are physically blocked. The total length is capped at 160 characters to ensure every text costs exactly <strong>1 API credit</strong>.
+        </div>
 
         <div class="bg-black/30 border border-white/10 p-4 rounded-lg mb-6 relative">
             <div class="text-[10px] text-slate-500 uppercase font-bold mb-2">SMS Live Preview (What they will see)</div>
-            <div id="broadcast-preview" class="text-sm text-slate-300 whitespace-pre-wrap font-mono">📢 GCTTA Database Update 📢
+            <div id="broadcast-preview" class="text-sm text-slate-300 whitespace-pre-wrap font-mono">GCTTA Update: [Your message will appear here]
 
-[Your message will appear here]
-
-Check out your updated ratings, win percentages, and division standings below! 👇
-🔗 https://gctta-stats.com.au
-
-Reply STOP to opt out.</div>
+View stats: gctta-stats.com.au
+Reply STOP to opt out</div>
         </div>
 
         <button onclick="window.sendSmsBroadcast()" id="btn-send-sms" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-lg py-4 rounded-xl transition-transform hover:scale-[1.02] shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2">
@@ -65,7 +69,21 @@ Reply STOP to opt out.</div>
 
 <script>
     document.getElementById('broadcast-input').addEventListener('input', function() {
+        // Strip emojis and non-standard ASCII characters instantly as the user types
+        this.value = this.value.replace(/[^\x20-\x7E\n\r]/g, '');
+        
         const msg = this.value || '[Your message will appear here]';
-        document.getElementById('broadcast-preview').innerText = `📢 GCTTA Database Update 📢\n\n${msg}\n\nCheck out your updated ratings, win percentages, and division standings below! 👇\n🔗 https://gctta-stats.com.au\n\nReply STOP to opt out.`;
+        const counter = document.getElementById('char-counter');
+        
+        counter.innerText = `${this.value.length} / 95 chars`;
+        
+        if (this.value.length >= 85) {
+            counter.className = "text-red-400 font-mono font-bold text-[10px] bg-red-900/30 px-2 py-1 rounded border border-red-500/30";
+        } else {
+            counter.className = "text-sky-400 font-mono text-[10px] bg-sky-900/30 px-2 py-1 rounded border border-sky-500/30";
+        }
+
+        // Cleaned up prefix and suffix without emojis
+        document.getElementById('broadcast-preview').innerText = `GCTTA Update: ${msg}\n\nView stats: gctta-stats.com.au\nReply STOP to opt out`;
     });
 </script>
