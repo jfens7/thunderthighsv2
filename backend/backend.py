@@ -798,7 +798,9 @@ class ThunderData:
                 batch.commit()
                 
             self._log_audit(admin_email, 'BULK_IMPORT_RATINGS', f"Pulled {total_count} ratings from 'Ratings crap' sheet as of {today_str}.", {})
-            self.refresh_data()
+            
+            # REMOVED self.refresh_data() here to avoid hitting the Google Sheets API limits.
+            
             return {"success": True, "count": total_count}
             
         except Exception as e:
@@ -1010,22 +1012,6 @@ class ThunderData:
             logger.error(f"SMS Broadcast Failed: {e}")
             return {"success": False, "error": str(e)}
             
-    def admin_get_all_donations(self):
-        if not self.db: return []
-        try:
-            docs = self.db.collection('donations').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
-            res = []
-            aest_tz = datetime.timezone(datetime.timedelta(hours=10))
-            for d in docs:
-                data = d.to_dict(); data['id'] = d.id; ts = data.get('timestamp')
-                data['time_str'] = ts.astimezone(aest_tz).strftime('%d/%m/%Y %I:%M %p') if ts else 'Unknown Time'
-                data['amount'] = float(data.get('amount', 0))
-                res.append(data)
-            return res
-        except Exception as e:
-            logger.error(f"Error fetching all donations: {e}")
-            return []
-
     def admin_glicko_math(self, p1, p2, s1, s2):
         r1 = self.rating_engine.get_rating(p1); r2 = self.rating_engine.get_rating(p2)
         
