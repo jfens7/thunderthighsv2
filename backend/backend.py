@@ -28,60 +28,46 @@ except ImportError:
     try: from backend.sky_engine import SkyEngine
     except: SkyEngine = None
 
+# --- CUSTOM RATINGS CENTRAL HYBRID ENGINE ---
 DEFAULT_RATING = 1000.0
-DEFAULT_RD = 350.0
-DEFAULT_VOL = 0.06
-TAU = 0.5        
-SCALE = 173.7178 
-
-def _glicko2_core(mu, phi, vol, opponent_mu, opponent_phi, score):
-    def g(p): return 1.0 / math.sqrt(1.0 + 3.0 * p**2 / (math.pi**2))
-    def E(m, mj, pj): return 1.0 / (1.0 + math.exp(-g(pj) * (m - mj)))
-    g_j = g(opponent_phi)
-    E_j = E(mu, opponent_mu, opponent_phi)
-    v = 1.0 / (g_j**2 * E_j * (1.0 - E_j))
-    delta = v * g_j * (score - E_j)
-    a = math.log(vol**2)
-    def f(x):
-        ex = math.exp(x)
-        num = ex * (delta**2 - phi**2 - v - ex)
-        den = 2.0 * (phi**2 + v + ex)**2
-        return (num / den) - ((x - a) / TAU**2)
-    A = a
-    if delta**2 > phi**2 + v: B = math.log(delta**2 - phi**2 - v)
-    else:
-        k = 1
-        while f(a - k * TAU) < 0: k += 1
-        B = a - k * TAU
-    fA, fB = f(A), f(B)
-    for _ in range(100): 
-        if abs(B - A) <= 0.000001: break
-        C = A + (A - B) * fA / (fB - fA)
-        fC = f(C)
-        if fC * fB <= 0: A, fA = B, fB
-        else: fA /= 2.0
-        B, fB = C, fC
-    new_vol = math.exp(A / 2.0)
-    phi_star = math.sqrt(phi**2 + new_vol**2)
-    new_phi = 1.0 / math.sqrt(1.0 / phi_star**2 + 1.0 / v)
-    new_mu = mu + new_phi**2 * g_j * (score - E_j)
-    return new_mu, new_phi, new_vol
+DEFAULT_RD = 300.0  # Starting Uncertainty (Standard Deviation)
 
 def calculate_match(w, l, s1, s2):
-    mu_w, phi_w, vol_w = (w['rating'] - 1500) / SCALE, w['rd'] / SCALE, w['vol']
-    mu_l, phi_l, vol_l = (l['rating'] - 1500) / SCALE, l['rd'] / SCALE, l['vol']
     total_sets = s1 + s2
     if total_sets == 0: return {'winner': w, 'loser': l}
+    
+    # 1. Match Set Modifier (3-0 is 1.0x, 3-2 is 0.8x)
     w_score = 0.75 + 0.25 * ((s1 - s2) / total_sets)
     l_score = 1.0 - w_score
-    new_mu_w, new_phi_w, new_vol_w = _glicko2_core(mu_w, phi_w, vol_w, mu_l, phi_l, w_score)
-    new_mu_l, new_phi_l, new_vol_l = _glicko2_core(mu_l, phi_l, vol_l, mu_w, phi_w, l_score)
-    w['rating'] = new_mu_w * SCALE + 1500
-    w['rd'] = max(30.0, new_phi_w * SCALE)
-    w['vol'] = new_vol_w
-    l['rating'] = new_mu_l * SCALE + 1500
-    l['rd'] = max(30.0, new_phi_l * SCALE)
-    l['vol'] = new_vol_l
+    
+    # 2. Ratings Central Base-10 Probability Curve
+    # A 500 point gap = ~95% win probability
+    E_w = 1.0 / (1.0 + 10.0 ** ((l['rating'] - w['rating']) / 400.0))
+    E_l = 1.0 - E_w
+    
+    # 3. Variance Protection Dampener
+    # If the opponent is brand new (High RD), we protect the established player
+    # by dampening the points exchanged.
+    w_dampener = 50.0 / max(50.0, l['rd'] * 0.5)
+    l_dampener = 50.0 / max(50.0, w['rd'] * 0.5)
+    
+    # 4. K-Factor (Elasticity)
+    # High RD = massive point swings for new players. Low RD = steady swings. Floor is 50.
+    K_w = max(50.0, w['rd'] * 0.8)
+    K_l = max(50.0, l['rd'] * 0.8)
+    
+    # 5. Final Calculation
+    w_shift = K_w * w_dampener * (w_score - E_w)
+    l_shift = K_l * l_dampener * (l_score - E_l)
+    
+    w['rating'] += w_shift
+    l['rating'] += l_shift
+    
+    # 6. Reduce Uncertainty (RD)
+    # As they play more matches, they become more established.
+    w['rd'] = max(50.0, w['rd'] - 4.0)
+    l['rd'] = max(50.0, l['rd'] - 4.0)
+    
     return {'winner': w, 'loser': l}
 
 RESULTS_SPREADSHEET_ID = "1tpxuUCl8ddpnBBr69vc4P1foRCRKWpts5-HaFPYb4po" 
@@ -93,15 +79,14 @@ class RatingEngine:
     def __init__(self): self.players = {} 
     
     def get_rating(self, name):
-        if name not in self.players: self.players[name] = {'rating': DEFAULT_RATING, 'rd': DEFAULT_RD, 'vol': DEFAULT_VOL}
+        if name not in self.players: self.players[name] = {'rating': DEFAULT_RATING, 'rd': DEFAULT_RD, 'vol': 0}
         return self.players[name]
         
     def set_seed(self, name, rating, rd=None, vol=None):
         try:
-            r_val = float(rating); rd_val = float(rd) if rd and str(rd).strip() else DEFAULT_RD; vol_val = float(vol) if vol and str(vol).strip() else DEFAULT_VOL
-            if vol_val <= 0.0001: vol_val = DEFAULT_VOL
+            r_val = float(rating); rd_val = float(rd) if rd and str(rd).strip() else DEFAULT_RD
             if rd_val < 0: rd_val = DEFAULT_RD
-            self.players[name] = {'rating': r_val, 'rd': rd_val, 'vol': vol_val}
+            self.players[name] = {'rating': r_val, 'rd': rd_val, 'vol': 0}
         except ValueError: pass
         
     def update_match(self, p1_name, p2_name, s1, s2):
@@ -115,14 +100,10 @@ class RatingEngine:
             res = calculate_match(p1_stats, p2_stats, s1, s2)
             self.players[p1_name] = res['winner']
             self.players[p2_name] = res['loser']
-            self.players[p1_name]['rating'] = max(r1_old, self.players[p1_name]['rating'])
-            self.players[p2_name]['rating'] = min(r2_old, self.players[p2_name]['rating'])
         else: 
             res = calculate_match(p2_stats, p1_stats, s2, s1)
             self.players[p2_name] = res['winner']
             self.players[p1_name] = res['loser']
-            self.players[p2_name]['rating'] = max(r2_old, self.players[p2_name]['rating'])
-            self.players[p1_name]['rating'] = min(r1_old, self.players[p1_name]['rating'])
             
         return {
             'p1_delta': self.players[p1_name]['rating'] - r1_old,
@@ -225,9 +206,10 @@ class ThunderData:
         try:
             docs = self.db.collection('admin_audit_logs').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(100).stream()
             logs = []
+            aest_tz = datetime.timezone(datetime.timedelta(hours=10))
             for d in docs:
                 data = d.to_dict(); data['id'] = d.id; ts = data.get('timestamp')
-                data['time_str'] = ts.strftime("%d/%m/%Y %H:%M:%S") if ts else "Unknown Time"
+                data['time_str'] = ts.astimezone(aest_tz).strftime("%d/%m/%Y %I:%M:%S %p") if ts else "Unknown Time"
                 data['timestamp'] = str(ts); logs.append(data)
             return logs
         except: return []
@@ -413,7 +395,6 @@ class ThunderData:
             final_matches.extend(merged)
         return final_matches
 
-    # --- BUG FIX: Removed the "Double Flip" logic. It now directly accepts the correct sets! ---
     def _update_player_stats(self, stat_dict, player_name, my_sets, op_sets, is_p1, opponent, is_fillin, division, date_str, week_num, season_name, details="", rich_stats=None, match_id="", delta=0, sheet_name="Unknown", row_index="?"):
         if stat_dict is None: return 
         if player_name not in stat_dict: stat_dict[player_name] = {'regular': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'fillin': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'combined': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}}
@@ -659,14 +640,20 @@ class ThunderData:
         if not self.db: return []
         try: 
             reports = []; m_docs = self.db.collection('match_reports').stream()
+            aest_tz = datetime.timezone(datetime.timedelta(hours=10))
             for d in m_docs:
                 data = d.to_dict()
-                if data.get('status', '').lower() == 'pending': reports.append({'id': d.id, 'type': 'MATCH_ERROR', 'reporter': data.get('reporter', 'Unknown'), 'date': data.get('date', 'Unknown Date'), 'title': f"{data.get('p1', '')} vs {data.get('p2', '')}", 'problem': data.get('problem', ''), 'suggested_s1': data.get('suggested_s1', ''), 'suggested_s2': data.get('suggested_s2', ''), 'match_id': data.get('match_id', ''), 'timestamp': data.get('timestamp')})
+                if data.get('status', '').lower() == 'pending': 
+                    ts = data.get('timestamp')
+                    date_str = ts.astimezone(aest_tz).strftime('%d/%m/%Y') if hasattr(ts, 'astimezone') else data.get('date', 'Unknown Date')
+                    reports.append({'id': d.id, 'type': 'MATCH_ERROR', 'reporter': data.get('reporter', 'Unknown'), 'date': date_str, 'title': f"{data.get('p1', '')} vs {data.get('p2', '')}", 'problem': data.get('problem', ''), 'suggested_s1': data.get('suggested_s1', ''), 'suggested_s2': data.get('suggested_s2', ''), 'match_id': data.get('match_id', ''), 'timestamp': ts})
             f_docs = self.db.collection('feedback').stream()
             for d in f_docs:
                 data = d.to_dict()
                 if data.get('status', '').lower() == 'new':
-                    ts = data.get('timestamp'); reports.append({'id': d.id, 'type': 'FEEDBACK', 'reporter': data.get('contact', 'Anonymous'), 'date': ts.strftime('%d/%m/%Y') if hasattr(ts, 'strftime') else 'Recent', 'title': f"Feedback: {data.get('type', 'General')}", 'problem': f"Context: {data.get('context', '')}\n\nMessage: {data.get('message', '')}", 'suggested_s1': '', 'suggested_s2': '', 'match_id': '', 'timestamp': ts})
+                    ts = data.get('timestamp')
+                    date_str = ts.astimezone(aest_tz).strftime('%d/%m/%Y') if hasattr(ts, 'astimezone') else 'Recent'
+                    reports.append({'id': d.id, 'type': 'FEEDBACK', 'reporter': data.get('contact', 'Anonymous'), 'date': date_str, 'title': f"Feedback: {data.get('type', 'General')}", 'problem': f"Context: {data.get('context', '')}\n\nMessage: {data.get('message', '')}", 'suggested_s1': '', 'suggested_s2': '', 'match_id': '', 'timestamp': ts})
             def safe_ts(x):
                 ts = x.get('timestamp')
                 if hasattr(ts, 'timestamp'): return ts.timestamp()
@@ -833,9 +820,10 @@ class ThunderData:
         try:
             docs = self.db.collection('notices').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
             res = []
+            aest_tz = datetime.timezone(datetime.timedelta(hours=10))
             for d in docs:
                 data = d.to_dict(); data['id'] = d.id; ts = data.get('timestamp')
-                data['date_str'] = ts.strftime('%d/%m/%Y %I:%M %p') if ts else 'Recent'; data['timestamp'] = str(ts)
+                data['date_str'] = ts.astimezone(aest_tz).strftime('%d/%m/%Y %I:%M %p') if ts else 'Recent'; data['timestamp'] = str(ts)
                 res.append(data)
             return res
         except: return []
@@ -863,9 +851,10 @@ class ThunderData:
         if not self.db: return []
         try:
             docs = self.db.collection('admin_messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(50).stream(); res = []
+            aest_tz = datetime.timezone(datetime.timedelta(hours=10))
             for d in docs:
                 data = d.to_dict(); data['id'] = d.id; ts = data.get('timestamp')
-                data['time_str'] = ts.strftime('%d/%m/%Y %H:%M') if ts else 'Just now'; data['timestamp'] = str(ts); res.append(data)
+                data['time_str'] = ts.astimezone(aest_tz).strftime('%d/%m/%Y %I:%M %p') if ts else 'Just now'; data['timestamp'] = str(ts); res.append(data)
             return res
         except: return []
 
@@ -975,9 +964,10 @@ class ThunderData:
         try:
             docs = self.db.collection('donations').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
             res = []
+            aest_tz = datetime.timezone(datetime.timedelta(hours=10))
             for d in docs:
                 data = d.to_dict(); data['id'] = d.id; ts = data.get('timestamp')
-                data['time_str'] = ts.strftime('%d/%m/%Y %I:%M %p') if ts else 'Unknown Time'
+                data['time_str'] = ts.astimezone(aest_tz).strftime('%d/%m/%Y %I:%M %p') if ts else 'Unknown Time'
                 data['amount'] = float(data.get('amount', 0))
                 res.append(data)
             return res
@@ -985,16 +975,29 @@ class ThunderData:
             logger.error(f"Error fetching all donations: {e}")
             return []
 
+    # --- CUSTOM MATH IN DIAGNOSTICS CALCULATOR ---
     def admin_glicko_math(self, p1, p2, s1, s2):
         r1 = self.rating_engine.get_rating(p1); r2 = self.rating_engine.get_rating(p2)
-        mu1, phi1, vol1 = (r1['rating'] - 1500) / SCALE, r1['rd'] / SCALE, r1['vol']; mu2, phi2, vol2 = (r2['rating'] - 1500) / SCALE, r2['rd'] / SCALE, r2['vol']
-        def g(p): return 1.0 / math.sqrt(1.0 + 3.0 * p**2 / (math.pi**2))
-        def E(m, mj, pj): return 1.0 / (1.0 + math.exp(-g(pj) * (m - mj)))
-        E_1 = E(mu1, mu2, phi2); E_2 = E(mu2, mu1, phi1)
-        dummy_w = {'rating': r1['rating'], 'rd': r1['rd'], 'vol': r1['vol']}; dummy_l = {'rating': r2['rating'], 'rd': r2['rd'], 'vol': r2['vol']}
-        if int(s1) > int(s2): res = calculate_match(dummy_w, dummy_l, int(s1), int(s2)); new_r1 = res['winner']['rating']; new_r2 = res['loser']['rating']
-        elif int(s2) > int(s1): res = calculate_match(dummy_l, dummy_w, int(s2), int(s1)); new_r2 = res['winner']['rating']; new_r1 = res['loser']['rating']
-        else: new_r1 = r1['rating']; new_r2 = r2['rating']
+        
+        dummy_1 = {'rating': r1['rating'], 'rd': r1['rd'], 'vol': 0}
+        dummy_2 = {'rating': r2['rating'], 'rd': r2['rd'], 'vol': 0}
+        
+        # Base-10 probability curve
+        E_1 = 1.0 / (1.0 + 10.0 ** ((dummy_2['rating'] - dummy_1['rating']) / 400.0))
+        E_2 = 1.0 - E_1
+        
+        if int(s1) > int(s2):
+            res = calculate_match(dummy_1, dummy_2, int(s1), int(s2))
+            new_r1 = res['winner']['rating']
+            new_r2 = res['loser']['rating']
+        elif int(s2) > int(s1):
+            res = calculate_match(dummy_2, dummy_1, int(s2), int(s1))
+            new_r2 = res['winner']['rating']
+            new_r1 = res['loser']['rating']
+        else:
+            new_r1 = r1['rating']
+            new_r2 = r2['rating']
+            
         return {
             'p1': {'name': p1, 'old_rating': round(r1['rating'], 1), 'old_rd': round(r1['rd'], 1), 'expected_win_pct': round(E_1 * 100, 1), 'new_rating': round(new_r1, 1), 'delta': round(new_r1 - r1['rating'], 1)},
             'p2': {'name': p2, 'old_rating': round(r2['rating'], 1), 'old_rd': round(r2['rd'], 1), 'expected_win_pct': round(E_2 * 100, 1), 'new_rating': round(new_r2, 1), 'delta': round(new_r2 - r2['rating'], 1)}
