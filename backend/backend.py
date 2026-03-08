@@ -30,34 +30,44 @@ except ImportError:
 
 # --- CUSTOM RATINGS CENTRAL HYBRID ENGINE ---
 DEFAULT_RATING = 1000.0
-DEFAULT_RD = 300.0  # Starting Uncertainty (Standard Deviation)
+DEFAULT_RD = 300.0  
 
-def calculate_match(w, l, s1, s2):
+def calculate_match(w, l, s1, s2, k_win=1.0, k_loss=1.4, anti_riot=True):
     total_sets = s1 + s2
     if total_sets == 0: return {'winner': w, 'loser': l}
     
-    # Win score calculation (Rewards sweeps heavily. 3-0 = 1.0, 3-2 = 0.76)
     w_score = 0.7 + 0.3 * ((s1 - s2) / total_sets)
     l_score = 1.0 - w_score
     
-    # Expected win probability based on current ratings
     E_w = 1.0 / (1.0 + 10.0 ** ((l['rating'] - w['rating']) / 400.0))
     E_l = 1.0 - E_w
     
-    # Asymmetrical K-factor. Players with high RD will experience massive swings (150-200+ pts)
-    # Players with low RD will experience standard stable swings (~20-80 pts)
-    K_w = max(40.0, w['rd'] * 1.3)
-    K_l = max(40.0, l['rd'] * 1.4)
+    K_w = max(30.0, w['rd'] * k_win)
+    K_l = max(40.0, l['rd'] * k_loss)
     
     w_shift = K_w * (w_score - E_w)
     l_shift = K_l * (l_score - E_l)
     
+    w_rd_shift = -4.0
+    l_rd_shift = -4.0
+    
+    if anti_riot:
+        # A winner cannot lose points. A loser cannot gain points.
+        if w_shift < 0:
+            w_shift = 0.0
+            # CONFIDENCE DROP: Winner underperformed. System is less sure of their high rating.
+            w_rd_shift = 5.0 
+        
+        if l_shift > 0:
+            l_shift = 0.0
+            # Loser overperformed but still lost, slight volatility bump
+            l_rd_shift = 2.0 
+    
     w['rating'] += w_shift
     l['rating'] += l_shift
     
-    # Reduce uncertainty (RD) slightly after playing a match
-    w['rd'] = max(50.0, w['rd'] - 4.0)
-    l['rd'] = max(50.0, l['rd'] - 4.0)
+    w['rd'] = max(50.0, min(350.0, w['rd'] + w_rd_shift))
+    l['rd'] = max(50.0, min(350.0, l['rd'] + l_rd_shift))
     
     return {'winner': w, 'loser': l}
 
@@ -81,13 +91,11 @@ class RatingEngine:
             self.players[name] = {'rating': r_val, 'rd': rd_val, 'vol': v_val}
         except ValueError: pass
         
-    def update_match(self, p1_name, p2_name, s1, s2):
+    def update_match(self, p1_name, p2_name, s1, s2, k_win=1.0, k_loss=1.4, anti_riot=True):
         p1_stats = self.get_rating(p1_name)
         p2_stats = self.get_rating(p2_name)
-        r1_old = p1_stats['rating']
-        rd1_old = p1_stats['rd']
-        r2_old = p2_stats['rating']
-        rd2_old = p2_stats['rd']
+        r1_old = p1_stats['rating']; rd1_old = p1_stats['rd']
+        r2_old = p2_stats['rating']; rd2_old = p2_stats['rd']
         
         if s1 == s2: 
             return {
@@ -97,11 +105,11 @@ class RatingEngine:
             }
         
         if s1 > s2: 
-            res = calculate_match(p1_stats, p2_stats, s1, s2)
+            res = calculate_match(p1_stats, p2_stats, s1, s2, k_win, k_loss, anti_riot)
             self.players[p1_name] = res['winner']
             self.players[p2_name] = res['loser']
         else: 
-            res = calculate_match(p2_stats, p1_stats, s2, s1)
+            res = calculate_match(p2_stats, p1_stats, s2, s1, k_win, k_loss, anti_riot)
             self.players[p2_name] = res['winner']
             self.players[p1_name] = res['loser']
             
@@ -122,6 +130,9 @@ class ThunderData:
         self.divisions_list = set(); self.date_lookup = {}; self.weekly_matches = {} 
         self.player_ids = {}; self.id_to_name = {}; self.alias_map = {}; self.date_to_week_map = {} 
         self.match_history_log = []
+        self.k_win = 1.0
+        self.k_loss = 1.4
+        self.chaos_config = {'active': False, 'weeks': [], 'approvals': [], 'req': 3}
         self._authenticate()
 
     def _authenticate(self):
@@ -232,6 +243,8 @@ class ThunderData:
                 name = payload.get('name'); safe_id = re.sub(r'[^a-zA-Z0-9]', '_', name).lower()
                 self.db.collection('rating_overrides').document(safe_id).delete()
             elif action == 'UPDATE_MATCH': self.db.collection('match_corrections').document(payload.get('correction_id')).delete()
+            elif action == 'OVERRIDE_DELTAS':
+                self.db.collection('match_delta_overrides').document(payload.get('match_id')).delete()
             elif action == 'FORCE_FINISH_LIVE':
                 self.db.collection('match_results').document(payload.get('result_id')).delete()
                 if payload.get('schedule_id') and payload.get('fixture_data'): self.db.collection('fixture_schedule').document(payload.get('schedule_id')).set(payload.get('fixture_data'))
@@ -291,6 +304,21 @@ class ThunderData:
             self.db.collection('bulk_date_rules').document(rule_id).set({'season': season, 'division': division, 'week': week, 'date': new_date, 'author': admin_email, 'timestamp': firestore.SERVER_TIMESTAMP})
             self._log_audit(admin_email, 'BULK_DATE_FIX', f"Smart-mapped all missing matches for {season} {division} Week {week} to {new_date}.", {"rule_id": rule_id})
             self.refresh_data(); return True
+        except: return False
+
+    def admin_override_match_deltas(self, match_id, p1_delta, p2_delta, admin_email="Unknown"):
+        if not self.db: return False
+        try:
+            self.db.collection('match_delta_overrides').document(match_id).set({
+                'match_id': match_id,
+                'p1_delta': float(p1_delta),
+                'p2_delta': float(p2_delta),
+                'author': admin_email,
+                'timestamp': firestore.SERVER_TIMESTAMP
+            }, merge=True)
+            self._log_audit(admin_email, 'OVERRIDE_DELTAS', f"Set custom point changes for match {match_id}: P1 {p1_delta}, P2 {p2_delta}", {"match_id": match_id})
+            self.refresh_data()
+            return True
         except: return False
 
     def _load_aliases(self):
@@ -413,12 +441,90 @@ class ThunderData:
             else: stats['losses'] += 1
             stats['history'].append({'season': season_name, 'week': week_num, 'date': date_str, 'opponent': opponent, 'result': result, 'score': f"{my_sets}-{op_sets}", 'type': 'Fill-in' if is_fillin else 'Regular', 'division': division, 'details': details, 'rich_stats': rich_stats, 'match_id': match_id, 'delta': delta, 'sheet_name': sheet_name, 'row_index': row_index})
 
+    def admin_set_rating_scales(self, k_win, k_loss, admin_email="Unknown"):
+        if not self.db: return False
+        try:
+            self.db.collection('system_config').document('main').set({
+                'k_win_scale': float(k_win),
+                'k_loss_scale': float(k_loss)
+            }, merge=True)
+            self._log_audit(admin_email, 'UPDATE_MATH', f"Changed Multipliers -> Win: {k_win}, Loss: {k_loss}", {})
+            self.refresh_data()
+            return True
+        except: return False
+        
+    def admin_get_chaos_config(self):
+        if not self.db: return {'active': False, 'weeks': [], 'approvals': [], 'req': 3}
+        return self.chaos_config
+        
+    def admin_vote_chaos(self, weeks_list, admin_email):
+        if not self.db: return False
+        try:
+            doc_ref = self.db.collection('system_config').document('chaos_mode')
+            doc = doc_ref.get()
+            data = doc.to_dict() if doc.exists else {'weeks': [], 'approvals': []}
+            
+            approvals = data.get('approvals', [])
+            if admin_email not in approvals: approvals.append(admin_email)
+            
+            doc_ref.set({'weeks': weeks_list, 'approvals': approvals}, merge=True)
+            self._log_audit(admin_email, 'CHAOS_VOTE', f"Voted to authorize Chaos Mode for weeks: {weeks_list}", {})
+            self.refresh_data()
+            return True
+        except: return False
+        
+    def admin_clear_chaos(self, admin_email):
+        if not self.db: return False
+        try:
+            self.db.collection('system_config').document('chaos_mode').set({'weeks': [], 'approvals': []})
+            self._log_audit(admin_email, 'CHAOS_CLEAR', "Revoked Chaos Mode and cleared all votes.", {})
+            self.refresh_data()
+            return True
+        except: return False
+
     def refresh_data(self):
         logger.info("⚡️ Fetching and Processing Data...")
         self.all_players = {}; self.season_stats = {}; self.seasons_list = ["Career"]; self.divisions_list = set(); self.weekly_matches = {}; self.rating_engine = RatingEngine() 
         self.match_history_log = []
+        
+        if self.db:
+            try:
+                conf = self.db.collection('system_config').document('main').get().to_dict() or {}
+                self.k_win = float(conf.get('k_win_scale', 1.0))
+                self.k_loss = float(conf.get('k_loss_scale', 1.4))
+                
+                admin_docs = list(self.db.collection('admin_users').stream())
+                active_admins = [d for d in admin_docs if d.to_dict().get('role') in ['admin', 'super_admin']]
+                admin_count = len(active_admins)
+                req_approvals = min(3, admin_count) if admin_count > 0 else 1
+                
+                chaos_doc = self.db.collection('system_config').document('chaos_mode').get()
+                if chaos_doc.exists:
+                    c_data = chaos_doc.to_dict()
+                    self.chaos_config = {
+                        'weeks': c_data.get('weeks', []),
+                        'approvals': c_data.get('approvals', []),
+                        'req': req_approvals,
+                        'active': len(c_data.get('approvals', [])) >= req_approvals
+                    }
+                else:
+                    self.chaos_config = {'weeks': [], 'approvals': [], 'req': req_approvals, 'active': False}
+                    
+            except: pass
+
         if self.sheet_results: self._load_calculated_dates(); self._load_aliases(); self._load_seed_ratings()
         raw_match_queue = [] 
+
+        delta_overrides_dict = {}
+        if self.db:
+            try:
+                for doc in self.db.collection('match_delta_overrides').stream():
+                    d = doc.to_dict()
+                    delta_overrides_dict[doc.id] = {
+                        'p1_delta': float(d.get('p1_delta', 0)),
+                        'p2_delta': float(d.get('p2_delta', 0))
+                    }
+            except Exception as e: pass
         
         if self.sheet_results:
             for worksheet in self.sheet_results.worksheets():
@@ -479,8 +585,6 @@ class ThunderData:
                     raw_match_queue.append({'p1': p1, 'p2': p2, 's1': s1, 's2': s2, 'date': parsed_date, 'season': season_name, 'week': week_val, 'div': d.get('division', 'Unknown'), 'p1_fill': False, 'p2_fill': False, 'game_history': d.get('game_scores_history', ''), 'rich_stats': rich, 'manual_override': d.get('manual_override', False), 'sheet_name': 'Live Match Data', 'row_index': 'Firebase'})
             except: pass
 
-        logger.info(f"📊 FINAL LOADED SEASONS LIST: {self.seasons_list}")
-
         corrections = {}
         if self.db:
             try:
@@ -534,42 +638,47 @@ class ThunderData:
 
             deltas = {'p1_delta': 0, 'p2_delta': 0}
             if m['date'] > RATING_START_DATE: 
-                deltas = self.rating_engine.update_match(m['p1'], m['p2'], m['s1'], m['s2'])
+                if match_id in delta_overrides_dict:
+                    p1_d = delta_overrides_dict[match_id]['p1_delta']
+                    p2_d = delta_overrides_dict[match_id]['p2_delta']
+                    
+                    p1_stats = self.rating_engine.get_rating(m['p1'])
+                    p2_stats = self.rating_engine.get_rating(m['p2'])
+                    p1_before = p1_stats['rating']; p1_rd_before = p1_stats['rd']
+                    p2_before = p2_stats['rating']; p2_rd_before = p2_stats['rd']
+                    
+                    self.rating_engine.players[m['p1']]['rating'] += p1_d
+                    self.rating_engine.players[m['p2']]['rating'] += p2_d
+                    self.rating_engine.players[m['p1']]['rd'] = max(50.0, self.rating_engine.players[m['p1']]['rd'] - 4.0)
+                    self.rating_engine.players[m['p2']]['rd'] = max(50.0, self.rating_engine.players[m['p2']]['rd'] - 4.0)
+
+                    deltas = {
+                        'p1_delta': p1_d, 'p2_delta': p2_d,
+                        'p1_before': p1_before, 'p1_rd_before': p1_rd_before,
+                        'p1_after': self.rating_engine.players[m['p1']]['rating'], 'p1_rd_after': self.rating_engine.players[m['p1']]['rd'],
+                        'p2_before': p2_before, 'p2_rd_before': p2_rd_before,
+                        'p2_after': self.rating_engine.players[m['p2']]['rating'], 'p2_rd_after': self.rating_engine.players[m['p2']]['rd']
+                    }
+                else:
+                    # Check if Chaos Mode is active for this week
+                    m_week = str(m.get('week', '')).lower()
+                    is_chaos = self.chaos_config['active'] and m_week in [w.lower() for w in self.chaos_config['weeks']]
+                    apply_anti_riot = not is_chaos # If chaos is active, anti_riot is OFF.
+
+                    deltas = self.rating_engine.update_match(m['p1'], m['p2'], m['s1'], m['s2'], self.k_win, self.k_loss, apply_anti_riot)
             
-            p1_delta = deltas.get('p1_delta', 0)
-            p2_delta = deltas.get('p2_delta', 0)
-            
+            p1_delta = deltas.get('p1_delta', 0); p2_delta = deltas.get('p2_delta', 0)
             match_hash = f"{d_str}_{m['season']}_{m['week']}_{players[0]}_{players[1]}_{m['s1']}-{m['s2']}"
             
-            # Snap the before/after stats for the admin panel
             record = {
-                'id': match_hash,
-                'match_id': match_id,
-                'date': d_str,
-                'season': m['season'],
-                'week': m['week'],
-                'division': m['div'],
-                'p1': m['p1'],
-                'p2': m['p2'],
-                'home_players': [m['p1']],
-                'away_players': [m['p2']],
-                's1': m['s1'],
-                's2': m['s2'],
-                'score': f"{m['s1']}-{m['s2']}",
-                'p1_before': deltas.get('p1_before', self.rating_engine.get_rating(m['p1'])['rating']),
-                'p1_rd_before': deltas.get('p1_rd_before', self.rating_engine.get_rating(m['p1'])['rd']),
-                'p1_after': deltas.get('p1_after', self.rating_engine.get_rating(m['p1'])['rating']),
-                'p1_rd_after': deltas.get('p1_rd_after', self.rating_engine.get_rating(m['p1'])['rd']),
+                'id': match_hash, 'match_id': match_id, 'date': d_str, 'season': m['season'], 'week': m['week'], 'division': m['div'],
+                'p1': m['p1'], 'p2': m['p2'], 'home_players': [m['p1']], 'away_players': [m['p2']], 's1': m['s1'], 's2': m['s2'], 'score': f"{m['s1']}-{m['s2']}",
+                'p1_before': deltas.get('p1_before', self.rating_engine.get_rating(m['p1'])['rating']), 'p1_rd_before': deltas.get('p1_rd_before', self.rating_engine.get_rating(m['p1'])['rd']),
+                'p1_after': deltas.get('p1_after', self.rating_engine.get_rating(m['p1'])['rating']), 'p1_rd_after': deltas.get('p1_rd_after', self.rating_engine.get_rating(m['p1'])['rd']),
                 'p1_delta': p1_delta,
-                'p2_before': deltas.get('p2_before', self.rating_engine.get_rating(m['p2'])['rating']),
-                'p2_rd_before': deltas.get('p2_rd_before', self.rating_engine.get_rating(m['p2'])['rd']),
-                'p2_after': deltas.get('p2_after', self.rating_engine.get_rating(m['p2'])['rating']),
-                'p2_rd_after': deltas.get('p2_rd_after', self.rating_engine.get_rating(m['p2'])['rd']),
-                'p2_delta': p2_delta,
-                'rich_stats': m.get('rich_stats', {}),
-                'game_history': m.get('game_history', ''),
-                'sheet_name': m.get('sheet_name', 'Unknown'),
-                'row_index': m.get('row_index', '?')
+                'p2_before': deltas.get('p2_before', self.rating_engine.get_rating(m['p2'])['rating']), 'p2_rd_before': deltas.get('p2_rd_before', self.rating_engine.get_rating(m['p2'])['rd']),
+                'p2_after': deltas.get('p2_after', self.rating_engine.get_rating(m['p2'])['rating']), 'p2_rd_after': deltas.get('p2_rd_after', self.rating_engine.get_rating(m['p2'])['rd']),
+                'p2_delta': p2_delta, 'rich_stats': m.get('rich_stats', {}), 'game_history': m.get('game_history', ''), 'sheet_name': m.get('sheet_name', 'Unknown'), 'row_index': m.get('row_index', '?')
             }
             self.match_history_log.append(record)
             
@@ -1082,10 +1191,10 @@ class ThunderData:
         E_2 = 1.0 - E_1
         
         if int(s1) > int(s2):
-            res = calculate_match(dummy_1, dummy_2, int(s1), int(s2))
+            res = calculate_match(dummy_1, dummy_2, int(s1), int(s2), self.k_win, self.k_loss, not self.chaos_config['active'])
             new_r1 = res['winner']['rating']; new_r2 = res['loser']['rating']
         elif int(s2) > int(s1):
-            res = calculate_match(dummy_2, dummy_1, int(s2), int(s1))
+            res = calculate_match(dummy_2, dummy_1, int(s2), int(s1), self.k_win, self.k_loss, not self.chaos_config['active'])
             new_r2 = res['winner']['rating']; new_r1 = res['loser']['rating']
         else:
             new_r1 = r1['rating']; new_r2 = r2['rating']

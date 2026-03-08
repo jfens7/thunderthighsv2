@@ -214,6 +214,39 @@ def bulk_fix_date():
     d = request.json
     return jsonify({"success": db.admin_bulk_fix_date(d.get('season'), d.get('division'), d.get('week'), d.get('date'), session.get('admin_email'))})
 
+@app.route('/api/admin/override_deltas', methods=['POST'])
+@login_required
+def override_deltas():
+    if not db: return jsonify({"success": False})
+    d = request.json
+    return jsonify({"success": db.admin_override_match_deltas(d.get('match_id'), d.get('p1_delta'), d.get('p2_delta'), session.get('admin_email'))})
+
+@app.route('/api/admin/set_rating_scales', methods=['POST'])
+@super_admin_required
+def set_rating_scales():
+    if not db: return jsonify({"success": False})
+    d = request.json
+    return jsonify({"success": db.admin_set_rating_scales(d.get('k_win'), d.get('k_loss'), session.get('admin_email'))})
+
+@app.route('/api/admin/chaos_config', methods=['GET'])
+@login_required
+def get_chaos_config():
+    if not db: return jsonify({"success": False})
+    return jsonify(db.admin_get_chaos_config())
+
+@app.route('/api/admin/chaos_vote', methods=['POST'])
+@login_required
+def chaos_vote():
+    if not db: return jsonify({"success": False})
+    d = request.json
+    return jsonify({"success": db.admin_vote_chaos(d.get('weeks', []), session.get('admin_email'))})
+
+@app.route('/api/admin/chaos_clear', methods=['POST'])
+@super_admin_required
+def chaos_clear():
+    if not db: return jsonify({"success": False})
+    return jsonify({"success": db.admin_clear_chaos(session.get('admin_email'))})
+
 @app.route('/api/admin/merge', methods=['POST'])
 @login_required
 def merge_players():
@@ -292,7 +325,6 @@ def delete_notice():
 @login_required
 def get_contacts(): return jsonify(db.get_contact_lists()) if db else jsonify({"emails": "", "phones": ""})
 
-# --- UPDATED: This now accepts targeted phone lists! ---
 @app.route('/api/admin/send_sms', methods=['POST'])
 @login_required
 def send_sms():
