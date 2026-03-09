@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Player Hub | GCTTA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: white; }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden">
+
+    <div class="bg-black border-b border-white/10 px-6 py-4 flex justify-between items-center z-50 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg"><i class="fa-solid fa-table-tennis-paddle-ball text-white text-xl"></i></div>
+            <div>
+                <h1 class="text-white font-black text-xl tracking-tight leading-none">PLAYER HUB</h1>
+                <p id="nav-player-name" class="text-[9px] text-emerald-400 font-mono tracking-widest uppercase">Verified Player</p>
+            </div>
+        </div>
+        <button onclick="window.location.href='/'" class="text-xs text-sky-400 font-bold px-3 py-2 border border-sky-500/30 bg-sky-900/30 rounded transition"><i class="fa-solid fa-house mr-1"></i> Return Home</button>
+    </div>
+
+    <div class="bg-slate-900 border-t border-white/10 flex justify-around p-2 pb-6 fixed bottom-0 w-full z-50 md:relative md:border-b md:border-t-0 md:pb-2">
+        <button onclick="switchTab('profile')" id="nav-profile" class="flex flex-col items-center text-indigo-400 w-1/3 py-2"><i class="fa-solid fa-user text-xl mb-1"></i><span class="text-[10px] font-bold tracking-widest uppercase">My Stats</span></button>
+        <button onclick="switchTab('forum')" id="nav-forum" class="flex flex-col items-center text-slate-500 hover:text-white transition w-1/3 py-2"><i class="fa-solid fa-comments text-xl mb-1"></i><span class="text-[10px] font-bold tracking-widest uppercase">Community</span></button>
+        <button onclick="switchTab('tournaments')" id="nav-tournaments" class="flex flex-col items-center text-slate-500 hover:text-white transition w-1/3 py-2"><i class="fa-solid fa-trophy text-xl mb-1"></i><span class="text-[10px] font-bold tracking-widest uppercase">Events</span></button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-4 md:p-8 pb-32">
+        
+        <div id="tab-profile" class="w-full max-w-3xl mx-auto animate-fade-in space-y-6">
+            <div id="hub-stats-container" class="bg-slate-800 p-6 rounded-xl border border-indigo-500/30 shadow-[0_0_20px_rgba(79,70,229,0.15)] flex justify-between items-center">
+                <div class="text-center w-full"><i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-500"></i><p class="text-slate-400 text-xs mt-2">Loading Stats...</p></div>
+            </div>
+
+            <div class="bg-black/30 p-6 rounded-xl border border-white/5">
+                <h3 class="text-white font-bold uppercase tracking-widest text-xs mb-4"><i class="fa-solid fa-calendar-days text-sky-400 mr-2"></i> Upcoming Fixtures</h3>
+                <div id="hub-schedule-list" class="space-y-3">
+                    <div class="text-slate-500 text-sm italic">Connect your profile to view your schedule...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-forum" class="hidden w-full max-w-2xl mx-auto animate-fade-in">
+            <div class="bg-slate-800 p-4 rounded-xl border border-white/10 mb-6 shadow-lg">
+                <textarea id="forum-input" placeholder="What's on your mind? (Lost & Found, Banter, etc.)" class="w-full bg-black/30 border border-white/5 rounded-lg p-3 text-white text-sm resize-none focus:outline-none focus:border-indigo-500" rows="3"></textarea>
+                
+                <div id="poll-builder" class="hidden mt-3 p-3 bg-black/40 rounded border border-white/5 space-y-2">
+                    <input type="text" placeholder="Option 1" class="poll-opt w-full bg-slate-800 text-sm p-2 rounded text-white border border-white/10">
+                    <input type="text" placeholder="Option 2" class="poll-opt w-full bg-slate-800 text-sm p-2 rounded text-white border border-white/10">
+                </div>
+
+                <div class="flex justify-between items-center mt-3 pt-3 border-t border-white/5">
+                    <div class="flex gap-3">
+                        <button onclick="document.getElementById('poll-builder').classList.toggle('hidden')" class="text-sky-400 hover:text-sky-300 text-sm"><i class="fa-solid fa-chart-bar mr-1"></i> Add Poll</button>
+                    </div>
+                    <button onclick="submitForumPost()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-1.5 px-6 rounded-lg shadow text-sm">Post</button>
+                </div>
+            </div>
+
+            <div id="forum-feed" class="space-y-4">
+                <div class="text-center py-10 text-slate-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>
+            </div>
+        </div>
+
+        <div id="tab-tournaments" class="hidden w-full max-w-3xl mx-auto animate-fade-in">
+            <div class="bg-gradient-to-br from-amber-900/40 to-slate-900 border border-amber-500/30 rounded-2xl p-6 shadow-xl">
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <span class="bg-red-600 text-white text-[10px] font-black tracking-widest px-2 py-0.5 rounded uppercase mb-2 inline-block">Registrations Open</span>
+                        <h2 class="text-2xl font-black text-white">Gold Coast Open</h2>
+                        <p class="text-slate-400 text-sm">Upcoming Tournament</p>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Cart Total</div>
+                        <div id="cart-total" class="text-3xl font-black text-amber-400 font-mono">$0</div>
+                    </div>
+                </div>
+
+                <div class="space-y-3 mb-8">
+                    <label class="flex items-center justify-between bg-black/40 p-4 rounded-xl border border-white/5 cursor-pointer hover:bg-black/60 transition">
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" class="tourney-checkbox w-5 h-5 rounded border-slate-600 text-amber-500 bg-slate-800" value="Open Singles" data-price="20" onchange="calculateCart()">
+                            <div>
+                                <div class="font-bold text-white">Open Singles</div>
+                                <div class="text-xs text-slate-400">Saturday 9:00 AM</div>
+                            </div>
+                        </div>
+                        <div class="font-mono text-amber-400 font-bold">$20</div>
+                    </label>
+                    <label class="flex items-center justify-between bg-black/40 p-4 rounded-xl border border-white/5 cursor-pointer hover:bg-black/60 transition">
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" class="tourney-checkbox w-5 h-5 rounded border-slate-600 text-amber-500 bg-slate-800" value="U1500 Singles" data-price="15" onchange="calculateCart()">
+                            <div>
+                                <div class="font-bold text-white">Under 1500 Singles</div>
+                                <div class="text-xs text-slate-400">Saturday 1:00 PM</div>
+                            </div>
+                        </div>
+                        <div class="font-mono text-amber-400 font-bold">$15</div>
+                    </label>
+                </div>
+
+                <div id="cart-action-box" class="bg-black/50 p-4 rounded-xl border border-white/5 text-center">
+                    <p class="text-xs text-slate-400 mb-3">You have currently paid <strong class="text-white">$0.00</strong> toward this event.</p>
+                    <button onclick="submitCart()" class="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.4)] transition">PROCEED TO CHECKOUT</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tabId) {
+            ['profile', 'forum', 'tournaments'].forEach(t => {
+                document.getElementById(`tab-${t}`).classList.add('hidden');
+                document.getElementById(`nav-${t}`).classList.remove('text-indigo-400');
+                document.getElementById(`nav-${t}`).classList.add('text-slate-500');
+            });
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            document.getElementById(`nav-${tabId}`).classList.remove('text-slate-500');
+            document.getElementById(`nav-${tabId}`).classList.add('text-indigo-400');
+
+            if(tabId === 'forum') loadForum();
+        }
+
+        let previouslyPaid = 0; 
+        function calculateCart() {
+            let total = 0;
+            document.querySelectorAll('.tourney-checkbox:checked').forEach(cb => { total += parseFloat(cb.dataset.price); });
+            document.getElementById('cart-total').innerText = `$${total}`;
+
+            const diff = total - previouslyPaid;
+            const btn = document.querySelector('#cart-action-box button');
+            
+            if (diff > 0) { btn.innerText = `PAY DIFFERENCE: $${diff}`; btn.className = "w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl transition"; } 
+            else if (diff < 0) { btn.innerText = `UPDATE (REFUND DUE: $${Math.abs(diff)})`; btn.className = "w-full bg-sky-600 hover:bg-sky-500 text-white font-black py-3 rounded-xl transition"; } 
+            else if (total > 0) { btn.innerText = `SAVE REGISTRATION`; btn.className = "w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 rounded-xl transition"; } 
+            else { btn.innerText = `SELECT EVENTS`; btn.className = "w-full bg-slate-700 text-slate-400 font-black py-3 rounded-xl transition cursor-not-allowed"; }
+        }
+
+        async function submitCart() {
+            let events = []; let total = 0;
+            document.querySelectorAll('.tourney-checkbox:checked').forEach(cb => { events.push(cb.value); total += parseFloat(cb.dataset.price); });
+            alert(`Sending to Server:\nEvents: ${events.join(', ')}\nTotal: $${total}\n\n(Stripe integration will pop up here)`);
+        }
+
+        async function loadForum() {
+            const feed = document.getElementById('forum-feed');
+            try {
+                const res = await fetch('/api/hub/forum'); const posts = await res.json();
+                if(posts.length === 0) { feed.innerHTML = '<div class="text-center text-slate-500 italic py-10">No posts yet. Start the conversation!</div>'; return; }
+                
+                feed.innerHTML = posts.map(p => `
+                    <div class="bg-slate-800 p-5 rounded-xl border border-white/5 shadow">
+                        <div class="flex justify-between items-center mb-3">
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-8 bg-indigo-900 text-indigo-400 rounded-full flex items-center justify-center font-bold text-xs">${p.author_name.charAt(0)}</div>
+                                <div><div class="text-sm font-bold text-white flex items-center gap-1">${p.author_name} <i class="fa-solid fa-circle-check text-sky-400 text-[10px]"></i></div><div class="text-[10px] text-slate-500 font-mono">${p.time_str}</div></div>
+                            </div>
+                            ${p.type === 'Poll' ? '<span class="bg-sky-900/30 text-sky-400 border border-sky-500/30 text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest">Poll</span>' : ''}
+                        </div>
+                        <p class="text-sm text-slate-300 whitespace-pre-wrap">${p.content}</p>
+                    </div>
+                `).join('');
+            } catch(e) { feed.innerHTML = "Error loading forum."; }
+        }
+        
+        async function submitForumPost() {
+            const val = document.getElementById('forum-input').value;
+            if(!val.trim()) return;
+            try {
+                await fetch('/api/hub/post', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ uid: 'mock_uid', name: 'Verified Player', content: val, type: 'General' }) });
+                document.getElementById('forum-input').value = ''; loadForum();
+            } catch(e) {}
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => { switchTab('profile'); });
+    </script>
+</body>
+</html>

@@ -2,80 +2,320 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GCTTA Admin Command</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Control Tower | ThunderThighs</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
-        body { background-color: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; }
-        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 1rem; }
-        .admin-view { animation: fadeIn 0.3s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: white; margin: 0; padding: 0; overflow-x: hidden; }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
     </style>
 </head>
-<body class="min-h-screen pb-24 lg:pb-6 relative flex flex-col bg-[#0f172a] text-slate-200 font-sans">
-    
-    <nav class="bg-slate-900 border-b border-white/10 sticky top-0 z-50">
-        <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-            <div class="flex items-center gap-3">
-                <div class="bg-red-600 p-2 rounded-lg shadow-[0_0_15px_rgba(220,38,38,0.5)]">
-                    <i class="fa-solid fa-shield-halved text-white text-xl"></i>
-                </div>
-                <div>
-                    <h1 class="text-xl font-black text-white leading-none tracking-tight">GCTTA ADMIN</h1>
-                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Logged in as {{ email }}</div>
-                </div>
-            </div>
-            <div class="flex items-center gap-3">
-                <button onclick="window.forceRefresh()" class="bg-yellow-500 hover:bg-yellow-400 text-black px-4 py-2 rounded font-bold text-xs transition shadow-lg flex items-center gap-2">
-                    <i class="fa-solid fa-bolt"></i> FORCE REFRESH
-                </button>
-                <a href="/logout" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded font-bold text-xs transition border border-white/10">Sign Out</a>
-                <a href="/" class="text-slate-400 hover:text-white transition px-3 py-2 text-sm font-bold"><i class="fa-solid fa-house"></i> Public Site</a>
+<body class="flex flex-col h-screen">
+
+    <div class="bg-black border-b border-white/10 px-6 py-4 flex justify-between items-center z-50 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center shadow-lg"><i class="fa-solid fa-shield text-white text-xl"></i></div>
+            <div>
+                <h1 class="text-white font-black text-xl tracking-tight leading-none">CONTROL TOWER</h1>
+                <p class="text-[9px] text-slate-400 font-mono tracking-widest uppercase">LOGGED IN AS {{ email }}</p>
             </div>
         </div>
-        
-        {% include 'Components/Admin/tabs.html' %}
-    </nav>
+        <div class="flex items-center gap-3">
+            <button onclick="window.forceRefresh()" class="bg-yellow-500 hover:bg-yellow-400 text-black text-[10px] font-black px-4 py-2 rounded uppercase tracking-widest transition shadow-[0_0_15px_rgba(234,179,8,0.3)] flex items-center gap-2">
+                <i class="fa-solid fa-bolt"></i> FORCE REFRESH
+            </button>
+            <a href="{{ url_for('logout') }}" class="text-xs text-slate-400 hover:text-white px-3 py-2 border border-white/10 rounded transition">Sign Out</a>
+            <a href="/" class="text-xs font-bold text-sky-400 hover:text-sky-300 ml-2"><i class="fa-solid fa-house mr-1"></i> Public Site</a>
+        </div>
+    </div>
 
-    <main class="max-w-6xl mx-auto p-4 w-full flex-1">
-        <div id="admin-live">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="admin-dashboard-stats">
-                <div class="bg-slate-800/50 border border-white/5 rounded-xl p-4 flex flex-col items-center justify-center">
-                    <i class="fa-solid fa-satellite-dish text-green-400 text-2xl mb-2"></i>
-                    <div class="text-2xl font-black text-white" id="liveMatchCount">0</div>
-                    <div class="text-[10px] uppercase text-slate-500 font-bold tracking-widest">Live Now</div>
+    <div class="bg-slate-900 border-b border-white/5 px-4 flex gap-8 overflow-x-auto hide-scroll shrink-0">
+        <button onclick="window.setAdminCategory('ops')" id="cat-ops" class="py-4 border-b-2 border-blue-500 text-blue-400 font-bold uppercase tracking-widest text-xs flex items-center gap-2"><i class="fa-solid fa-table-tennis-paddle-ball"></i> Match Ops</button>
+        <button onclick="window.setAdminCategory('players')" id="cat-players" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-users-gear"></i> Players & Math</button>
+        <button onclick="window.setAdminCategory('comms')" id="cat-comms" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-bullhorn"></i> Comms & Money</button>
+        <button onclick="window.setAdminCategory('system')" id="cat-system" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-server"></i> System Logs</button>
+    </div>
+
+    <div id="sub-ops" class="bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
+        <button onclick="window.switchAdminTab('live')" id="tab-btn-live" class="px-4 py-2 text-xs font-bold text-blue-400 bg-blue-900/30 rounded-lg">Live iPads</button>
+        <button onclick="window.switchAdminTab('history')" id="tab-btn-history" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Full History</button>
+        <button onclick="window.switchAdminTab('manual')" id="tab-btn-manual" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">+ Add Match</button>
+        <button onclick="window.switchAdminTab('date-errors')" id="tab-btn-date-errors" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Date Errors <span id="date-badge" class="hidden ml-1 bg-red-500 text-white rounded-full px-1.5 py-0.5 text-[9px]"></span></button>
+        <button onclick="window.switchAdminTab('tournaments')" id="tab-btn-tournaments" class="px-4 py-2 text-xs font-bold text-amber-400 bg-amber-900/30 rounded-lg"><i class="fa-solid fa-trophy mr-1"></i> Tournaments (Stealth)</button>
+    </div>
+
+    <div id="sub-players" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
+        <button onclick="window.switchAdminTab('players')" id="tab-btn-players" class="px-4 py-2 text-xs font-bold text-purple-400 bg-purple-900/30 rounded-lg">Player Editor & Merges</button>
+        <button onclick="window.switchAdminTab('diagnostics')" id="tab-btn-diagnostics" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Glicko Simulator</button>
+        <button onclick="window.switchAdminTab('schedules')" id="tab-btn-schedules" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"><i class="fa-solid fa-file-pdf mr-1"></i> Upload PDF Schedules</button>
+    </div>
+
+    <div id="sub-comms" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
+        <button onclick="window.switchAdminTab('broadcast')" id="tab-btn-broadcast" class="px-4 py-2 text-xs font-bold text-sky-400 bg-sky-900/30 rounded-lg">SMS Broadcast</button>
+        <button onclick="window.switchAdminTab('sms-inbox')" id="tab-btn-sms-inbox" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">SMS Inbox</button>
+        <button onclick="window.switchAdminTab('notices')" id="tab-btn-notices" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Public Notices</button>
+        <button onclick="window.switchAdminTab('inbox-feedback')" id="tab-btn-inbox-feedback" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Feedback</button>
+        <button onclick="window.switchAdminTab('donations')" id="tab-btn-donations" class="px-4 py-2 text-xs font-bold text-emerald-400 hover:text-white">Donations Ledger</button>
+    </div>
+
+    <div id="sub-system" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
+        <button onclick="window.switchAdminTab('audit')" id="tab-btn-audit" class="px-4 py-2 text-xs font-bold text-yellow-400 bg-yellow-900/30 rounded-lg">Audit Logs</button>
+        <button onclick="window.switchAdminTab('chat')" id="tab-btn-chat" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Admin Notes</button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-6 pb-20">
+        
+        <div id="admin-live" class="animate-fade-in w-full max-w-4xl mx-auto space-y-6">
+            <div class="flex justify-between items-center mb-2 border-b border-white/10 pb-4">
+                <h2 class="text-blue-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-satellite-dish mr-2"></i> Live iPad Telemetry</h2>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="live-list"></div>
+            <h3 class="text-slate-500 font-bold uppercase tracking-widest text-xs mt-8 mb-4 border-b border-white/5 pb-2">Scheduled (Not Started)</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 opacity-70" id="scheduled-list"></div>
+        </div>
+
+        <div id="admin-manual" class="hidden animate-fade-in w-full max-w-3xl mx-auto">
+            <div class="bg-slate-800 p-8 rounded-xl border border-white/10 shadow-xl">
+                <h2 class="text-emerald-400 font-black text-xl mb-2"><i class="fa-solid fa-pen-to-square mr-2"></i> Manual Match Creator</h2>
+                <p class="text-xs text-slate-400 mb-8">Inject a custom match directly into history. You can specify exact game scores (e.g. 11-8) and the system will calculate the final sets automatically.</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div class="relative">
+                        <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Player 1 (Home)</label>
+                        <input type="text" id="manual-p1" placeholder="Search..." class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm" autocomplete="off">
+                        <div id="sugg-p1" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 rounded shadow-xl max-h-48 overflow-y-auto hidden border border-white/10"></div>
+                    </div>
+                    <div class="relative">
+                        <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Player 2 (Away)</label>
+                        <input type="text" id="manual-p2" placeholder="Search..." class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm" autocomplete="off">
+                        <div id="sugg-p2" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 rounded shadow-xl max-h-48 overflow-y-auto hidden border border-white/10"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div>
+                        <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Date</label>
+                        <input type="text" id="manual-date" placeholder="DD/MM/YYYY" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm font-mono">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Exact Game Scores (Optional)</label>
+                        <input type="text" id="manual-scores" placeholder="e.g. 11-8, 9-11, 14-12, 11-5" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm font-mono">
+                    </div>
+                </div>
+
+                <button onclick="window.submitManualMatch()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.3)] transition text-sm">INJECT INTO HISTORY</button>
+            </div>
+        </div>
+
+        <div id="admin-history" class="hidden animate-fade-in w-full max-w-5xl mx-auto">
+            <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
+                <h2 class="text-white font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-clock-rotate-left mr-2"></i> Match Database</h2>
+            </div>
+            <div class="flex flex-col md:flex-row gap-3 mb-6">
+                <input type="text" id="history-search" placeholder="Search by player name..." class="flex-1 bg-slate-800 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-indigo-500 focus:outline-none">
+                <select id="hist-div-filter" class="bg-slate-800 border border-white/10 text-white rounded-lg px-4 py-3 focus:outline-none w-full md:w-auto"><option value="All">All Divisions</option></select>
+                <select id="hist-source-filter" class="bg-slate-800 border border-white/10 text-white rounded-lg px-4 py-3 focus:outline-none w-full md:w-auto">
+                    <option value="All">All Sources</option>
+                    <option value="Spreadsheet">Spreadsheet Only</option>
+                    <option value="Live App">Live App / Admin</option>
+                </select>
+                <button onclick="window.searchHistory()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-lg font-bold transition">Search</button>
+            </div>
+            <div id="historyList" class="space-y-3"></div>
+        </div>
+
+        <div id="admin-date-errors" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
+            <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
+                <h2 class="text-orange-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-calendar-xmark mr-2"></i> Missing Date Scrubber</h2>
+                <button onclick="window.loadDateErrors()" class="text-xs text-slate-400 hover:text-white"><i class="fa-solid fa-rotate mr-1"></i> Scan</button>
+            </div>
+            <div id="dateErrorsList" class="w-full"></div>
+        </div>
+
+        <div id="admin-tournaments" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
+            <div class="flex justify-between items-center mb-6 border-b border-amber-500/30 pb-4">
+                <h2 class="text-amber-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-user-secret mr-2"></i> Stealth Tournament Engine</h2>
+                <span class="bg-amber-900/50 text-amber-400 border border-amber-500/50 text-[10px] font-bold px-2 py-1 rounded shadow-inner animate-pulse">BETA MODE ACTIVE</span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-slate-800 p-6 rounded-xl border border-white/5">
+                    <h3 class="text-white font-bold mb-4 text-sm border-b border-white/10 pb-2">Create Registration Event</h3>
+                    <input type="text" placeholder="Event Name (e.g. Open Singles)" class="w-full bg-black/40 border border-white/10 rounded px-4 py-2 text-white mb-3 text-sm focus:outline-none">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <input type="number" placeholder="Price ($)" class="w-full bg-black/40 border border-white/10 rounded px-4 py-2 text-white text-sm focus:outline-none">
+                        <input type="number" placeholder="Max Players" class="w-full bg-black/40 border border-white/10 rounded px-4 py-2 text-white text-sm focus:outline-none">
+                    </div>
+                    <button class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2.5 rounded-lg transition shadow-lg text-xs">CREATE EVENT (HIDDEN)</button>
+                </div>
+                <div class="bg-slate-800 p-6 rounded-xl border border-amber-500/20 text-center flex flex-col justify-center">
+                    <div class="text-5xl text-amber-400 mb-4"><i class="fa-solid fa-file-csv"></i></div>
+                    <h3 class="text-white font-bold text-lg mb-1">Zermelo Engine</h3>
+                    <p class="text-xs text-slate-400 mb-6">Instantly compile all registered players and Ratings Central IDs into a Zermelo-ready import file.</p>
+                    <a href="/api/admin/export_zermelo/test_event_001" class="bg-white text-black hover:bg-slate-200 font-black py-3 rounded-lg transition shadow-[0_0_15px_rgba(255,255,255,0.2)] text-sm"><i class="fa-solid fa-download mr-2"></i> EXPORT TO ZERMELO</a>
                 </div>
             </div>
-            {% include 'Components/Admin/view_live.html' %}
         </div>
-        
-        <div id="admin-approved" class="hidden">{% include 'Components/Admin/view_approved.html' %}</div>
-        <div id="admin-inbox-match" class="hidden">{% include 'Components/Admin/view_match_reports.html' %}</div>
-        <div id="admin-inbox-feedback" class="hidden">{% include 'Components/Admin/view_feedback.html' %}</div>
-        
-        <div id="admin-date-errors" class="hidden">{% include 'Components/Admin/view_date_errors.html' %}</div>
-        <div id="admin-players" class="hidden">{% include 'Components/Admin/view_players.html' %}</div>
-        <div id="admin-history" class="hidden">{% include 'Components/Admin/view_history.html' %}</div>
-        <div id="admin-notices" class="hidden">{% include 'Components/Admin/view_notices.html' %}</div>
-        <div id="admin-chat" class="hidden">{% include 'Components/Admin/view_chat.html' %}</div>
-        <div id="admin-diagnostics" class="hidden">{% include 'Components/Admin/view_diagnostics.html' %}</div>
-        <div id="admin-broadcast" class="hidden">{% include 'Components/Admin/view_broadcast.html' %}</div>
-        
-        <div id="admin-donations" class="hidden">{% include 'Components/Admin/view_donations.html' %}</div>
-        
-        {% if role == 'super_admin' %}
-        <div id="admin-audit" class="hidden">{% include 'Components/Admin/view_audit.html' %}</div>
-        {% endif %}
-        
-        <div id="admin-migration" class="hidden">{% include 'Components/Admin/view_migration.html' %}</div>
-    </main>
 
-    {% include 'Components/Admin/modals.html' %}
+        <div id="admin-players" class="hidden animate-fade-in w-full max-w-5xl mx-auto">
+            {% include 'Components/Admin/view_players.html' %}
+        </div>
+
+        <div id="admin-diagnostics" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
+            <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
+                <h2 class="text-emerald-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-microchip mr-2"></i> Glicko-2 Match Simulator</h2>
+            </div>
+            <div class="bg-slate-800 p-6 rounded-xl border border-white/5 shadow-lg">
+                <div class="grid grid-cols-[1fr,auto,1fr] gap-6 items-center mb-8">
+                    <div>
+                        <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Player 1</label>
+                        <input type="text" id="diag-p1-search" placeholder="Search Player..." class="w-full bg-black/40 border border-white/10 rounded px-4 py-3 text-white focus:outline-none" autocomplete="off">
+                        <div id="diag-p1-suggestions" class="absolute z-50 w-64 mt-1 bg-slate-700 border border-white/10 rounded shadow-xl hidden"></div>
+                    </div>
+                    <div class="text-slate-600 font-black mt-6">VS</div>
+                    <div>
+                        <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Player 2</label>
+                        <input type="text" id="diag-p2-search" placeholder="Search Player..." class="w-full bg-black/40 border border-white/10 rounded px-4 py-3 text-white focus:outline-none" autocomplete="off">
+                        <div id="diag-p2-suggestions" class="absolute z-50 w-64 mt-1 bg-slate-700 border border-white/10 rounded shadow-xl hidden"></div>
+                    </div>
+                </div>
+                <div class="flex justify-center items-center gap-4 mb-8 bg-black/20 p-4 rounded-xl border border-white/5">
+                    <div class="flex flex-col items-center">
+                        <span class="text-[10px] text-slate-500 uppercase font-bold mb-2">P1 Sets</span>
+                        <input type="number" id="diag-s1" value="3" class="w-16 bg-slate-900 border border-white/10 text-white font-bold font-mono text-center rounded py-2 outline-none">
+                    </div>
+                    <span class="text-slate-600 font-black mt-4">-</span>
+                    <div class="flex flex-col items-center">
+                        <span class="text-[10px] text-slate-500 uppercase font-bold mb-2">P2 Sets</span>
+                        <input type="number" id="diag-s2" value="0" class="w-16 bg-slate-900 border border-white/10 text-white font-bold font-mono text-center rounded py-2 outline-none">
+                    </div>
+                </div>
+                <button id="diag-btn" onclick="window.runDiagnostics()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition-all shadow-lg"><i class="fa-solid fa-microchip"></i> Run Simulation</button>
+            </div>
+            <div id="diag-results" class="mt-6 hidden"></div>
+
+            <div class="mt-8 bg-slate-900 border border-slate-700 p-6 rounded-xl shadow-lg">
+                <h3 class="text-white font-bold mb-4 uppercase tracking-widest text-xs text-center"><i class="fa-solid fa-sliders text-yellow-500 mr-2"></i> Global Glicko Multipliers</h3>
+                <p class="text-[10px] text-slate-400 text-center mb-6">If the Loss Multiplier is higher than the Win Multiplier, the system is actively punishing losers. Set both to 1.0 for pure, mathematically fair exchanges.</p>
+                <div class="flex justify-center items-center gap-8">
+                    <div class="text-center">
+                        <label class="text-[10px] text-emerald-500 font-bold uppercase tracking-widest block mb-2">Win Multiplier</label>
+                        <input type="number" step="0.1" id="math-k-win" value="1.0" class="w-20 bg-black/50 border border-emerald-500/30 text-emerald-400 text-center font-mono font-bold py-2 rounded focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div class="text-center">
+                        <label class="text-[10px] text-red-500 font-bold uppercase tracking-widest block mb-2">Loss Multiplier</label>
+                        <input type="number" step="0.1" id="math-k-loss" value="1.4" class="w-20 bg-black/50 border border-red-500/30 text-red-400 text-center font-mono font-bold py-2 rounded focus:outline-none focus:border-red-500">
+                    </div>
+                </div>
+                <button onclick="window.saveMathMultipliers()" class="mt-6 w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-lg border border-white/10 transition-colors text-sm">SAVE & RECALCULATE HISTORY</button>
+            </div>
+        </div>
+
+        <div id="admin-schedules" class="hidden animate-fade-in w-full max-w-3xl mx-auto">
+            <div class="bg-slate-800 p-8 rounded-xl border border-white/10 shadow-xl text-center">
+                <div class="w-16 h-16 bg-red-600/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl"><i class="fa-solid fa-file-pdf"></i></div>
+                <h2 class="text-white font-black text-xl mb-2">PDF Schedule Scraper</h2>
+                <p class="text-xs text-slate-400 mb-8">Upload the weekly fixture PDFs sent out by the club. The AI will extract the matchups and attach them to player profiles so they can see who they play next.</p>
+                <input type="text" id="pdf-division" placeholder="Division Name (e.g. Division 1)" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none mb-4 text-center">
+                <input type="file" id="pdf-file-upload" accept=".pdf" class="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-red-900/30 file:text-red-400 hover:file:bg-red-900/50 mb-6 bg-black/20 p-4 border border-white/5 rounded-xl cursor-pointer">
+                <button onclick="window.uploadPdfSchedule()" id="pdf-upload-btn" class="w-full bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-xl shadow-[0_0_15px_rgba(220,38,38,0.3)] transition text-sm">EXTRACT MATCHUPS</button>
+            </div>
+        </div>
+
+        <div id="admin-broadcast" class="hidden animate-fade-in w-full max-w-3xl mx-auto">
+            {% include 'Components/Admin/view_broadcast.html' %}
+        </div>
+
+        <div id="admin-sms-inbox" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
+            <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
+                <h2 class="text-pink-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-message mr-2"></i> Player Text Replies</h2>
+                <button onclick="window.loadSmsInbox()" class="text-xs text-slate-400 hover:text-white"><i class="fa-solid fa-rotate mr-1"></i> Refresh</button>
+            </div>
+            <div id="smsInboxList" class="space-y-3"></div>
+        </div>
+
+        <div id="admin-inbox-feedback" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
+            <h2 class="text-white font-bold uppercase tracking-widest text-sm border-b border-white/10 pb-4 mb-4">App Feedback</h2>
+            <div id="feedbackList" class="w-full"></div>
+        </div>
+
+        <div id="admin-notices" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
+            <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
+                <h2 class="text-white font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-bullhorn mr-2"></i> Public Notices</h2>
+            </div>
+            <div class="bg-slate-800 p-5 rounded-xl border border-white/5 mb-6 shadow-lg">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                    <input type="text" id="notice-title" placeholder="Notice Title" class="md:col-span-3 w-full bg-black/40 border border-white/10 rounded px-4 py-2 text-white focus:outline-none">
+                    <select id="notice-type" class="w-full bg-black/40 border border-white/10 rounded px-4 py-2 text-white focus:outline-none">
+                        <option value="Update">Blue (Update)</option>
+                        <option value="Event">Yellow (Event)</option>
+                        <option value="Alert">Red (Alert)</option>
+                    </select>
+                </div>
+                <textarea id="notice-message" placeholder="Type the full message here..." rows="3" class="w-full bg-black/40 border border-white/10 rounded px-4 py-3 text-white focus:outline-none mb-4 resize-none"></textarea>
+                <button onclick="window.submitNotice()" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 rounded-lg transition-colors shadow">Post Notice to Public Site</button>
+            </div>
+            <div id="adminNoticesList" class="space-y-3"></div>
+        </div>
+
+        <div id="admin-donations" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
+            <div class="flex justify-between items-center mb-4 border-b border-emerald-500/30 pb-4">
+                <h2 class="text-emerald-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-hand-holding-dollar mr-2"></i> Agnes Foundation Ledger</h2>
+            </div>
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="bg-slate-800 p-5 rounded-xl border border-emerald-500/20 text-center">
+                    <div class="text-xs text-slate-400 uppercase font-bold tracking-widest mb-1">Total Raised</div>
+                    <div class="text-4xl font-black text-emerald-400 font-mono" id="donations-total">$0</div>
+                </div>
+                <div class="bg-slate-800 p-5 rounded-xl border border-emerald-500/20 text-center">
+                    <div class="text-xs text-slate-400 uppercase font-bold tracking-widest mb-1">Supporters</div>
+                    <div class="text-4xl font-black text-emerald-400 font-mono" id="donations-count">0</div>
+                </div>
+            </div>
+            <div id="donationsList" class="space-y-3"></div>
+        </div>
+
+        <div id="admin-audit" class="hidden animate-fade-in w-full max-w-5xl mx-auto space-y-8">
+            <div>
+                <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
+                    <h2 class="text-yellow-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-shield-halved mr-2"></i> Server Audit Trail</h2>
+                    <select id="audit-filter" onchange="window.loadAuditLogs()" class="bg-slate-800 border border-white/10 text-white rounded px-3 py-1 text-xs outline-none">
+                        <option value="ALL">Show All Actions</option>
+                        <option value="MATCH">Matches & Edits</option>
+                        <option value="RATING">Rating Math Overrides</option>
+                        <option value="SYSTEM">System & Users</option>
+                    </select>
+                </div>
+                <div id="auditLogList" class="space-y-2 h-[400px] overflow-y-auto pr-2 custom-scrollbar border border-white/5 rounded-lg bg-black/20 p-2"></div>
+            </div>
+            {% if role == 'super_admin' or role == 'temp_super_admin' %}
+            <div>
+                <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-4 mt-8">
+                    <h2 class="text-red-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-users-gear mr-2"></i> Admin Access Control</h2>
+                </div>
+                <div id="adminUsersList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div id="admin-chat" class="hidden animate-fade-in w-full max-w-3xl mx-auto">
+            <h2 class="text-white font-bold uppercase tracking-widest text-sm border-b border-white/10 pb-4 mb-4"><i class="fa-solid fa-comments mr-2"></i> Admin Notes</h2>
+            <div class="bg-slate-800 p-4 rounded-xl border border-white/5 mb-6">
+                <textarea id="admin-chat-input" placeholder="Leave a note for other admins..." rows="2" class="w-full bg-black/40 border border-white/10 rounded px-4 py-3 text-white focus:outline-none mb-3 resize-none text-sm"></textarea>
+                <button onclick="window.postAdminMessage()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 rounded-lg transition-colors text-sm shadow">Post Note</button>
+            </div>
+            <div id="adminChatList" class="space-y-3"></div>
+        </div>
+
+    </div>
+
     {% include 'Components/Admin/scripts.html' %}
 </body>
 </html>
