@@ -18,10 +18,14 @@ app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=30)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Globals for Lazy Loading
 db = None
+db_lock = threading.Lock()
 sync_lock = threading.Lock()
+is_first_snapshot = True
 
 def scheduled_refresh():
+    global db
     if db and sync_lock.acquire(blocking=False):
         try: 
             logger.info("🔄 Executing background database sync...")
@@ -32,18 +36,8 @@ def scheduled_refresh():
         finally:
             sync_lock.release()
 
-try:
-    logger.info("Initializing ThunderData backend...")
-    db = ThunderData()
-    logger.info("✅ Database connected. Spawning background thread for initial data pull...")
-    # This instantly pulls your data in the background without freezing the server boot!
-    threading.Thread(target=scheduled_refresh).start()
-except Exception as e: 
-    logger.error(f"❌ FATAL: Failed to start Backend: {str(e)}", exc_info=True)
-
-# AUTO-SYNC FIREBASE LISTENER
-is_first_snapshot = True
 def watch_firebase_for_live_matches():
+    global db
     if not db or not db.db: return
     
     def on_snapshot(col_snapshot, changes, read_time):
@@ -58,22 +52,41 @@ def watch_firebase_for_live_matches():
                 has_new_match = True
                 
         if has_new_match:
-            logger.info("📡 New Match Detected in Database! Triggering Instant Auto-Sync...")
+            logger.info("📡 New Match Detected! Triggering Instant Auto-Sync...")
             threading.Thread(target=scheduled_refresh).start()
 
     try:
         db.db.collection('match_results').where('status', '==', 'approved').on_snapshot(on_snapshot)
-        logger.info("📡 Instant Auto-Sync Listener Attached to Firebase.")
+        logger.info("📡 Instant Auto-Sync Listener Attached.")
     except Exception as e:
         logger.error(f"Failed to attach listener: {e}")
 
-if db and db.db:
-    watch_firebase_for_live_matches()
+# LAZY LOAD ENGINE (Fixes the Render Gunicorn Crash!)
+@app.before_request
+def pre_request_setup():
+    global db
+    if db is None:
+        with db_lock:
+            if db is None:
+                try:
+                    logger.info("Initializing ThunderData safely inside worker process...")
+                    db = ThunderData()
+                    watch_firebase_for_live_matches()
+                    logger.info("✅ Database connected.")
+                except Exception as e:
+                    logger.error(f"❌ FATAL: Failed to start Backend: {str(e)}")
+
+    # Traffic Tracking
+    if request.path == '/' or request.path == '/index':
+        if not request.cookies.get('ghostmode') and not session.get('admin_logged_in'):
+            if db:
+                ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+                if ip: 
+                    db.record_page_view(ip.split(',')[0].strip())
 
 # CRON SCHEDULER
 scheduler = BackgroundScheduler()
 try:
-    # Run routine maintenance every 12 hours
     scheduler.add_job(func=scheduled_refresh, trigger="interval", hours=12, id="scheduled_refresh")
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
@@ -96,15 +109,6 @@ def super_admin_required(f):
             return jsonify({'error': 'Super Admin Required'}), 403
         return f(*args, **kwargs)
     return decorated_function
-
-@app.before_request
-def track_traffic():
-    if request.path == '/' or request.path == '/index':
-        if not request.cookies.get('ghostmode') and not session.get('admin_logged_in'):
-            if db:
-                ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-                if ip: 
-                    db.record_page_view(ip.split(',')[0].strip())
 
 @app.route('/ghostmode')
 def activate_ghost_mode():
@@ -132,11 +136,9 @@ def player_dashboard():
 
 @app.route('/api/auth/google', methods=['POST'])
 def auth_google():
-    if not db: 
-        return jsonify({"success": False, "error": "Database offline"})
+    if not db: return jsonify({"success": False, "error": "Database offline"})
     user_data = db.verify_admin_token(request.json.get('token'))
-    if not user_data: 
-        return jsonify({"success": False, "error": "Invalid Token"})
+    if not user_data: return jsonify({"success": False, "error": "Invalid Token"})
         
     if user_data['role'] in ['admin', 'super_admin', 'temp_super_admin']:
         session.permanent = True
@@ -150,8 +152,7 @@ def auth_google():
 
 @app.route('/api/webhook/sms', methods=['POST', 'GET'])
 def sms_webhook():
-    if not db: 
-        return jsonify({"status": "error"}), 500
+    if not db: return jsonify({"status": "error"}), 500
     try:
         data = request.json if request.is_json else request.form
         sender = data.get('from', 'Unknown')
@@ -171,8 +172,7 @@ def logout():
 
 @app.route('/admin')
 def admin(): 
-    if not session.get('admin_logged_in'): 
-        return redirect(url_for('login'))
+    if not session.get('admin_logged_in'): return redirect(url_for('login'))
     return render_template('admin.html', email=session.get('admin_email'), role=session.get('admin_role'))
 
 # --- PUBLIC DATA APIS ---

@@ -1413,9 +1413,6 @@ class ThunderData:
         except Exception as e: 
             return {"success": False, "error": str(e)}
 
-    # ==========================================
-    # PDF SCHEDULE PARSER (REWRITTEN FOR PLAYER NAMES)
-    # ==========================================
     def admin_upload_pdf_schedule(self, division, file_stream, admin_email="Unknown"):
         if not self.db: return {"success": False, "error": "DB Offline"}
         try:
@@ -1432,7 +1429,6 @@ class ThunderData:
                         
                         headers = [str(x).lower().replace('\n', ' ') for x in table[0] if x]
                         
-                        # 1. Extract Teams & Players
                         if any("team name" in h for h in headers) or any("player" in h for h in headers):
                             for row in table[1:]:
                                 if not row or not row[0]: continue
@@ -1463,7 +1459,6 @@ class ThunderData:
                                     players = [p.title() for p in players if len(p) > 2]
                                     teams[num] = {"name": t_name, "players": players}
                                     
-                        # 2. Extract Matchups & Link to Teams
                         if any("date" in h for h in headers) or any("match" in h for h in headers):
                             for row in table[1:]:
                                 if not row: continue
@@ -1640,7 +1635,6 @@ class ThunderData:
         except: 
             return []
 
-    # REWRITTEN TO READ FROM THE NEW PDF PARSER
     def get_player_upcoming_schedule(self, player_name):
         if not self.db: return []
         try:
