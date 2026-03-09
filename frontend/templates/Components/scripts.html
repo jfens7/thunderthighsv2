@@ -164,7 +164,6 @@
 </script>
 
 <script>
-    // --- BRAND NEW: ADVANCED HISTORY ROUTER (Solves the Back Button & Reload issues) ---
     window.addEventListener('popstate', function(event) {
         const reportModal = document.getElementById('reportModal');
         const donateModal = document.getElementById('donateModal');
@@ -172,7 +171,6 @@
         const compareModal = document.getElementById('compareModal');
         const matchDetailsModal = document.getElementById('matchDetailsModal');
 
-        // 1. Intercept Back Button: Close open modals first before changing the page
         let modalClosed = false;
         if (reportModal && !reportModal.classList.contains('hidden')) { closeReportModal(); modalClosed = true; }
         if (donateModal && !donateModal.classList.contains('hidden')) { closeDonateModal(); modalClosed = true; }
@@ -180,17 +178,14 @@
         if (compareModal && !compareModal.classList.contains('hidden')) { closeCompareModal(); modalClosed = true; }
         if (matchDetailsModal && !matchDetailsModal.classList.contains('hidden')) { closeMatchDetails(); modalClosed = true; }
         
-        if (modalClosed) return; // If a modal was open, stop here so we don't change the tab underneath it!
+        if (modalClosed) return; 
 
-        // 2. Read the Hash from the URL to figure out where we are navigating to
         const hash = window.location.hash;
         
         if (hash.startsWith('#profile/')) {
-            // Restore a specific player profile
             const pName = decodeURIComponent(hash.replace('#profile/', ''));
             loadStats(pName, false); 
         } else if (hash) {
-            // Restore a specific tab
             const tabId = hash.replace('#', '');
             if (['home', 'week', 'sheets', 'search', 'notices', 'live-center', 'rules', 'statsContainer'].includes(tabId)) {
                 switchTab(tabId, false);
@@ -198,7 +193,6 @@
                 switchTab('home', false);
             }
         } else {
-            // Default fallback
             switchTab('home', false);
         }
     });
@@ -264,7 +258,6 @@
 
     window.switchTab = function(tabId, pushHistory = true) {
         if(pushHistory) { 
-            // Save the tab name in the browser history
             history.pushState({ tab: tabId }, "", "#" + tabId); 
         }
         
@@ -299,7 +292,6 @@
     };
 
     window.closeProfile = function() {
-        // When clicking 'Back' on a profile, naturally execute a browser back command so it returns exactly to where they were!
         if (window.history.length > 2) {
             window.history.back();
         } else {
@@ -448,7 +440,6 @@
         if(!player) return;
         window.currentProfileName = player;
         
-        // Push the custom Profile URL Hash to memory
         if(pushHistory) {
             history.pushState({ page: 'profile', player: player }, "", "#profile/" + encodeURIComponent(player));
         }
@@ -631,13 +622,21 @@
 
         const loadInitialData = async () => {
             try {
-                const pRes = await fetch('/api/players'); window.allPlayersRaw = await pRes.json(); setupMainSearch(); 
+                // FIXED THE INFINITE LOOP BUG HERE. It will now properly wait for the backend thread to finish loading players without freezing.
+                const pRes = await fetch('/api/players'); 
+                window.allPlayersRaw = await pRes.json(); 
+                
+                if (window.allPlayersRaw.length === 0) { 
+                    console.log("Waiting for backend background sync to finish...");
+                    setTimeout(loadInitialData, 2000); 
+                    return; 
+                }
+
+                setupMainSearch(); 
                 const [sRes, dRes] = await Promise.all([fetch('/api/seasons'), fetch('/api/divisions')]);
                 const seasons = await sRes.json(); const divisions = await dRes.json();
                 
-                if (seasons.length <= 2) { setTimeout(loadInitialData, 2000); return; }
-
-                const latestSeason = seasons.includes("Summer 2026") ? "Summer 2026" : (seasons[1] || "Career");
+                const latestSeason = seasons.includes("Summer 2026") ? "Summer 2026" : (seasons[seasons.length - 1] || "Career");
                 currentSeason = latestSeason;
 
                 const sSelect = document.getElementById('seasonSelect'); if (sSelect) { sSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; sSelect.appendChild(opt); }); sSelect.value = latestSeason; }
@@ -654,7 +653,6 @@
                 
                 loadDivisionLeaderboard(); loadResults(); loadTopDonors(); window.loadNotices();
                 
-                // 3. Auto-Routing on Load (Instantly drops the loading overlay if they have a hash!)
                 const initialHash = window.location.hash;
                 if (initialHash && initialHash !== '#fixtures') {
                     const overlay = document.getElementById('landing-overlay');

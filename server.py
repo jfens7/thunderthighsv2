@@ -21,22 +21,25 @@ logger = logging.getLogger(__name__)
 db = None
 sync_lock = threading.Lock()
 
-try:
-    logger.info("Initializing ThunderData backend...")
-    db = ThunderData()
-    logger.info("✅ Database connected. Skipping auto-sync to allow fast boot.")
-except Exception as e: 
-    logger.error(f"❌ FATAL: Failed to start Backend: {str(e)}", exc_info=True)
-
 def scheduled_refresh():
     if db and sync_lock.acquire(blocking=False):
         try: 
             logger.info("🔄 Executing background database sync...")
             db.refresh_data()
+            logger.info("✅ Background sync complete!")
         except Exception as e: 
-            pass
+            logger.error(f"Background Sync Error: {e}")
         finally:
             sync_lock.release()
+
+try:
+    logger.info("Initializing ThunderData backend...")
+    db = ThunderData()
+    logger.info("✅ Database connected. Spawning background thread for initial data pull...")
+    # This instantly pulls your data in the background without freezing the server boot!
+    threading.Thread(target=scheduled_refresh).start()
+except Exception as e: 
+    logger.error(f"❌ FATAL: Failed to start Backend: {str(e)}", exc_info=True)
 
 # AUTO-SYNC FIREBASE LISTENER
 is_first_snapshot = True
@@ -70,8 +73,8 @@ if db and db.db:
 # CRON SCHEDULER
 scheduler = BackgroundScheduler()
 try:
-    first_run = datetime.datetime.now() + datetime.timedelta(minutes=10)
-    scheduler.add_job(func=scheduled_refresh, trigger="interval", hours=12, id="scheduled_refresh", next_run_time=first_run)
+    # Run routine maintenance every 12 hours
+    scheduler.add_job(func=scheduled_refresh, trigger="interval", hours=12, id="scheduled_refresh")
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
 except Exception as e: 
