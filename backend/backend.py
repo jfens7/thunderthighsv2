@@ -57,7 +57,6 @@ def calculate_match(w, l, s1, s2, k_win=1.0, k_loss=1.4, anti_riot=True):
         if w_shift < 0:
             w_shift = 0.0
             w_rd_shift = 5.0 
-        
         if l_shift > 0:
             l_shift = 0.0
             l_rd_shift = 2.0 
@@ -442,7 +441,7 @@ class ThunderData:
             }
             res = self.db.collection('match_results').add(payload)
             self._log_audit(admin_email, 'ADD_MATCH', f"Manually authored match: {p1} vs {p2} ({s1}-{s2}).", {"result_id": res[1].id})
-            self.refresh_data()
+            self.refresh_data() 
             return True
         except Exception as e: 
             return False
@@ -712,6 +711,33 @@ class ThunderData:
             return True
         except: 
             return False
+
+    def get_recent_rating_context(self, player_id):
+        player_name = self.id_to_name.get(player_id)
+        if not player_name: return []
+        
+        player_matches = [m for m in self.match_history_log if m['p1'] == player_name or m['p2'] == player_name]
+        
+        def safe_date(m):
+            try: 
+                return datetime.datetime.strptime(m['date'], "%d/%m/%Y")
+            except: 
+                return datetime.datetime(1900, 1, 1)
+                
+        player_matches.sort(key=safe_date, reverse=True)
+        
+        context = []
+        for m in player_matches[:6]: 
+            if m['p1'] == player_name:
+                rating = m['p1_after']
+            else:
+                rating = m['p2_after']
+            context.append({
+                'date': m['date'],
+                'opponent': m['p2'] if m['p1'] == player_name else m['p1'],
+                'rating': round(rating)
+            })
+        return context
 
     def refresh_data(self):
         logger.info("⚡️ Fetching and Processing Data...")
@@ -1013,12 +1039,6 @@ class ThunderData:
                     self.weekly_matches[m['season']][wk] = []
                 self.weekly_matches[m['season']][wk].append({'p1': m['p1'], 'p2': m['p2'], 'score': f"{m['s1']}-{m['s2']}", 'division': m['div'], 'date': d_str})
         
-        for p, over in overrides_dict.items():
-            if p not in player_overrides_applied and p in self.rating_engine.players: 
-                self.rating_engine.players[p]['rating'] = over['rating']
-                self.rating_engine.players[p]['rd'] = over['rd']
-                self.rating_engine.players[p]['vol'] = over['vol']
-
         logger.info(f"👤 Total Unique Players Loaded: {len(player_set)}")
         self._update_master_roster()
         self._sync_to_firebase()
@@ -1392,365 +1412,107 @@ class ThunderData:
             return {"success": True, "count": total_count}
         except Exception as e: 
             return {"success": False, "error": str(e)}
-            
-    def admin_force_finish_live(self, schedule_id, s1, s2, admin_email="Unknown"):
-        if not self.db: return False
-        try:
-            doc_ref = self.db.collection('fixture_schedule').document(schedule_id)
-            doc_snap = doc_ref.get()
-            if not doc_snap.exists: return False
-            data = doc_snap.to_dict()
-            res = self.db.collection('match_results').add({
-                'home_players': data.get('home_players', []), 'away_players': data.get('away_players', []),
-                'home_team': data.get('home_team', ''), 'away_team': data.get('away_team', ''),
-                'division': data.get('division', 'Unknown'), 'season': data.get('season', 'Unknown'),
-                'date': data.get('date', datetime.datetime.now().strftime("%d/%m/%Y")), 'week': data.get('week', 'Unknown'),
-                'live_home_sets': int(s1), 'live_away_sets': int(s2), 'game_scores_history': data.get('game_scores_history', ''),
-                'richStats': data.get('richStats', {}), 'timestamp': firestore.SERVER_TIMESTAMP, 'status': 'approved'
-            })
-            doc_ref.update({'match_status': 'Scheduled', 'live_home_score': 0, 'live_away_score': 0, 'live_home_sets': 0, 'live_away_sets': 0, 'current_server': '', 'game_scores_history': '', 'momentum': '', 'richStats': None, 'serve_stats': None})
-            self._log_audit(admin_email, 'FORCE_FINISH_LIVE', f"Force submitted live match {schedule_id} to history.", {"result_id": res[1].id, "schedule_id": schedule_id, "fixture_data": data})
-            self.refresh_data()
-            return True
-        except: 
-            return False
-
-    def admin_wipe_live(self, schedule_id, admin_email="Unknown"):
-        if not self.db: return False
-        try:
-            doc_ref = self.db.collection('fixture_schedule').document(schedule_id)
-            data = doc_ref.get().to_dict()
-            doc_ref.update({'match_status': 'Scheduled', 'live_home_score': 0, 'live_away_score': 0, 'live_home_sets': 0, 'live_away_sets': 0, 'current_server': '', 'game_scores_history': '', 'momentum': '', 'richStats': None, 'serve_stats': None})
-            self._log_audit(admin_email, 'WIPE_LIVE', f"Wiped ghost match data for {schedule_id}.", {"schedule_id": schedule_id, "fixture_data": data})
-            return True
-        except: 
-            return False
-
-    def record_donation(self, intent_id, name, amount):
-        if not self.db: return False
-        try:
-            doc_ref = self.db.collection('donations').document(intent_id)
-            if doc_ref.get().exists: return True 
-            doc_ref.set({'name': name if name and name.strip() else 'Anonymous', 'amount': float(amount), 'timestamp': firestore.SERVER_TIMESTAMP, 'month': datetime.datetime.now().strftime("%Y-%m")})
-            return True
-        except: 
-            return False
-
-    def get_top_donors(self, limit=5):
-        if not self.db: return []
-        try:
-            docs = self.db.collection('donations').stream()
-            grouped_donors = {}
-            donors = []
-            for d in docs:
-                data = d.to_dict()
-                n = data.get('name', 'Anonymous').strip()
-                if not n: n = 'Anonymous'
-                amt = float(data.get('amount', 0))
-                if n.lower() == 'anonymous': 
-                    donors.append({'name': 'Anonymous', 'amount': amt})
-                else: 
-                    grouped_donors[n] = grouped_donors.get(n, 0) + amt
-                    
-            for k, v in grouped_donors.items(): 
-                donors.append({'name': k, 'amount': v})
-                
-            donors.sort(key=lambda x: x['amount'], reverse=True)
-            return donors[:limit]
-        except: 
-            return []
-
-    def admin_get_all_donations(self):
-        if not self.db: return []
-        try:
-            docs = self.db.collection('donations').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
-            res = []
-            aest_tz = datetime.timezone(datetime.timedelta(hours=10))
-            for d in docs:
-                data = d.to_dict()
-                data['id'] = d.id
-                ts = data.get('timestamp')
-                data['time_str'] = ts.astimezone(aest_tz).strftime('%d/%m/%Y %I:%M %p') if ts else 'Unknown'
-                res.append(data)
-            return res
-        except: 
-            return []
-
-    def get_notices(self):
-        if not self.db: return []
-        try:
-            docs = self.db.collection('notices').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
-            res = []
-            aest_tz = datetime.timezone(datetime.timedelta(hours=10))
-            for d in docs:
-                data = d.to_dict()
-                data['id'] = d.id
-                ts = data.get('timestamp')
-                data['date_str'] = ts.astimezone(aest_tz).strftime('%d/%m/%Y %I:%M %p') if ts else 'Recent'
-                data['timestamp'] = str(ts)
-                res.append(data)
-            return res
-        except: 
-            return []
-
-    def admin_add_notice(self, title, message, notice_type, admin_email="Unknown"):
-        if not self.db: return False
-        try:
-            self.db.collection('notices').add({'title': title, 'message': message, 'type': notice_type, 'timestamp': firestore.SERVER_TIMESTAMP, 'author': admin_email})
-            self._log_audit(admin_email, 'ADD_NOTICE', f"Posted notice: {title}", {})
-            return True
-        except: 
-            return False
-
-    def admin_delete_notice(self, notice_id, admin_email="Unknown"):
-        if not self.db: return False
-        try: 
-            self.db.collection('notices').document(notice_id).delete()
-            self._log_audit(admin_email, 'DELETE_NOTICE', f"Deleted notice ID: {notice_id}", {})
-            return True
-        except: 
-            return False
-
-    def admin_set_fixture_format(self, fixture_id, format_type, admin_email="Unknown"):
-        if not self.db: return False
-        try:
-            self.db.collection('fixture_schedule').document(fixture_id).update({'format_override': format_type if format_type in ['2v2', '3v3'] else None})
-            self._log_audit(admin_email, 'SET_FORMAT', f"Changed format override for fixture {fixture_id} to {format_type}", {})
-            return True
-        except: 
-            return False
-
-    def get_admin_messages(self):
-        if not self.db: return []
-        try:
-            docs = self.db.collection('admin_messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(50).stream()
-            res = []
-            aest_tz = datetime.timezone(datetime.timedelta(hours=10))
-            for d in docs:
-                data = d.to_dict()
-                data['id'] = d.id
-                ts = data.get('timestamp')
-                data['time_str'] = ts.astimezone(aest_tz).strftime('%d/%m/%Y %I:%M %p') if ts else 'Just now'
-                data['timestamp'] = str(ts)
-                res.append(data)
-            return res
-        except: 
-            return []
-
-    def add_admin_message(self, message, admin_email):
-        if not self.db: return False
-        try: 
-            self.db.collection('admin_messages').add({'message': message, 'author': admin_email, 'timestamp': firestore.SERVER_TIMESTAMP})
-            return True
-        except: 
-            return False
-
-    def get_contact_lists(self):
-        if not self.sheet_results: return {"emails": "", "phones": "", "preview": [], "error": "No sheet connection"}
-        try:
-            ws = self.sheet_results.worksheet("Member info")
-            raw_data = ws.get_all_values()
-            if not raw_data or len(raw_data) < 2: 
-                return {"emails": "", "phones": "", "preview": [], "error": "Sheet appears to be empty."}
-                
-            headers = [str(h).lower().strip() for h in raw_data[0]]
-            has_send_col = any('send' in h for h in headers)
-            emails = []
-            phones = []
-            preview = []
-            
-            for row in raw_data[1:]:
-                if not any(str(cell).strip() for cell in row): continue
-                email_val = ""
-                phone_val = ""
-                name_val = "Unknown Player"
-                allow_sms = not has_send_col 
-                
-                for idx, cell_val in enumerate(row):
-                    if idx >= len(headers): break
-                    col_name = headers[idx]
-                    val_str = str(cell_val).strip()
-                    if col_name in ['name', 'player', 'player name', 'full name', 'first name'] and name_val == "Unknown Player": name_val = val_str
-                    if 'email' in col_name and not email_val: email_val = val_str
-                    if ('phone' in col_name or 'mobile' in col_name or 'number' in col_name) and not phone_val: phone_val = val_str
-                    if 'send' in col_name: allow_sms = val_str.lower() in ['yes', 'y', 'true']
-                            
-                if email_val and '@' in email_val: emails.append(email_val)
-                if phone_val and allow_sms:
-                    clean_phone = re.sub(r'[^\d\+\s]', '', phone_val)
-                    if len(clean_phone) >= 8: 
-                        phones.append(clean_phone)
-                        main_div = "Unknown Div"
-                        clean_name_key = self._clean_name(name_val)
-                        if clean_name_key in self.all_players:
-                            div_counts = {}
-                            for h in self.all_players[clean_name_key].get('combined', {}).get('history', []): 
-                                div_counts[h['division']] = div_counts.get(h['division'], 0) + 1
-                            if div_counts: 
-                                main_div = max(div_counts, key=div_counts.get)
-                        preview.append({"name": name_val, "phone": clean_phone, "division": main_div})
-                        
-            return {"emails": ", ".join(list(set(emails))), "phones": ", ".join(list(set(phones))), "preview": preview}
-        except Exception as e: 
-            return {"emails": "", "phones": "", "preview": [], "error": str(e)}
-
-    def admin_send_sms_broadcast(self, message_body, target_phones=None, admin_email="Unknown"):
-        contacts = self.get_contact_lists()
-        raw_phones = contacts.get("phones", "")
-        if not raw_phones: return {"success": False, "error": "No valid opted-in phone numbers found in the Google Sheet."}
-        
-        allowed_phone_list = [p.strip() for p in raw_phones.split(",") if p.strip()]
-        if target_phones is not None: 
-            phone_list = [p for p in target_phones if p in allowed_phone_list]
-        else: 
-            phone_list = allowed_phone_list
-            
-        if not phone_list: return {"success": False, "error": "No valid opted-in phone numbers matched your selection."}
-            
-        username = "jakobwill7@gmail.com"
-        api_key = "76F26417-8DEB-E47E-8056-B86E519B4445"
-        clean_body = re.sub(r'[^\x20-\x7E\n\r]+', '', message_body)
-        final_message = f"GCTTA Update: {clean_body}\n\nView stats: gctta-stats.com.au\nReply STOP to opt out"
-        
-        messages = [{"source": "gctta_admin", "from": "GCTTA-STATS", "body": final_message, "to": phone} for phone in phone_list]
-        payload = json.dumps({"messages": messages}).encode('utf-8')
-        
-        try:
-            auth_str = f"{username}:{api_key}"
-            auth_bytes = base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')
-            req = urllib.request.Request("https://rest.clicksend.com/v3/sms/send", data=payload)
-            req.add_header("Content-Type", "application/json")
-            req.add_header("Authorization", f"Basic {auth_bytes}")
-            response = urllib.request.urlopen(req)
-            res_data = json.loads(response.read().decode('utf-8'))
-            
-            if res_data.get('http_code') == 200:
-                self._log_audit(admin_email, 'SMS_BROADCAST', f"Sent Mass SMS to {len(phone_list)} selected members via API.", {})
-                return {"success": True, "message": f"Successfully sent SMS to {len(phone_list)} selected members!"}
-            else: 
-                return {"success": False, "error": f"ClickSend API Error: {res_data}"}
-        except Exception as e: 
-            return {"success": False, "error": str(e)}
-
-    def get_sms_inbox(self):
-        if not self.db: return []
-        try:
-            docs = self.db.collection('sms_replies').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(50).stream()
-            res = []
-            aest_tz = datetime.timezone(datetime.timedelta(hours=10))
-            for d in docs:
-                data = d.to_dict()
-                data['id'] = d.id
-                ts = data.get('timestamp')
-                data['time_str'] = ts.astimezone(aest_tz).strftime('%d/%m/%Y %I:%M %p') if ts else 'Just now'
-                res.append(data)
-            return res
-        except: 
-            return []
-            
-    def admin_glicko_math(self, p1, p2, s1, s2):
-        r1 = self.rating_engine.get_rating(p1)
-        r2 = self.rating_engine.get_rating(p2)
-        dummy_1 = {'rating': r1['rating'], 'rd': r1['rd'], 'vol': 0}
-        dummy_2 = {'rating': r2['rating'], 'rd': r2['rd'], 'vol': 0}
-        E_1 = 1.0 / (1.0 + 10.0 ** ((dummy_2['rating'] - dummy_1['rating']) / 400.0))
-        E_2 = 1.0 - E_1
-        
-        if int(s1) > int(s2):
-            res = calculate_match(dummy_1, dummy_2, int(s1), int(s2), self.k_win, self.k_loss, not self.chaos_config['active'])
-            new_r1 = res['winner']['rating']
-            new_r2 = res['loser']['rating']
-        elif int(s2) > int(s1):
-            res = calculate_match(dummy_2, dummy_1, int(s2), int(s1), self.k_win, self.k_loss, not self.chaos_config['active'])
-            new_r2 = res['winner']['rating']
-            new_r1 = res['loser']['rating']
-        else: 
-            new_r1 = r1['rating']
-            new_r2 = r2['rating']
-            
-        return {
-            'p1': {'name': p1, 'old_rating': round(r1['rating'], 1), 'old_rd': round(r1['rd'], 1), 'expected_win_pct': round(E_1 * 100, 1), 'new_rating': round(new_r1, 1), 'delta': round(new_r1 - r1['rating'], 1)},
-            'p2': {'name': p2, 'old_rating': round(r2['rating'], 1), 'old_rd': round(r2['rd'], 1), 'expected_win_pct': round(E_2 * 100, 1), 'new_rating': round(new_r2, 1), 'delta': round(new_r2 - r2['rating'], 1)}
-        }
-
-    def get_head_to_head(self, p1, p2):
-        p1 = self._clean_name(p1)
-        p2 = self._clean_name(p2)
-        r1 = self.rating_engine.get_rating(p1)
-        r2 = self.rating_engine.get_rating(p2)
-        E_1 = 1.0 / (1.0 + 10.0 ** ((r2['rating'] - r1['rating']) / 400.0))
-        E_2 = 1.0 - E_1
-        
-        matches = []
-        if p1 in self.all_players:
-            hist = self.all_players[p1].get('combined', {}).get('history', [])
-            for m in hist:
-                if m.get('opponent', '').lower() == p2.lower(): matches.append(m)
-                    
-        def safe_date(date_str):
-            try: 
-                return datetime.datetime.strptime(date_str, "%d/%m/%Y")
-            except: 
-                return datetime.datetime(1900, 1, 1)
-            
-        matches.sort(key=lambda x: safe_date(x.get('date', '1900-01-01')), reverse=True)
-        p1_wins = sum(1 for m in matches if m.get('result') == 'Win')
-        p2_wins = len(matches) - p1_wins
-        recent_matches = matches[:5]
-        p1_recent = sum(1 for m in recent_matches if m.get('result') == 'Win')
-        p2_recent = len(recent_matches) - p1_recent
-        
-        return {
-            'p1': {'name': p1, 'rating': round(r1['rating']), 'wins': p1_wins, 'recent_wins': p1_recent, 'win_pct': round(E_1 * 100, 1)},
-            'p2': {'name': p2, 'rating': round(r2['rating']), 'wins': p2_wins, 'recent_wins': p2_recent, 'win_pct': round(E_2 * 100, 1)},
-            'total_matches': len(matches), 'history': matches
-        }
 
     # ==========================================
-    # PDF SCHEDULE PARSER
+    # PDF SCHEDULE PARSER (REWRITTEN FOR PLAYER NAMES)
     # ==========================================
     def admin_upload_pdf_schedule(self, division, file_stream, admin_email="Unknown"):
         if not self.db: return {"success": False, "error": "DB Offline"}
         try:
             import pdfplumber
+            import re
             matches_found = []
+            teams = {}
+            
             with pdfplumber.open(file_stream) as pdf:
                 for page in pdf.pages:
-                    text = page.extract_text()
-                    if not text: continue
-                    lines = text.split('\n')
-                    
-                    current_date = None
-                    for line in lines:
-                        if "Monday" in line or "Tuesday" in line or "Wednesday" in line or "Thursday" in line:
-                            current_date = line.strip()
+                    tables = page.extract_tables()
+                    for table in tables:
+                        if not table or len(table) < 2: continue
                         
-                        if " v " in line.lower() or " vs " in line.lower():
-                            parts = re.split(r'\s+v\s+|\s+vs\s+', line, flags=re.IGNORECASE)
-                            if len(parts) == 2 and current_date:
-                                home_team = parts[0].strip()
-                                away_team = parts[1].split(' Table ')[0].strip()
-                                matches_found.append({
-                                    'division': division,
-                                    'date_text': current_date,
-                                    'home_team': home_team,
-                                    'away_team': away_team
-                                })
+                        headers = [str(x).lower().replace('\n', ' ') for x in table[0] if x]
+                        
+                        # 1. Extract Teams & Players
+                        if any("team name" in h for h in headers) or any("player" in h for h in headers):
+                            for row in table[1:]:
+                                if not row or not row[0]: continue
+                                
+                                nums = str(row[0]).split('\n')
+                                names = str(row[1]).split('\n') if len(row) > 1 else []
+                                p1_block = str(row[2]).split('\n') if len(row) > 2 else []
+                                p2_block = str(row[3]).split('\n') if len(row) > 3 else []
+                                p3_block = str(row[4]).split('\n') if len(row) > 4 else []
+                                
+                                def clean_p(block, idx):
+                                    text_lines = [line.strip() for line in block if re.search(r'[A-Za-z]', line)]
+                                    if idx < len(text_lines):
+                                        name = text_lines[idx]
+                                        name = re.sub(r'\s+C$', '', name).strip()
+                                        name = re.sub(r'[^A-Za-z\s-]', '', name).strip()
+                                        return name
+                                    return ""
+
+                                for i in range(len(nums)):
+                                    num = nums[i].strip()
+                                    if not num.isdigit(): continue
+                                    
+                                    t_name = names[i].strip() if i < len(names) else f"Team {num}"
+                                    t_name = re.sub(r'[^A-Za-z0-9\s]', '', t_name).strip()
+                                    
+                                    players = [clean_p(p1_block, i), clean_p(p2_block, i), clean_p(p3_block, i)]
+                                    players = [p.title() for p in players if len(p) > 2]
+                                    teams[num] = {"name": t_name, "players": players}
+                                    
+                        # 2. Extract Matchups & Link to Teams
+                        if any("date" in h for h in headers) or any("match" in h for h in headers):
+                            for row in table[1:]:
+                                if not row: continue
+                                
+                                date_val_1 = str(row[0]).replace('\n', ' ').strip()
+                                if date_val_1 and len(date_val_1) >= 4 and not date_val_1.isdigit():
+                                    for cell in row[1:5]: 
+                                        if not cell: continue
+                                        cell_str = str(cell).replace('\n', ' ')
+                                        match = re.search(r'(\d+)\s*vs\s*(\d+)', cell_str, re.IGNORECASE)
+                                        if match:
+                                            matches_found.append({'date_text': date_val_1, 't1': match.group(1), 't2': match.group(2)})
+                                            
+                                if len(row) > 6:
+                                    date_val_2 = str(row[6]).replace('\n', ' ').strip() 
+                                    if date_val_2 and len(date_val_2) >= 4 and not date_val_2.isdigit():
+                                        for cell in row[7:]:
+                                            if not cell: continue
+                                            cell_str = str(cell).replace('\n', ' ')
+                                            match = re.search(r'(\d+)\s*vs\s*(\d+)', cell_str, re.IGNORECASE)
+                                            if match:
+                                                matches_found.append({'date_text': date_val_2, 't1': match.group(1), 't2': match.group(2)})
+
+            if not matches_found:
+                return {"success": False, "error": "No schedule detected in the PDF."}
 
             batch = self.db.batch()
             for m in matches_found:
+                home = teams.get(m['t1'], {"name": f"Team {m['t1']}", "players": []})
+                away = teams.get(m['t2'], {"name": f"Team {m['t2']}", "players": []})
+                
                 doc_ref = self.db.collection('upcoming_schedule').document()
-                batch.set(doc_ref, m)
+                batch.set(doc_ref, {
+                    'division': division,
+                    'date_text': m['date_text'],
+                    'home_team': home['name'],
+                    'away_team': away['name'],
+                    'home_players': home['players'],
+                    'away_players': away['players']
+                })
             batch.commit()
             
-            self._log_audit(admin_email, 'UPLOAD_SCHEDULE', f"Parsed PDF for {division} and found {len(matches_found)} matchups.", {})
-            return {"success": True, "matches_found": len(matches_found)}
+            self._log_audit(admin_email, 'UPLOAD_SCHEDULE', f"Parsed PDF for {division}. Extracted {len(teams)} teams and {len(matches_found)} matchups.", {})
+            return {"success": True, "matches_found": len(matches_found), "teams_found": len(teams)}
+            
         except Exception as e: 
+            logger.error(f"PDF Parse Error: {str(e)}")
             return {"success": False, "error": f"Failed to read PDF: {str(e)}"}
 
-    # ==========================================
-    # TOURNAMENT ENGINE (STEALTH MODE)
-    # ==========================================
     def create_tournament_event(self, name, date, price, limits):
         if not self.db: return False
         try:
@@ -1784,9 +1546,6 @@ class ThunderData:
         except: 
             return None
 
-    # ==========================================
-    # PLAYER ACCOUNTS & COMMUNITY
-    # ==========================================
     def register_player_account(self, name, dob, email, uid, estimated_rating):
         if not self.db: return False
         try:
@@ -1834,6 +1593,36 @@ class ThunderData:
         except: 
             return False
 
+    def add_community_comment(self, post_id, author_name, content):
+        if not self.db: return False
+        try:
+            doc_ref = self.db.collection('community_posts').document(post_id)
+            new_comment = {
+                'author': author_name, 
+                'content': content, 
+                'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat()
+            }
+            doc_ref.update({'comments': firestore.ArrayUnion([new_comment])})
+            return True
+        except: 
+            return False
+
+    def toggle_post_upvote(self, post_id, uid):
+        if not self.db: return False
+        try:
+            doc_ref = self.db.collection('community_posts').document(post_id)
+            doc = doc_ref.get()
+            if not doc.exists: return False
+            upvotes = doc.to_dict().get('upvotes', [])
+            if uid in upvotes:
+                upvotes.remove(uid)
+            else:
+                upvotes.append(uid)
+            doc_ref.update({'upvotes': upvotes})
+            return True
+        except: 
+            return False
+
     def get_community_feed(self):
         if not self.db: return []
         try:
@@ -1851,21 +1640,28 @@ class ThunderData:
         except: 
             return []
 
+    # REWRITTEN TO READ FROM THE NEW PDF PARSER
     def get_player_upcoming_schedule(self, player_name):
         if not self.db: return []
         try:
-            teams = []
-            for team_name, players in self.admin_get_teams().items():
-                if player_name in players: 
-                    teams.append(team_name)
-            if not teams: return []
-            
+            player_clean = self._clean_name(player_name).lower()
             docs = self.db.collection('upcoming_schedule').stream()
             matches = []
+            
             for d in docs:
                 m = d.to_dict()
-                if m.get('home_team') in teams or m.get('away_team') in teams: 
+                home_p = [self._clean_name(p).lower() for p in m.get('home_players', [])]
+                away_p = [self._clean_name(p).lower() for p in m.get('away_players', [])]
+                
+                is_playing = False
+                for hp in home_p:
+                    if player_clean in hp or hp in player_clean: is_playing = True
+                for ap in away_p:
+                    if player_clean in ap or ap in player_clean: is_playing = True
+                    
+                if is_playing:
                     matches.append(m)
+                    
             return matches
         except: 
             return []

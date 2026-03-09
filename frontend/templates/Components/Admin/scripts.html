@@ -1,9 +1,6 @@
 <script>
     console.log("✅ Admin UI Script Loaded");
 
-    // ==========================================
-    // UI NAVIGATION
-    // ==========================================
     window.setAdminCategory = function(catId) {
         ['ops', 'players', 'comms', 'system'].forEach(c => {
             const btn = document.getElementById(`cat-${c}`);
@@ -50,14 +47,12 @@
         const targetBtn = document.getElementById(`tab-btn-${tabId}`);
         if (targetBtn) targetBtn.className = `px-4 py-2 text-xs font-bold text-white bg-white/10 rounded-lg cursor-pointer whitespace-nowrap transition-colors`;
 
-        // Trigger data loads based on the active tab
         if (tabId === 'inbox-feedback') window.loadPendingReports();
         if (tabId === 'date-errors') window.loadDateErrors();
         if (tabId === 'notices') window.loadAdminNotices();
         if (tabId === 'chat') window.loadAdminChat();
         if (tabId === 'donations') window.loadDonations();
         if (tabId === 'sms-inbox') window.loadSmsInbox();
-        
         if (tabId === 'history') {
             const histDivFilter = document.getElementById('hist-div-filter');
             if (histDivFilter && histDivFilter.options.length <= 1) {
@@ -68,13 +63,10 @@
                     }).catch(e => console.error(e));
             }
         }
-        
         if (['players', 'diagnostics', 'manual'].includes(tabId) && playerDirectoryData.length === 0) {
             window.loadPlayerDirectory();
         }
-        
         if (tabId === 'players') window.loadChaosConfig();
-        
         if (tabId === 'diagnostics') {
             fetch('/api/admin/get_rating_scales')
                 .then(r => r.json())
@@ -83,7 +75,6 @@
                     document.getElementById('math-k-loss').value = d.k_loss;
                 }).catch(e => console.error(e));
         }
-        
         if (tabId === 'audit') { 
             window.loadAuditLogs(); 
             window.loadAdminUsers(); 
@@ -105,8 +96,7 @@
             const res = await fetch('/api/refresh', { method: 'POST' });
             const data = await res.json();
             if(data.success || data.status === "Refreshed") { 
-                alert("✅ Data successfully synced!"); 
-                window.location.reload(); 
+                alert("✅ Sync triggered! Changes will appear momentarily."); 
             } else { 
                 alert("❌ Sync failed."); 
             }
@@ -117,9 +107,6 @@
         }
     };
 
-    // ==========================================
-    // PLAYER SEARCH & UTILITIES
-    // ==========================================
     let playerDirectoryData = [];
     window.loadPlayerDirectory = async function() { 
         try { 
@@ -150,9 +137,12 @@
             
             sugg.innerHTML = matches.slice(0, 8).map(p => `
                 <div class="px-4 py-2 hover:bg-blue-600/30 cursor-pointer text-sm text-white font-bold border-b border-white/5" 
-                     onclick="document.getElementById('${inputId}').value = '${p.name.replace(/'/g, "\\'")}'; 
+                     onclick="
+                     document.getElementById('${inputId}').value = '${p.name.replace(/'/g, "\\'")}'; 
                      ${hiddenId ? `document.getElementById('${hiddenId}').value = '${p.id}';` : ''} 
-                     document.getElementById('${suggId}').classList.add('hidden');">
+                     document.getElementById('${suggId}').classList.add('hidden');
+                     ${hiddenId === 'override-id' ? `window.fetchRatingContext('${p.id}');` : ''}
+                     ">
                     ${p.name} <span class="text-[10px] text-slate-500 font-mono ml-2">${p.id}</span>
                 </div>
             `).join('');
@@ -176,9 +166,6 @@
         attachPlayerSearch('manual-p2', 'sugg-p2');
     });
 
-    // ==========================================
-    // OPS: MATCH CREATOR & HISTORY
-    // ==========================================
     window.submitManualMatch = async function() {
         const p1 = document.getElementById('manual-p1').value; 
         const p2 = document.getElementById('manual-p2').value;
@@ -196,7 +183,7 @@
             });
             const data = await res.json();
             if(data.success) { 
-                alert(`✅ Match injected successfully!`); 
+                alert(`✅ Match injected successfully! The database is auto-syncing in the background.`); 
                 document.getElementById('manual-p1').value = ''; 
                 document.getElementById('manual-p2').value = ''; 
                 document.getElementById('manual-scores').value = ''; 
@@ -575,8 +562,34 @@
     };
 
     // ==========================================
-    // PLAYER EDITOR & MERGING
+    // PLAYER EDITOR & CONTEXT
     // ==========================================
+    window.fetchRatingContext = async function(playerId) {
+        const contextDiv = document.getElementById('override-context');
+        if(!contextDiv) return;
+        
+        contextDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading recent rating context...';
+        
+        try {
+            const res = await fetch(`/api/admin/rating_context/${playerId}`);
+            const data = await res.json();
+            
+            if(data.length === 0) {
+                contextDiv.innerHTML = '<div class="italic">No recent match history found for this player.</div>';
+                return;
+            }
+            
+            let html = '<div class="font-bold text-white mb-2 pb-1 border-b border-white/10"><i class="fa-solid fa-clock-rotate-left mr-2"></i>Last 6 Match Ratings:</div>';
+            data.forEach(m => {
+                html += `<div class="flex justify-between items-center py-1 border-b border-white/5 last:border-0"><span class="text-[10px] uppercase font-bold tracking-widest">${m.date} vs ${m.opponent}</span> <span class="text-emerald-400 font-mono font-bold">${m.rating}</span></div>`;
+            });
+            
+            contextDiv.innerHTML = `<div class="bg-black/30 p-3 rounded border border-white/5 shadow-inner">${html}</div>`;
+        } catch(e) {
+            contextDiv.innerHTML = '';
+        }
+    };
+
     window.submitRatingOverride = async function() {
         const id = document.getElementById('override-id').value; 
         const rating = document.getElementById('override-score').value; 
@@ -596,6 +609,7 @@
                 document.getElementById('override-id').value = ''; 
                 document.getElementById('override-search').value = ''; 
                 document.getElementById('override-score').value = ''; 
+                if(document.getElementById('override-context')) document.getElementById('override-context').innerHTML = '';
             } else {
                 alert("❌ Error applying rating override.");
             }
