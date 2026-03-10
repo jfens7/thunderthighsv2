@@ -81,6 +81,7 @@
                 <button id="nav-sheets" onclick="window.switchTab('sheets')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Match Centre</button>
                 <button id="nav-search" onclick="window.switchTab('search')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Player Search</button>
                 <button id="nav-notices" onclick="window.switchTab('notices')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Notices</button>
+                <button id="nav-community" onclick="window.switchTab('community')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Community</button>
             </div>
 
             <div class="flex items-center gap-3 shrink-0">
@@ -104,6 +105,7 @@
         {% include 'Components/results.html' %}
         {% include 'Components/search.html' %}
         {% include 'Components/notices.html' %}
+        {% include 'Components/community.html' %}
         {% include 'Components/profile.html' %}
     </main>
 
@@ -120,34 +122,34 @@
     </footer>
 
     <div class="lg:hidden fixed bottom-0 left-0 right-0 z-50 px-2 pb-2">
-        <div class="glass-panel rounded-2xl flex justify-around items-center p-2 border border-white/10 shadow-2xl bg-slate-900/95">
-            <button id="b-nav-home" onclick="window.switchTab('home')" class="nav-item active flex flex-col items-center gap-1 p-2 flex-1 transition-all duration-300 text-slate-400">
-                <i class="fa-solid fa-house text-xl"></i>
-                <span class="text-[10px] font-medium">Home</span>
+        <div class="glass-panel rounded-2xl flex justify-around items-center p-1 border border-white/10 shadow-2xl bg-slate-900/95">
+            <button id="b-nav-home" onclick="window.switchTab('home')" class="nav-item active flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 text-slate-400">
+                <i class="fa-solid fa-house text-lg"></i>
+                <span class="text-[9px] font-medium tracking-tight">Home</span>
             </button>
-            <button id="b-nav-week" onclick="window.switchTab('week')" class="nav-item flex flex-col items-center gap-1 p-2 flex-1 transition-all duration-300 text-slate-400">
-                <i class="fa-solid fa-trophy text-xl"></i>
-                <span class="text-[10px] font-medium">Ranks</span>
+            <button id="b-nav-week" onclick="window.switchTab('week')" class="nav-item flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 text-slate-400">
+                <i class="fa-solid fa-trophy text-lg"></i>
+                <span class="text-[9px] font-medium tracking-tight">Ranks</span>
             </button>
-            <button id="b-nav-live-center" onclick="window.switchTab('live-center')" class="nav-item flex flex-col items-center gap-1 p-2 flex-1 transition-all duration-300 relative text-slate-400 hidden">
+            <button id="b-nav-live-center" onclick="window.switchTab('live-center')" class="nav-item flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 relative text-slate-400 hidden">
                 <div class="absolute -top-1 -right-1 flex h-3 w-3">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
                 </div>
-                <i class="fa-solid fa-satellite-dish text-xl"></i>
-                <span class="text-[10px] font-medium">Live</span>
+                <i class="fa-solid fa-satellite-dish text-lg"></i>
+                <span class="text-[9px] font-medium tracking-tight">Live</span>
             </button>
-            <button id="b-nav-sheets" onclick="window.switchTab('sheets')" class="nav-item flex flex-col items-center gap-1 p-2 flex-1 transition-all duration-300 text-slate-400">
-                <i class="fa-solid fa-calendar-week text-xl"></i>
-                <span class="text-[10px] font-medium">Matches</span>
+            <button id="b-nav-sheets" onclick="window.switchTab('sheets')" class="nav-item flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 text-slate-400">
+                <i class="fa-solid fa-calendar-week text-lg"></i>
+                <span class="text-[9px] font-medium tracking-tight">Matches</span>
             </button>
-            <button id="b-nav-search" onclick="window.switchTab('search')" class="nav-item flex flex-col items-center gap-1 p-2 flex-1 transition-all duration-300 text-slate-400">
-                <i class="fa-solid fa-magnifying-glass text-xl"></i>
-                <span class="text-[10px] font-medium">Search</span>
+            <button id="b-nav-search" onclick="window.switchTab('search')" class="nav-item flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 text-slate-400">
+                <i class="fa-solid fa-magnifying-glass text-lg"></i>
+                <span class="text-[9px] font-medium tracking-tight">Search</span>
             </button>
-            <button id="b-nav-notices" onclick="window.switchTab('notices')" class="nav-item flex flex-col items-center gap-1 p-2 flex-1 transition-all duration-300 text-slate-400">
-                <i class="fa-solid fa-clipboard-list text-xl"></i>
-                <span class="text-[10px] font-medium">Notices</span>
+            <button id="b-nav-community" onclick="window.switchTab('community')" class="nav-item flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 text-slate-400">
+                <i class="fa-solid fa-earth-oceania text-lg"></i>
+                <span class="text-[9px] font-medium tracking-tight">Forum</span>
             </button>
         </div>
     </div>
@@ -186,8 +188,8 @@
         window.switchTab = function(tabId, pushHistory = true) {
             if(pushHistory) { history.pushState({ page: 'fixtures', tab: tabId }, "", "#" + tabId); }
             
-            // ADDED 'notices' TO THE ARRAY SO IT PROPERLY SWITCHES
-            ['home', 'week', 'sheets', 'search', 'notices', 'live-center', 'rules'].forEach(t => { 
+            // MAP ALL TABS SO THEY PROPERLY HIDE AND SHOW
+            ['home', 'week', 'sheets', 'search', 'notices', 'community', 'live-center', 'rules'].forEach(t => { 
                 const el = document.getElementById(`tab-${t}`); 
                 if(el) el.classList.add('hidden'); 
                 const nav = document.getElementById(`nav-${t}`); 
@@ -213,9 +215,88 @@
                     const searchInput = document.getElementById('bigPlayerSearch');
                     if(searchInput) setTimeout(() => searchInput.focus(), 100);
                 }
+                
+                // AUTO-INITIALIZE COMMUNITY FORUM WHEN CLICKED
+                if(tabId === 'community' && typeof window.initCommunity === 'function') {
+                    window.initCommunity();
+                }
             } 
             window.scrollTo({ top: 0, behavior: 'smooth' }); 
         };
+
+        // FAIL-SAFE: Stop the infinite loading loop if the database is genuinely empty.
+        let loadAttempts = 0;
+        const originalLoadInitialData = async () => {
+            try {
+                const pRes = await fetch('/api/players'); 
+                window.allPlayersRaw = await pRes.json(); 
+                
+                if (window.allPlayersRaw.length === 0 && loadAttempts < 10) { 
+                    console.log("Waiting for backend background sync to finish...");
+                    loadAttempts++;
+                    setTimeout(originalLoadInitialData, 3000); 
+                    return; 
+                }
+
+                setupMainSearch(); 
+                const [sRes, dRes] = await Promise.all([fetch('/api/seasons'), fetch('/api/divisions')]);
+                const seasons = await sRes.json(); const divisions = await dRes.json();
+                
+                const latestSeason = seasons.includes("Summer 2026") ? "Summer 2026" : (seasons[seasons.length - 1] || "Career");
+                currentSeason = latestSeason;
+
+                const sSelect = document.getElementById('seasonSelect'); if (sSelect) { sSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; sSelect.appendChild(opt); }); sSelect.value = latestSeason; }
+                const pDivSelect = document.getElementById('profileDivisionSelect'); if (pDivSelect) { pDivSelect.innerHTML = '<option value="All">All Divisions</option>'; divisions.forEach(d => { let opt = document.createElement('option'); opt.value = d; opt.innerText = d; pDivSelect.appendChild(opt); }); }
+                
+                document.getElementById('seasonSelect')?.addEventListener('change', () => loadStats(window.currentProfileName)); 
+                document.getElementById('profileDivisionSelect')?.addEventListener('change', () => loadStats(window.currentProfileName));
+                
+                const boardDivSelect = document.getElementById('boardDiv'); const boardSeasonSelect = document.getElementById('boardSeason');
+                if(boardDivSelect) { boardDivSelect.innerHTML = ''; divisions.forEach(d => { let opt = document.createElement('option'); opt.value = d; opt.innerText = d; boardDivSelect.appendChild(opt); }); }
+                if(boardSeasonSelect) { boardSeasonSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; boardSeasonSelect.appendChild(opt); }); boardSeasonSelect.value = latestSeason; }
+                
+                const resultSeasonSelect = document.getElementById('resultsSeason'); if(resultSeasonSelect) { resultSeasonSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; resultSeasonSelect.appendChild(opt); }); resultSeasonSelect.value = latestSeason; }
+                
+                loadDivisionLeaderboard(); loadResults(); loadTopDonors(); window.loadNotices();
+                
+                const initialHash = window.location.hash;
+                if (initialHash && initialHash !== '#fixtures') {
+                    const overlay = document.getElementById('landing-overlay');
+                    if(overlay) { overlay.style.display = 'none'; document.body.style.overflow = 'auto'; }
+                    
+                    if (initialHash.startsWith('#profile/')) {
+                        const pName = decodeURIComponent(initialHash.replace('#profile/', ''));
+                        loadStats(pName, false);
+                    } else {
+                        const tabId = initialHash.replace('#', '');
+                        if (['home', 'week', 'sheets', 'search', 'notices', 'community', 'live-center', 'rules'].includes(tabId)) {
+                            switchTab(tabId, false);
+                        } else {
+                            switchTab('home', false);
+                        }
+                    }
+                }
+            } catch(e) {
+                console.error("Initialization Error", e);
+            }
+        };
+
+        window.onload = async () => {
+            generateStars();
+            const clientSecret = new URLSearchParams(window.location.search).get('payment_intent_client_secret');
+            const paymentIntent = new URLSearchParams(window.location.search).get('payment_intent');
+            
+            if (clientSecret && paymentIntent) {
+                const dName = localStorage.getItem('pending_donation_name') || 'Anonymous'; const dAmt = localStorage.getItem('pending_donation_amount') || 0;
+                fetch('/api/record_donation', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({intent_id: paymentIntent, name: dName, amount: dAmt}) }).then(() => {
+                    localStorage.removeItem('pending_donation_name'); localStorage.removeItem('pending_donation_amount');
+                    alert(`Thank you ${dName} for your support! Payment successful. You are on the Honour Board!`);
+                    window.history.replaceState({}, document.title, window.location.pathname); enterFixturesMode();
+                });
+            }
+            
+            originalLoadInitialData();
+        }
     </script>
 </body>
 </html>

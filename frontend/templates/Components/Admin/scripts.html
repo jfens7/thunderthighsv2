@@ -1,42 +1,51 @@
 <script>
-    console.log("✅ Admin UI Script Loaded");
+    console.log("✅ Admin UI Script Loaded Successfully!");
 
+    // ==========================================
+    // UI NAVIGATION ENGINE
+    // ==========================================
     window.setAdminCategory = function(catId) {
-        ['ops', 'players', 'comms', 'system'].forEach(c => {
+        ['ops', 'players', 'setup', 'comms', 'system'].forEach(c => {
             const btn = document.getElementById(`cat-${c}`);
-            if(btn) { 
+            if (btn) { 
                 btn.classList.remove('border-blue-500', 'text-blue-400'); 
                 btn.classList.add('border-transparent', 'text-slate-500'); 
             }
             const sub = document.getElementById(`sub-${c}`);
-            if(sub) sub.classList.add('hidden');
+            if (sub) {
+                sub.classList.add('hidden');
+            }
         });
 
         const targetBtn = document.getElementById(`cat-${catId}`);
-        if(targetBtn) { 
+        if (targetBtn) { 
             targetBtn.classList.remove('border-transparent', 'text-slate-500'); 
             targetBtn.classList.add('border-blue-500', 'text-blue-400'); 
         }
         
         const targetSub = document.getElementById(`sub-${catId}`);
-        if(targetSub) targetSub.classList.remove('hidden');
+        if (targetSub) {
+            targetSub.classList.remove('hidden');
+        }
 
-        if(catId === 'ops') window.switchAdminTab('live');
-        if(catId === 'players') window.switchAdminTab('players');
-        if(catId === 'comms') window.switchAdminTab('broadcast');
-        if(catId === 'system') window.switchAdminTab('audit');
+        if (catId === 'ops') window.switchAdminTab('live');
+        if (catId === 'players') window.switchAdminTab('players');
+        if (catId === 'setup') window.switchAdminTab('schedules');
+        if (catId === 'comms') window.switchAdminTab('notices');
+        if (catId === 'system') window.switchAdminTab('audit');
     };
 
     window.switchAdminTab = function(tabId) {
         const allTabs = [
             'live', 'manual', 'history', 'date-errors', 'tournaments', 
-            'players', 'diagnostics', 'schedules', 'broadcast', 
-            'sms-inbox', 'notices', 'inbox-feedback', 'donations', 'audit', 'chat'
+            'players', 'diagnostics', 'schedules', 'team-editor', 'broadcast', 
+            'sms-inbox', 'notices', 'community-mod', 'inbox-feedback', 'donations', 'audit', 'chat'
         ];
 
         allTabs.forEach(t => {
             const section = document.getElementById(`admin-${t}`);
             if (section) section.classList.add('hidden');
+            
             const btn = document.getElementById(`tab-btn-${t}`);
             if (btn) btn.className = "px-4 py-2 text-xs font-bold text-slate-400 hover:text-white cursor-pointer whitespace-nowrap transition-colors";
         });
@@ -45,14 +54,18 @@
         if (targetSection) targetSection.classList.remove('hidden');
         
         const targetBtn = document.getElementById(`tab-btn-${tabId}`);
-        if (targetBtn) targetBtn.className = `px-4 py-2 text-xs font-bold text-white bg-white/10 rounded-lg cursor-pointer whitespace-nowrap transition-colors`;
+        if (targetBtn) targetBtn.className = "px-4 py-2 text-xs font-bold text-white bg-white/10 rounded-lg cursor-pointer whitespace-nowrap transition-colors";
 
+        // Auto-Load Data for the selected tab
         if (tabId === 'inbox-feedback') window.loadPendingReports();
         if (tabId === 'date-errors') window.loadDateErrors();
         if (tabId === 'notices') window.loadAdminNotices();
         if (tabId === 'chat') window.loadAdminChat();
         if (tabId === 'donations') window.loadDonations();
         if (tabId === 'sms-inbox') window.loadSmsInbox();
+        if (tabId === 'community-mod') window.loadCommunityMod();
+        if (tabId === 'team-editor') window.loadTeams();
+        
         if (tabId === 'history') {
             const histDivFilter = document.getElementById('hist-div-filter');
             if (histDivFilter && histDivFilter.options.length <= 1) {
@@ -63,10 +76,13 @@
                     }).catch(e => console.error(e));
             }
         }
+        
         if (['players', 'diagnostics', 'manual'].includes(tabId) && playerDirectoryData.length === 0) {
             window.loadPlayerDirectory();
         }
+        
         if (tabId === 'players') window.loadChaosConfig();
+        
         if (tabId === 'diagnostics') {
             fetch('/api/admin/get_rating_scales')
                 .then(r => r.json())
@@ -75,6 +91,7 @@
                     document.getElementById('math-k-loss').value = d.k_loss;
                 }).catch(e => console.error(e));
         }
+        
         if (tabId === 'audit') { 
             window.loadAuditLogs(); 
             window.loadAdminUsers(); 
@@ -83,11 +100,11 @@
     };
 
     window.forceRefresh = async function() {
-        if(!confirm("Force the server to pull the latest data from the Master Google Sheet?")) return;
-        const btn = event.currentTarget || document.querySelector('button[onclick="window.forceRefresh()"]');
+        if (!confirm("Force the server to pull the latest data from the Master Google Sheet?")) return;
+        const btn = document.querySelector('button[onclick="window.forceRefresh()"]');
         const originalHtml = btn ? btn.innerHTML : "FORCE REFRESH";
         
-        if(btn) { 
+        if (btn) { 
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> SYNCING...'; 
             btn.disabled = true; 
         }
@@ -95,7 +112,7 @@
         try {
             const res = await fetch('/api/refresh', { method: 'POST' });
             const data = await res.json();
-            if(data.success || data.status === "Refreshed") { 
+            if (data.success || data.status === "Refreshed") {
                 alert("✅ Sync triggered! Changes will appear momentarily."); 
             } else { 
                 alert("❌ Sync failed."); 
@@ -103,33 +120,40 @@
         } catch(e) { 
             alert("❌ Network Error."); 
         } finally { 
-            if(btn) { btn.innerHTML = originalHtml; btn.disabled = false; } 
+            if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; } 
         }
     };
 
+    // ==========================================
+    // PLAYER SEARCH UTILITIES
+    // ==========================================
     let playerDirectoryData = [];
+    
     window.loadPlayerDirectory = async function() { 
         try { 
             const res = await fetch('/api/admin/player_directory'); 
             playerDirectoryData = await res.json(); 
-        } catch(e) {} 
-    }
+        } catch(e) {
+            console.error("Failed to load player directory", e);
+        } 
+    };
 
     function attachPlayerSearch(inputId, suggId, hiddenId = null) {
         const input = document.getElementById(inputId); 
         const sugg = document.getElementById(suggId);
-        if(!input || !sugg) return;
+        
+        if (!input || !sugg) return;
         
         input.addEventListener('input', (e) => {
             const q = e.target.value.toLowerCase();
-            if(q.length < 1) { 
+            if (q.length < 1) { 
                 sugg.classList.add('hidden'); 
                 return; 
             }
             
             const matches = playerDirectoryData.filter(p => p.name.toLowerCase().includes(q));
             
-            if(matches.length === 0) { 
+            if (matches.length === 0) { 
                 sugg.innerHTML = '<div class="px-3 py-2 text-slate-400 text-xs italic">No players found</div>'; 
                 sugg.classList.remove('hidden'); 
                 return; 
@@ -151,7 +175,9 @@
         });
         
         document.addEventListener('click', (e) => { 
-            if(e.target !== input && e.target !== sugg) sugg.classList.add('hidden'); 
+            if (e.target !== input && e.target !== sugg) {
+                sugg.classList.add('hidden'); 
+            }
         });
     }
 
@@ -166,14 +192,17 @@
         attachPlayerSearch('manual-p2', 'sugg-p2');
     });
 
+    // ==========================================
+    // MANUAL MATCH & HISTORY
+    // ==========================================
     window.submitManualMatch = async function() {
         const p1 = document.getElementById('manual-p1').value; 
         const p2 = document.getElementById('manual-p2').value;
         const date = document.getElementById('manual-date').value; 
         const scores = document.getElementById('manual-scores').value;
         
-        if(!p1 || !p2 || !date) return alert("Player 1, Player 2, and Date are required.");
-        if(!confirm(`Create official match record?\n\n${p1} vs ${p2}\nDate: ${date}\nScores: ${scores || 'None provided'}`)) return;
+        if (!p1 || !p2 || !date) return alert("Player 1, Player 2, and Date are required.");
+        if (!confirm(`Create official match record?\n\n${p1} vs ${p2}\nDate: ${date}\nScores: ${scores || 'None provided'}`)) return;
         
         try {
             const res = await fetch('/api/admin/manual_match', { 
@@ -182,7 +211,7 @@
                 body: JSON.stringify({ p1: p1, p2: p2, date: date, scores: scores }) 
             });
             const data = await res.json();
-            if(data.success) { 
+            if (data.success) { 
                 alert(`✅ Match injected successfully! The database is auto-syncing in the background.`); 
                 document.getElementById('manual-p1').value = ''; 
                 document.getElementById('manual-p2').value = ''; 
@@ -197,8 +226,11 @@
 
     window.searchHistory = async function() {
         const q = document.getElementById('history-search').value.trim(); 
-        const divFilter = document.getElementById('hist-div-filter')?.value || 'All'; 
-        const sourceFilter = document.getElementById('hist-source-filter')?.value || 'All';
+        const divFilterObj = document.getElementById('hist-div-filter');
+        const sourceFilterObj = document.getElementById('hist-source-filter');
+        
+        const divFilter = divFilterObj ? divFilterObj.value : 'All'; 
+        const sourceFilter = sourceFilterObj ? sourceFilterObj.value : 'All';
         
         const list = document.getElementById('historyList'); 
         list.innerHTML = '<div class="text-center py-10 text-indigo-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
@@ -211,7 +243,7 @@
                 matches = matches.filter(m => m.division.toLowerCase() === divFilter.toLowerCase());
             }
             
-            if(matches.length === 0) { 
+            if (matches.length === 0) { 
                 list.innerHTML = '<div class="text-slate-500 text-center py-10 italic">No matches found.</div>'; 
                 return; 
             }
@@ -299,8 +331,8 @@
         const p1Delta = document.getElementById(`override-p1-${matchId}`).value; 
         const p2Delta = document.getElementById(`override-p2-${matchId}`).value;
         
-        if(p1Delta === "" || p2Delta === "") return alert("Please enter point changes for both players.");
-        if(!confirm(`OVERRIDE MATH:\n\nForce ${p1} to get ${p1Delta} pts\nForce ${p2} to get ${p2Delta} pts\n\nProceed?`)) return;
+        if (!p1Delta || !p2Delta) return alert("Please enter point changes for both players.");
+        if (!confirm(`OVERRIDE MATH:\n\nForce ${p1} to get ${p1Delta} pts\nForce ${p2} to get ${p2Delta} pts\n\nProceed?`)) return;
         
         try {
             const res = await fetch('/api/admin/override_deltas', { 
@@ -309,7 +341,7 @@
                 body: JSON.stringify({ match_id: matchId, p1_delta: p1Delta, p2_delta: p2Delta }) 
             });
             const data = await res.json();
-            if(data.success) { 
+            if (data.success) { 
                 alert("✅ Point overrides saved!"); 
                 window.searchHistory(); 
             } else { 
@@ -325,7 +357,7 @@
         const s2 = document.getElementById(`s2-${id}`).value; 
         const newDate = document.getElementById(`date-${id}`).value;
         
-        if(!confirm(`OVERRIDE MATCH:\n\nPlayers: ${p1} vs ${p2}\nNew Score: ${s1}-${s2}\nNew Date: ${newDate}\n\nProceed?`)) return;
+        if (!confirm(`OVERRIDE MATCH:\n\nPlayers: ${p1} vs ${p2}\nNew Score: ${s1}-${s2}\nNew Date: ${newDate}\n\nProceed?`)) return;
         
         try {
             const res = await fetch('/api/admin/update_match', { 
@@ -334,7 +366,7 @@
                 body: JSON.stringify({ p1: p1, p2: p2, date: oldDate, s1: s1, s2: s2, new_date: newDate }) 
             });
             const data = await res.json();
-            if(data.success) {
+            if (data.success) {
                 alert("✅ Update locked in!"); 
             } else {
                 alert("❌ Failed to update match.");
@@ -344,10 +376,13 @@
         }
     };
 
+    // ==========================================
+    // MISSING DATE FIXER
+    // ==========================================
     window.loadDateErrors = async function() {
         const dList = document.getElementById('dateErrorsList'); 
         const dBadge = document.getElementById('date-badge');
-        if(!dList) return; 
+        if (!dList) return; 
         
         dList.innerHTML = '<div class="text-center py-10 text-orange-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
         
@@ -355,12 +390,12 @@
             const res = await fetch('/api/admin/date_errors'); 
             const errors = await res.json();
             
-            if(dBadge) { 
+            if (dBadge) { 
                 dBadge.innerText = errors.length; 
                 errors.length > 0 ? dBadge.classList.remove('hidden') : dBadge.classList.add('hidden'); 
             }
             
-            if(errors.length === 0) { 
+            if (errors.length === 0) { 
                 dList.innerHTML = '<div class="text-slate-600 text-center py-10 italic">Awesome! No missing dates found.</div>'; 
                 return; 
             }
@@ -407,7 +442,7 @@
             });
             const data = await res.json();
             
-            if(data.success) {
+            if (data.success) {
                 const allCards = document.querySelectorAll('.date-card'); 
                 let removedCount = 0;
                 allCards.forEach(card => {
@@ -421,11 +456,11 @@
                 });
                 
                 const dBadge = document.getElementById('date-badge');
-                if(dBadge) { 
+                if (dBadge) { 
                     let count = parseInt(dBadge.innerText) || 0; 
                     count = Math.max(0, count - removedCount); 
                     dBadge.innerText = count; 
-                    if(count === 0) { 
+                    if (count === 0) { 
                         dBadge.classList.add('hidden'); 
                         document.getElementById('dateErrorsList').innerHTML = '<div class="text-slate-600 text-center py-10 italic">Awesome! No missing dates found.</div>'; 
                     } 
@@ -443,12 +478,241 @@
     };
 
     // ==========================================
-    // SYSTEM & MATH TUNER
+    // PDF PARSER & TEAM ROSTER EDITOR
+    // ==========================================
+    window.uploadPdfSchedule = async function() {
+        const fileInput = document.getElementById('pdf-file-upload'); 
+        const seasonInput = document.getElementById('pdf-season'); 
+        const divInput = document.getElementById('pdf-division'); 
+        const btn = document.getElementById('pdf-upload-btn');
+        
+        if (!fileInput.files.length) return alert("Please select a PDF file first.");
+        if (!seasonInput.value) return alert("Please specify the Season (e.g., Summer 2026).");
+        if (!divInput.value) return alert("Please specify the Division.");
+        
+        const formData = new FormData();
+        formData.append('pdf', fileInput.files[0]); 
+        formData.append('season', seasonInput.value);
+        formData.append('division', divInput.value);
+        
+        const originalText = btn.innerHTML; 
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> PARSING PDF & EXTRACTING TEAMS...'; 
+        btn.disabled = true;
+        
+        try {
+            const res = await fetch('/api/admin/upload_schedule', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.success) { 
+                alert(`✅ Success! AI extracted ${data.teams_found} teams and ${data.matches_found} matchups from the PDF.`); 
+                fileInput.value = ''; 
+                divInput.value = ''; 
+                seasonInput.value = '';
+                
+                if (document.getElementById('admin-team-editor') && !document.getElementById('admin-team-editor').classList.contains('hidden')) {
+                    window.loadTeams();
+                }
+            } else {
+                alert(`❌ Parsing Error: ${data.error}`);
+            }
+        } catch(e) { 
+            alert("Network Error"); 
+        } finally { 
+            btn.innerHTML = originalText; 
+            btn.disabled = false; 
+        }
+    };
+
+    window.loadTeams = async function() {
+        const list = document.getElementById('teamsList');
+        if (!list) return;
+        list.innerHTML = '<div class="col-span-full text-center py-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-emerald-500"></i></div>';
+        
+        try {
+            const res = await fetch('/api/admin/teams'); 
+            const teams = await res.json();
+            
+            if (teams.length === 0) { 
+                list.innerHTML = '<div class="col-span-full text-center text-slate-500 py-10 italic">No teams found. Upload a schedule PDF first to auto-extract teams!</div>'; 
+                return; 
+            }
+            
+            let html = '';
+            teams.forEach(t => {
+                const pInputs = [0, 1, 2].map(i => {
+                    const pName = t.players && t.players[i] ? t.players[i] : '';
+                    return `<input type="text" id="team-${t.id}-p${i}" value="${pName.replace(/"/g, '&quot;')}" placeholder="Player ${i+1}" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white mb-2 focus:border-emerald-500 outline-none">`;
+                }).join('');
+                
+                html += `
+                <div class="bg-slate-800 p-5 rounded-xl border border-white/5 shadow-lg relative overflow-hidden">
+                    <div class="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500"></div>
+                    <div class="pl-3">
+                        <div class="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mb-1">${t.season || 'Unknown Season'} • ${t.division || 'Unknown Division'}</div>
+                        <h3 class="text-white font-black text-lg mb-4 pb-2 border-b border-white/10">${t.team_name || t.id}</h3>
+                        <div class="space-y-1 mb-4">${pInputs}</div>
+                        <button onclick="window.saveTeam('${t.id}')" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-lg text-sm transition shadow-[0_0_10px_rgba(16,185,129,0.3)]">Save Roster</button>
+                    </div>
+                </div>`;
+            });
+            list.innerHTML = html;
+        } catch(e) { 
+            list.innerHTML = '<div class="col-span-full text-red-500 text-center py-10">Error loading teams.</div>'; 
+        }
+    };
+    
+    window.saveTeam = async function(teamId) {
+        const players = [];
+        for(let i=0; i<3; i++) { 
+            const val = document.getElementById(`team-${teamId}-p${i}`).value.trim(); 
+            if (val) players.push(val); 
+        }
+        
+        try {
+            const res = await fetch('/api/admin/update_team', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ team_id: teamId, players: players }) 
+            });
+            const data = await res.json();
+            if (data.success) { 
+                alert("✅ Team saved successfully!"); 
+            } else { 
+                alert("❌ Error saving team."); 
+            }
+        } catch(e) { 
+            alert("Network Error"); 
+        }
+    };
+
+    // ==========================================
+    // PLAYER EDITOR & RATING OVERRIDES
+    // ==========================================
+    window.fetchRatingContext = async function(playerId) {
+        const contextDiv = document.getElementById('override-context');
+        if (!contextDiv) return;
+        
+        contextDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading recent rating context...';
+        
+        try {
+            const res = await fetch(`/api/admin/rating_context/${playerId}`);
+            const data = await res.json();
+            
+            if (data.length === 0) {
+                contextDiv.innerHTML = '<div class="italic">No recent match history found for this player.</div>';
+                return;
+            }
+            
+            let html = '<div class="font-bold text-white mb-2 pb-1 border-b border-white/10"><i class="fa-solid fa-clock-rotate-left mr-2"></i>Last 6 Match Ratings:</div>';
+            data.forEach(m => {
+                html += `<div class="flex justify-between items-center py-1 border-b border-white/5 last:border-0"><span class="text-[10px] uppercase font-bold tracking-widest">${m.date} vs ${m.opponent}</span> <span class="text-emerald-400 font-mono font-bold">${m.rating}</span></div>`;
+            });
+            
+            contextDiv.innerHTML = `<div class="bg-black/30 p-3 rounded border border-white/5 shadow-inner">${html}</div>`;
+        } catch(e) {
+            contextDiv.innerHTML = '';
+        }
+    };
+
+    window.submitRatingOverride = async function() {
+        const id = document.getElementById('override-id').value; 
+        const rating = document.getElementById('override-score').value; 
+        const isRetro = document.getElementById('override-retro').checked;
+        
+        if (!id || !rating) return alert("Please select a player and provide a rating.");
+        
+        try {
+            const res = await fetch('/api/admin/override_rating', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ player_id: id, rating: rating, retroactive: isRetro }) 
+            });
+            const data = await res.json();
+            
+            if (data.success) { 
+                alert(`✅ Successfully applied rating override.`); 
+                document.getElementById('override-id').value = ''; 
+                document.getElementById('override-search').value = ''; 
+                document.getElementById('override-score').value = ''; 
+                if (document.getElementById('override-context')) document.getElementById('override-context').innerHTML = '';
+            } else {
+                alert("❌ Error applying rating override.");
+            }
+        } catch(e) { 
+            alert("Network error."); 
+        }
+    };
+    
+    window.bulkSetRatings = async function() {
+        if (!confirm("⚠️ Are you sure you want to pull ALL ratings from the 'Ratings crap' sheet and apply them as of today?")) return;
+        const btn = document.querySelector('button[onclick="window.bulkSetRatings()"]'); 
+        const originalHtml = btn ? btn.innerHTML : "SET RATINGS";
+        
+        if (btn) { 
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> PULLING RATINGS...'; 
+            btn.disabled = true; 
+        }
+        
+        try {
+            const res = await fetch('/api/admin/bulk_pull_ratings', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({}) 
+            });
+            const text = await res.text(); 
+            let data;
+            try { 
+                data = JSON.parse(text); 
+            } catch(err) { 
+                alert("Server Crash!"); 
+                return; 
+            }
+            if (data.success) { 
+                alert(`✅ Successfully imported ${data.count} ratings!`); 
+                window.loadPlayerDirectory(); 
+            } else {
+                alert(`❌ Failed: ${data.error}`);
+            }
+        } catch(e) { 
+            alert("Network error: " + e.message); 
+        } finally { 
+            if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; } 
+        }
+    };
+
+    window.submitPlayerMerge = async function() {
+        const bad = document.getElementById('merge-bad-search').value; 
+        const good = document.getElementById('merge-good-search').value;
+        
+        if (!bad || !good) return alert("Please select both names.");
+        if (bad.toLowerCase() === good.toLowerCase()) return alert("Names must be different.");
+        if (!confirm(`⚠️ DANGER: You are about to PERMANENTLY merge "${bad}" into "${good}". Proceed?`)) return;
+        
+        try {
+            const res = await fetch('/api/admin/merge', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ bad_name: bad, good_name: good }) 
+            });
+            const data = await res.json();
+            if (data.success) { 
+                alert(`✅ Successfully merged profiles!`); 
+                document.getElementById('merge-bad-search').value = ''; 
+                document.getElementById('merge-good-search').value = ''; 
+            } else {
+                alert("❌ Error merging players.");
+            }
+        } catch(e) { 
+            alert("Network error."); 
+        }
+    };
+
+    // ==========================================
+    // SYSTEM MATH & DIAGNOSTICS
     // ==========================================
     window.saveMathMultipliers = async function() {
         const kWin = document.getElementById('math-k-win').value;
         const kLoss = document.getElementById('math-k-loss').value;
-        if(!confirm(`WARNING: Changing these scales triggers a recalculation of the entire database.\n\nNew Win Scale: ${kWin}x\nNew Loss Scale: ${kLoss}x\n\nProceed?`)) return;
+        if (!confirm(`WARNING: Changing these scales triggers a recalculation of the entire database.\n\nNew Win Scale: ${kWin}x\nNew Loss Scale: ${kLoss}x\n\nProceed?`)) return;
         
         try {
             const res = await fetch('/api/admin/set_rating_scales', { 
@@ -457,7 +721,7 @@
                 body: JSON.stringify({ k_win: kWin, k_loss: kLoss }) 
             });
             const data = await res.json();
-            if(data.success) { 
+            if (data.success) { 
                 alert("✅ Math parameters updated! The server is recalculating history."); 
                 window.location.reload(); 
             } else {
@@ -476,7 +740,7 @@
         const resultsBox = document.getElementById('diag-results'); 
         const btn = document.getElementById('diag-btn');
         
-        if(!p1 || !p2) return alert("Please select both players.");
+        if (!p1 || !p2) return alert("Please select both players.");
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Calculating...';
         
         try {
@@ -486,7 +750,7 @@
                 body: JSON.stringify({ p1: p1, p2: p2, s1: s1, s2: s2 }) 
             });
             const d = await res.json();
-            if(d.success) {
+            if (d.success) {
                 const math = d.data;
                 const renderPlayerMath = (pData) => {
                     const deltaColor = pData.delta > 0 ? "text-emerald-400" : "text-red-400";
@@ -524,162 +788,6 @@
         }
     };
 
-    // ==========================================
-    // PDF SCHEDULE PARSER
-    // ==========================================
-    window.uploadPdfSchedule = async function() {
-        const fileInput = document.getElementById('pdf-file-upload'); 
-        const divInput = document.getElementById('pdf-division'); 
-        const btn = document.getElementById('pdf-upload-btn');
-        
-        if (!fileInput.files.length) return alert("Please select a PDF file first.");
-        if (!divInput.value) return alert("Please specify the Division.");
-        
-        const formData = new FormData();
-        formData.append('pdf', fileInput.files[0]); 
-        formData.append('division', divInput.value);
-        
-        const originalText = btn.innerHTML; 
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> PARSING PDF...'; 
-        btn.disabled = true;
-        
-        try {
-            const res = await fetch('/api/admin/upload_schedule', { method: 'POST', body: formData });
-            const data = await res.json();
-            if(data.success) { 
-                alert(`✅ Success! AI extracted ${data.matches_found} matchups from the PDF.`); 
-                fileInput.value = ''; 
-                divInput.value = ''; 
-            } else {
-                alert(`❌ Parsing Error: ${data.error}`);
-            }
-        } catch(e) { 
-            alert("Network Error"); 
-        } finally { 
-            btn.innerHTML = originalText; 
-            btn.disabled = false; 
-        }
-    };
-
-    // ==========================================
-    // PLAYER EDITOR & CONTEXT
-    // ==========================================
-    window.fetchRatingContext = async function(playerId) {
-        const contextDiv = document.getElementById('override-context');
-        if(!contextDiv) return;
-        
-        contextDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading recent rating context...';
-        
-        try {
-            const res = await fetch(`/api/admin/rating_context/${playerId}`);
-            const data = await res.json();
-            
-            if(data.length === 0) {
-                contextDiv.innerHTML = '<div class="italic">No recent match history found for this player.</div>';
-                return;
-            }
-            
-            let html = '<div class="font-bold text-white mb-2 pb-1 border-b border-white/10"><i class="fa-solid fa-clock-rotate-left mr-2"></i>Last 6 Match Ratings:</div>';
-            data.forEach(m => {
-                html += `<div class="flex justify-between items-center py-1 border-b border-white/5 last:border-0"><span class="text-[10px] uppercase font-bold tracking-widest">${m.date} vs ${m.opponent}</span> <span class="text-emerald-400 font-mono font-bold">${m.rating}</span></div>`;
-            });
-            
-            contextDiv.innerHTML = `<div class="bg-black/30 p-3 rounded border border-white/5 shadow-inner">${html}</div>`;
-        } catch(e) {
-            contextDiv.innerHTML = '';
-        }
-    };
-
-    window.submitRatingOverride = async function() {
-        const id = document.getElementById('override-id').value; 
-        const rating = document.getElementById('override-score').value; 
-        const isRetro = document.getElementById('override-retro').checked;
-        
-        if(!id || !rating) return alert("Please select a player and provide a rating.");
-        
-        try {
-            const res = await fetch('/api/admin/override_rating', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ player_id: id, rating: rating, retroactive: isRetro }) 
-            });
-            const data = await res.json();
-            if(data.success) { 
-                alert(`✅ Successfully applied rating override.`); 
-                document.getElementById('override-id').value = ''; 
-                document.getElementById('override-search').value = ''; 
-                document.getElementById('override-score').value = ''; 
-                if(document.getElementById('override-context')) document.getElementById('override-context').innerHTML = '';
-            } else {
-                alert("❌ Error applying rating override.");
-            }
-        } catch(e) { 
-            alert("Network error."); 
-        }
-    };
-    
-    window.bulkSetRatings = async function() {
-        if(!confirm("⚠️ Are you sure you want to pull ALL ratings from the 'Ratings crap' sheet and apply them as of today?")) return;
-        const btn = document.querySelector('button[onclick="window.bulkSetRatings()"]'); 
-        const originalHtml = btn ? btn.innerHTML : "SET RATINGS";
-        
-        if (btn) { 
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> PULLING RATINGS...'; 
-            btn.disabled = true; 
-        }
-        try {
-            const res = await fetch('/api/admin/bulk_pull_ratings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
-            const text = await res.text(); 
-            let data;
-            try { 
-                data = JSON.parse(text); 
-            } catch(err) { 
-                alert("Server Crash!"); 
-                return; 
-            }
-            if(data.success) { 
-                alert(`✅ Successfully imported ${data.count} ratings!`); 
-                window.loadPlayerDirectory(); 
-            } else {
-                alert(`❌ Failed: ${data.error}`);
-            }
-        } catch(e) { 
-            alert("Network error: " + e.message); 
-        } finally { 
-            if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; } 
-        }
-    };
-
-    window.submitPlayerMerge = async function() {
-        const bad = document.getElementById('merge-bad-search').value; 
-        const good = document.getElementById('merge-good-search').value;
-        
-        if(!bad || !good) return alert("Please select both names.");
-        if(bad.toLowerCase() === good.toLowerCase()) return alert("Names must be different.");
-        if(!confirm(`⚠️ DANGER: You are about to PERMANENTLY merge "${bad}" into "${good}". Proceed?`)) return;
-        
-        try {
-            const res = await fetch('/api/admin/merge', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ bad_name: bad, good_name: good }) 
-            });
-            const data = await res.json();
-            if(data.success) { 
-                alert(`✅ Successfully merged profiles!`); 
-                document.getElementById('merge-bad-search').value = ''; 
-                document.getElementById('merge-good-search').value = ''; 
-            } else {
-                alert("❌ Error merging players.");
-            }
-        } catch(e) { 
-            alert("Network error."); 
-        }
-    }
-
-    // ==========================================
-    // CHAOS MODE MULTI-SIG
-    // ==========================================
     window.loadChaosConfig = async function() {
         try {
             const res = await fetch('/api/admin/chaos_config'); 
@@ -690,10 +798,10 @@
             const pct = Math.min(100, (current / req) * 100);
             
             const countEl = document.getElementById('chaos-vote-count'); 
-            if(countEl) countEl.innerText = `${current}/${req}`;
+            if (countEl) countEl.innerText = `${current}/${req}`;
             
             const prog = document.getElementById('chaos-progress-bar'); 
-            if(prog) prog.style.width = `${pct}%`;
+            if (prog) prog.style.width = `${pct}%`;
             
             const votersList = document.getElementById('chaos-voters-list'); 
             if (votersList) { 
@@ -705,7 +813,7 @@
             if (weeksInput && data.weeks && data.weeks.length > 0) weeksInput.value = data.weeks.join(', ');
             
             const banner = document.getElementById('chaos-status-banner');
-            if(banner) {
+            if (banner) {
                 if (data.active) {
                     banner.className = "bg-red-900/30 border border-red-500/30 text-red-400 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2 mb-4 animate-pulse";
                     banner.innerHTML = '<i class="fa-solid fa-fire"></i> CHAOS MODE ARMED & ACTIVE';
@@ -717,7 +825,7 @@
                 }
             }
         } catch(e) { }
-    }
+    };
     
     window.castChaosVote = async function() {
         const weeksRaw = document.getElementById('chaos-weeks').value;
@@ -732,7 +840,7 @@
                 body: JSON.stringify({ weeks: weeks }) 
             });
             const data = await res.json();
-            if(data.success) window.loadChaosConfig(); 
+            if (data.success) window.loadChaosConfig(); 
             else alert("Failed to record signature.");
         } catch(e) { 
             alert("Network Error"); 
@@ -744,7 +852,7 @@
         try {
             const res = await fetch('/api/admin/chaos_clear', { method: 'POST' });
             const data = await res.json();
-            if(data.success) { 
+            if (data.success) { 
                 document.getElementById('chaos-weeks').value = ''; 
                 window.loadChaosConfig(); 
             }
@@ -754,11 +862,62 @@
     };
 
     // ==========================================
-    // COMMS & INBOX
+    // COMMUNITY FORUM MODERATION
+    // ==========================================
+    window.loadCommunityMod = async function() {
+        const feed = document.getElementById('mod-forum-feed');
+        if (!feed) return;
+        feed.innerHTML = '<div class="text-center py-10 text-red-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
+        
+        try {
+            const res = await fetch('/api/hub/forum');
+            const posts = await res.json();
+            
+            if (posts.length === 0) { 
+                feed.innerHTML = '<div class="text-center text-slate-500 py-10 italic">No posts in the community yet.</div>'; 
+                return; 
+            }
+            
+            feed.innerHTML = posts.map(p => `
+                <div class="bg-slate-800 p-4 rounded-xl border border-white/5 flex justify-between items-start gap-4">
+                    <div class="flex-1">
+                        <div class="text-[10px] text-slate-500 mb-1 font-bold uppercase tracking-widest"><span class="text-white">${p.author_name}</span> • ${p.time_str}</div>
+                        <div class="text-sm text-slate-300 whitespace-pre-wrap">${p.content}</div>
+                        ${p.image_url ? `<img src="${p.image_url}" class="mt-3 h-24 rounded object-cover shadow-lg border border-white/10">` : ''}
+                    </div>
+                    <button onclick="window.deleteCommunityPost('${p.id}')" class="bg-red-900/40 hover:bg-red-600 text-red-500 hover:text-white px-3 py-2 rounded-lg transition shrink-0 border border-red-500/20"><i class="fa-solid fa-trash"></i></button>
+                </div>
+            `).join('');
+        } catch(e) { 
+            feed.innerHTML = '<div class="text-red-500 py-10 text-center">Error loading feed.</div>'; 
+        }
+    };
+
+    window.deleteCommunityPost = async function(id) {
+        if (!confirm("Are you sure you want to permanently delete this post?")) return;
+        try {
+            const res = await fetch('/api/admin/delete_post', { 
+                method: 'POST', 
+                headers: {'Content-Type':'application/json'}, 
+                body: JSON.stringify({post_id: id}) 
+            });
+            const data = await res.json();
+            if (data.success) { 
+                alert("Post deleted."); 
+                window.loadCommunityMod(); 
+            } else { 
+                alert("Failed to delete post."); 
+            }
+        } catch(e) {}
+    };
+
+    // ==========================================
+    // NOTICES, SMS INBOX, AND FEEDBACK
     // ==========================================
     window.loadPendingReports = async function() {
         const fList = document.getElementById('feedbackList'); 
-        if(fList) fList.innerHTML = '<div class="text-center py-10 text-slate-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
+        if (!fList) return; 
+        fList.innerHTML = '<div class="text-center py-10 text-slate-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
         
         try {
             const res = await fetch('/api/admin/reports'); 
@@ -784,12 +943,12 @@
                     </div>`;
                 }
             });
-            if(fList) fList.innerHTML = fHtml || '<div class="text-slate-600 text-center py-10 italic">No new feedback.</div>';
+            fList.innerHTML = fHtml || '<div class="text-slate-600 text-center py-10 italic">No new feedback.</div>';
         } catch(e) {}
     };
 
     window.resolveReport = async function(id, action) {
-        if(!confirm(`Are you sure you want to ${action} this?`)) return;
+        if (!confirm(`Are you sure you want to ${action} this?`)) return;
         try {
             const res = await fetch('/api/admin/resolve', { 
                 method: 'POST', 
@@ -797,72 +956,28 @@
                 body: JSON.stringify({ report_id: id, action: action }) 
             });
             const data = await res.json();
-            if(data.success) { window.loadPendingReports(); } 
+            if (data.success) { window.loadPendingReports(); } 
             else alert("Error resolving item.");
         } catch(e) { 
             alert("Network error."); 
         }
     };
 
-    window.loadAdminChat = async function() {
-        const list = document.getElementById('adminChatList'); 
-        if(!list) return;
-        try {
-            const res = await fetch('/api/admin/messages'); 
-            const messages = await res.json();
-            if(messages.length === 0) { 
-                list.innerHTML = '<div class="text-slate-500 text-center py-8 italic">No notes yet.</div>'; 
-                return; 
-            }
-            list.innerHTML = messages.map(m => `
-                <div class="bg-slate-900/50 p-4 rounded-lg border border-white/5 relative">
-                    <div class="flex justify-between items-center mb-2 border-b border-white/5 pb-2">
-                        <span class="text-xs font-bold text-indigo-400"><i class="fa-solid fa-user-shield mr-1"></i>${m.author}</span>
-                        <span class="text-[10px] text-slate-500 font-mono">${m.time_str}</span>
-                    </div>
-                    <div class="text-sm text-slate-300 whitespace-pre-wrap">${m.message}</div>
-                </div>
-            `).join('');
-        } catch(e) {}
-    };
-
-    window.postAdminMessage = async function() {
-        const input = document.getElementById('admin-chat-input'); 
-        const msg = input.value.trim(); 
-        if(!msg) return;
-        try {
-            const res = await fetch('/api/admin/add_message', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ message: msg }) 
-            });
-            const data = await res.json();
-            if(data.success) { 
-                input.value = ''; 
-                window.loadAdminChat(); 
-            } else {
-                alert("Failed to post message.");
-            }
-        } catch(e) { 
-            alert("Network Error"); 
-        }
-    };
-
     window.loadAdminNotices = async function() {
         const list = document.getElementById('adminNoticesList'); 
-        if(!list) return;
+        if (!list) return;
         try {
             const res = await fetch('/api/notices'); 
             const notices = await res.json();
-            if(notices.length === 0) { 
+            if (notices.length === 0) { 
                 list.innerHTML = '<div class="text-slate-600 text-center py-10 italic">No active notices.</div>'; 
                 return; 
             }
             list.innerHTML = notices.map(n => {
                 let badgeColor = 'bg-slate-700 text-slate-300';
-                if(n.type === 'Update') badgeColor = 'bg-sky-500/20 text-sky-400 border border-sky-500/30';
-                if(n.type === 'Event') badgeColor = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30';
-                if(n.type === 'Alert') badgeColor = 'bg-red-500/20 text-red-400 border border-red-500/30';
+                if (n.type === 'Update') badgeColor = 'bg-sky-500/20 text-sky-400 border border-sky-500/30';
+                if (n.type === 'Event') badgeColor = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30';
+                if (n.type === 'Alert') badgeColor = 'bg-red-500/20 text-red-400 border border-red-500/30';
                 return `
                 <div class="bg-slate-800 p-4 rounded-xl border border-white/5 flex justify-between items-start gap-4">
                     <div>
@@ -883,7 +998,7 @@
         const title = document.getElementById('notice-title').value; 
         const type = document.getElementById('notice-type').value; 
         const msg = document.getElementById('notice-message').value;
-        if(!title || !msg) return alert("Title and Message are required.");
+        if (!title || !msg) return alert("Title and Message are required.");
         
         try {
             const res = await fetch('/api/admin/add_notice', { 
@@ -892,7 +1007,7 @@
                 body: JSON.stringify({ title: title, type: type, message: msg }) 
             });
             const data = await res.json();
-            if(data.success) { 
+            if (data.success) { 
                 document.getElementById('notice-title').value = ''; 
                 document.getElementById('notice-message').value = ''; 
                 window.loadAdminNotices(); 
@@ -906,7 +1021,7 @@
     };
 
     window.deleteNotice = async function(id) {
-        if(!confirm("Remove this notice from the public site?")) return;
+        if (!confirm("Remove this notice from the public site?")) return;
         try {
             const res = await fetch('/api/admin/delete_notice', { 
                 method: 'POST', 
@@ -914,14 +1029,14 @@
                 body: JSON.stringify({ notice_id: id }) 
             });
             const data = await res.json();
-            if(data.success) window.loadAdminNotices(); 
+            if (data.success) window.loadAdminNotices(); 
             else alert("Failed to delete notice.");
         } catch(e) {}
     };
 
     window.loadSmsInbox = async function() {
         const list = document.getElementById('smsInboxList'); 
-        if(!list) return;
+        if (!list) return;
         
         list.innerHTML = '<div class="text-center py-10 text-pink-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
         
@@ -929,7 +1044,7 @@
             const res = await fetch('/api/admin/sms_inbox'); 
             const messages = await res.json();
             
-            if(messages.length === 0) { 
+            if (messages.length === 0) { 
                 list.innerHTML = '<div class="text-slate-500 text-center py-8 italic">No replies received yet.</div>'; 
                 return; 
             }
@@ -948,139 +1063,58 @@
         }
     };
 
-    // SMS BROADCAST ENGINE
-    window.smsPreviewData = [];
-
-    window.verifySmsList = async function() {
-        const btn = document.getElementById('btn-verify-sms'); 
-        const originalText = btn.innerHTML; 
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Scanning Sheet...'; 
-        btn.disabled = true;
-        
+    window.loadAdminChat = async function() {
+        const list = document.getElementById('adminChatList'); 
+        if (!list) return;
         try {
-            const res = await fetch('/api/admin/contacts'); 
-            const data = await res.json();
-            
-            if (data.error) { 
-                alert(`Error reading sheet: ${data.error}`); 
-            } else {
-                document.getElementById('sms-preview-box').classList.remove('hidden');
-                
-                if (data.preview && data.preview.length > 0) {
-                    window.smsPreviewData = data.preview; 
-                    const divs = new Set();
-                    data.preview.forEach(p => { if(p.division) divs.add(p.division); });
-                    
-                    const select = document.getElementById('sms-div-filter'); 
-                    select.innerHTML = '<option value="All">All Divisions</option>';
-                    Array.from(divs).sort().forEach(d => { 
-                        select.innerHTML += `<option value="${d}">${d}</option>`; 
-                    });
-                    
-                    let html = '';
-                    data.preview.forEach((p) => { 
-                        html += `
-                        <label class="sms-row flex justify-between items-center bg-slate-800/50 hover:bg-slate-800 cursor-pointer px-3 py-2 rounded border border-white/5 transition-colors" data-div="${p.division}">
-                            <div class="flex items-center gap-3">
-                                <input type="checkbox" class="sms-recipient-checkbox w-4 h-4 rounded border-slate-600 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-900 bg-slate-700" value="${p.phone}" checked onchange="window.updateSmsCount()">
-                                <div>
-                                    <div class="font-bold text-white text-sm">${p.name}</div>
-                                    <div class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">${p.division}</div>
-                                </div>
-                            </div>
-                            <span class="font-mono text-emerald-400 text-xs">${p.phone}</span>
-                        </label>`; 
-                    });
-                    document.getElementById('preview-list').innerHTML = html; 
-                    window.updateSmsCount();
-                } else { 
-                    document.getElementById('preview-count').innerText = "0"; 
-                    document.getElementById('preview-list').innerHTML = '<div class="text-red-400 italic text-xs py-2">No active players found...</div>'; 
-                }
+            const res = await fetch('/api/admin/messages'); 
+            const messages = await res.json();
+            if (messages.length === 0) { 
+                list.innerHTML = '<div class="text-slate-500 text-center py-8 italic">No notes yet.</div>'; 
+                return; 
             }
-        } catch(e) { 
-            alert(`Network error contacting server.`); 
-        } finally { 
-            btn.innerHTML = originalText; 
-            btn.disabled = false; 
-        }
-    }
+            list.innerHTML = messages.map(m => `
+                <div class="bg-slate-900/50 p-4 rounded-lg border border-white/5 relative">
+                    <div class="flex justify-between items-center mb-2 border-b border-white/5 pb-2">
+                        <span class="text-xs font-bold text-indigo-400"><i class="fa-solid fa-user-shield mr-1"></i>${m.author}</span>
+                        <span class="text-[10px] text-slate-500 font-mono">${m.time_str}</span>
+                    </div>
+                    <div class="text-sm text-slate-300 whitespace-pre-wrap">${m.message}</div>
+                </div>
+            `).join('');
+        } catch(e) {}
+    };
 
-    window.filterSmsList = function() {
-        const filter = document.getElementById('sms-div-filter').value; 
-        const rows = document.querySelectorAll('.sms-row');
-        rows.forEach(row => { 
-            if (filter === 'All' || row.dataset.div === filter) row.style.display = 'flex'; 
-            else row.style.display = 'none'; 
-        });
-        window.updateSmsCount();
-    }
-
-    window.toggleAllSms = function() {
-        const rows = document.querySelectorAll('.sms-row'); 
-        let anyUnchecked = false;
-        rows.forEach(row => { 
-            if (row.style.display !== 'none' && !row.querySelector('.sms-recipient-checkbox').checked) anyUnchecked = true; 
-        });
-        rows.forEach(row => { 
-            if (row.style.display !== 'none') row.querySelector('.sms-recipient-checkbox').checked = anyUnchecked; 
-        });
-        window.updateSmsCount();
-    }
-
-    window.updateSmsCount = function() { 
-        document.getElementById('preview-count').innerText = document.querySelectorAll('.sms-recipient-checkbox:checked').length; 
-    }
-
-    window.sendSmsBroadcast = async function() {
-        const msgText = document.getElementById('broadcast-input').value.trim();
-        if (!msgText) return alert("You must write a custom message before sending!");
-        
-        const checkedBoxes = document.querySelectorAll('.sms-recipient-checkbox:checked');
-        if (checkedBoxes.length === 0) return alert("You have 0 recipients selected! Please tick at least one box.");
-        
-        const targetPhones = Array.from(checkedBoxes).map(cb => cb.value);
-        
-        if (!confirm(`🚨 CHECKOUT WARNING 🚨\n\nYou are about to send a mass SMS to ${targetPhones.length} selected members. This will use real API credits.\n\nProceed?`)) return;
-        
-        const btn = document.getElementById('btn-send-sms'); 
-        const originalText = btn.innerHTML; 
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> CONTACTING API...'; 
-        btn.disabled = true;
-        
+    window.postAdminMessage = async function() {
+        const input = document.getElementById('admin-chat-input'); 
+        const msg = input.value.trim(); 
+        if (!msg) return;
         try {
-            const res = await fetch('/api/admin/send_sms', { 
+            const res = await fetch('/api/admin/add_message', { 
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ message: msgText, phones: targetPhones }) 
+                body: JSON.stringify({ message: msg }) 
             });
             const data = await res.json();
-            
-            if (data.success) {
-                const succ = document.getElementById('sms-success-msg'); 
-                succ.innerText = `✅ SUCCESS! ${data.message}`; 
-                succ.classList.remove('hidden');
-                document.getElementById('broadcast-input').value = ''; 
-                setTimeout(() => succ.classList.add('hidden'), 5000);
-            } else { 
-                alert(`❌ API ERROR: ${data.error}`); 
+            if (data.success) { 
+                input.value = ''; 
+                window.loadAdminChat(); 
+            } else {
+                alert("Failed to post message.");
             }
         } catch(e) { 
-            alert("❌ FATAL ERROR: Could not connect to backend server."); 
-        } finally { 
-            btn.innerHTML = originalText; 
-            btn.disabled = false; 
+            alert("Network Error"); 
         }
-    }
+    };
 
     // ==========================================
-    // DONATIONS & SYSTEM LOGS
+    // SYSTEM AUDIT & DONATIONS
     // ==========================================
     window.loadDonations = async function() {
         const list = document.getElementById('donationsList'); 
         const totalEl = document.getElementById('donations-total'); 
         const countEl = document.getElementById('donations-count');
-        if(!list) return;
+        if (!list) return;
         
         list.innerHTML = '<div class="text-center py-10 text-emerald-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
         
@@ -1092,8 +1126,8 @@
             
             if (data.length === 0) { 
                 list.innerHTML = '<div class="text-slate-500 text-center py-10 italic">No donations recorded yet.</div>'; 
-                if(totalEl) totalEl.innerText = '$0.00'; 
-                if(countEl) countEl.innerText = '0'; 
+                if (totalEl) totalEl.innerText = '$0.00'; 
+                if (countEl) countEl.innerText = '0'; 
                 return; 
             }
             
@@ -1110,8 +1144,8 @@
             });
             
             list.innerHTML = html;
-            if(totalEl) totalEl.innerText = '$' + total.toFixed(2); 
-            if(countEl) countEl.innerText = data.length;
+            if (totalEl) totalEl.innerText = '$' + total.toFixed(2); 
+            if (countEl) countEl.innerText = data.length;
         } catch (e) { 
             list.innerHTML = '<div class="text-red-400 text-center py-10">Error loading donations.</div>'; 
         }
@@ -1120,7 +1154,7 @@
     window.loadTrafficStats = async function() {
         const viewsEl = document.getElementById('dash-traffic-views'); 
         const uniquesEl = document.getElementById('dash-traffic-uniques');
-        if(!viewsEl || !uniquesEl) return;
+        if (!viewsEl || !uniquesEl) return;
         try { 
             const res = await fetch('/api/admin/traffic'); 
             const data = await res.json(); 
@@ -1131,14 +1165,15 @@
 
     window.loadAuditLogs = async function() {
         const list = document.getElementById('auditLogList'); 
-        if(!list) return;
-        const filter = document.getElementById('audit-filter')?.value || 'ALL';
+        if (!list) return;
+        const filterObj = document.getElementById('audit-filter');
+        const filter = filterObj ? filterObj.value : 'ALL';
         
         try {
             const res = await fetch('/api/admin/audit_logs'); 
             const logs = await res.json();
             
-            if(logs.length === 0) { 
+            if (logs.length === 0) { 
                 list.innerHTML = '<div class="text-slate-500 py-10 text-center italic">No actions recorded yet.</div>'; 
                 return; 
             }
@@ -1175,7 +1210,7 @@
     };
 
     window.undoAction = async function(logId) {
-        if(!confirm("Are you sure you want to completely reverse this action?")) return;
+        if (!confirm("Are you sure you want to completely reverse this action?")) return;
         try {
             const res = await fetch('/api/admin/undo_action', { 
                 method: 'POST', 
@@ -1183,7 +1218,7 @@
                 body: JSON.stringify({log_id: logId}) 
             });
             const data = await res.json();
-            if(data.success) { 
+            if (data.success) { 
                 alert("✅ Action successfully undone!"); 
                 window.loadAuditLogs(); 
             } else { 
@@ -1194,7 +1229,7 @@
 
     window.loadAdminUsers = async function() {
         const list = document.getElementById('adminUsersList'); 
-        if(!list) return;
+        if (!list) return;
         
         try {
             const res = await fetch('/api/admin/users'); 
@@ -1206,7 +1241,7 @@
                 const isTemp = u.role === 'temp_super_admin';
                 let roleBadge = '';
                 
-                if(isPending) {
+                if (isPending) {
                     roleBadge = '<span class="text-yellow-500 bg-yellow-900/30 border border-yellow-500/30 px-2 py-0.5 rounded text-[9px] uppercase font-bold">Pending</span>';
                 } else if (isTemp) {
                     roleBadge = `<span class="text-pink-400 bg-pink-900/30 border border-pink-500/30 px-2 py-0.5 rounded text-[9px] uppercase font-bold">Temp Super Admin <i class="fa-solid fa-clock text-[8px] ml-1"></i> ${u.expires_at_str}</span>`;
@@ -1215,14 +1250,14 @@
                 }
                 
                 let actions = '';
-                if(u.role !== 'super_admin') {
-                    if(isPending) { 
+                if (u.role !== 'super_admin') {
+                    if (isPending) { 
                         actions = `
-                        <button onclick="window.manageUser('${u.email}', 'approve')" class="text-green-500 hover:text-green-400 text-sm"><i class="fa-solid fa-check"></i></button>
-                        <button onclick="window.manageUser('${u.email}', 'delete')" class="text-red-500 hover:text-red-400 text-sm"><i class="fa-solid fa-trash"></i></button>`; 
+                        <button onclick="window.manageUser('${u.email}', 'approve')" class="text-green-500 hover:text-green-400 text-sm mx-1"><i class="fa-solid fa-check"></i></button>
+                        <button onclick="window.manageUser('${u.email}', 'delete')" class="text-red-500 hover:text-red-400 text-sm mx-1"><i class="fa-solid fa-trash"></i></button>`; 
                     } else { 
                         actions = `<button onclick="window.manageUser('${u.email}', 'revoke')" class="text-red-400 hover:text-red-300 text-[10px] font-bold uppercase border border-red-500/30 px-2 py-1 rounded">Revoke Access</button>`; 
-                        if(u.role === 'admin') {
+                        if (u.role === 'admin') {
                             actions += `<button onclick="window.manageUser('${u.email}', 'temp_super')" class="ml-2 text-pink-400 hover:text-pink-300 text-[10px] font-bold uppercase border border-pink-500/30 px-2 py-1 rounded">+ 7 Day Super Admin</button>`;
                         }
                     }
@@ -1242,7 +1277,7 @@
     }
 
     window.manageUser = async function(email, action) {
-        if(!confirm(`Are you sure you want to apply this access rule for ${email}?`)) return;
+        if (!confirm(`Are you sure you want to apply this access rule for ${email}?`)) return;
         try {
             const res = await fetch('/api/admin/approve_user', { 
                 method: 'POST', 
@@ -1250,7 +1285,7 @@
                 body: JSON.stringify({email: email, action: action}) 
             });
             const data = await res.json();
-            if(data.success) window.loadAdminUsers();
+            if (data.success) window.loadAdminUsers();
         } catch(e) {}
     }
 </script>
@@ -1259,7 +1294,6 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getFirestore, collection, query, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-    // Initialize Firebase Live Connection
     const firebaseConfig = { 
         apiKey: "AIzaSyDq05wFsKLHtt8G0Z5yLOG9pIk9UX24S4o", 
         authDomain: "gctta-stats-live.firebaseapp.com", 
@@ -1269,22 +1303,20 @@
         appId: "1:1070856258556:web:be438e04c1941abc3c6879" 
     };
     
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-
-    // Dynamic Format Override (2v2, 3v3)
-    window.setFormatOverride = async function(fixtureId, formatType) {
-        try { 
-            await fetch('/api/admin/set_fixture_format', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ fixture_id: fixtureId, format_type: formatType }) 
-            }); 
-        } catch(e) {}
-    };
-
-    // Listen to Firebase iPad data in Real-Time
     try {
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        window.setFormatOverride = async function(fixtureId, formatType) {
+            try { 
+                await fetch('/api/admin/set_fixture_format', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ fixture_id: fixtureId, format_type: formatType }) 
+                }); 
+            } catch(e) {}
+        };
+
         onSnapshot(query(collection(db, "fixture_schedule")), (snapshot) => {
             const liveList = document.getElementById("live-list"); 
             const scheduledList = document.getElementById("scheduled-list");
@@ -1298,7 +1330,6 @@
                 const p1 = (m.home_players && m.home_players.length > 0) ? m.home_players[0] : m.home_team;
                 const p2 = (m.away_players && m.away_players.length > 0) ? m.away_players[0] : m.away_team;
                 
-                // Live Match Cards
                 if (m.match_status === "Live" || m.match_status === "Paused" || m.live_home_score > 0 || m.live_away_score > 0) {
                     liveCount++; 
                     const s1 = m.live_home_sets || 0; 
@@ -1322,9 +1353,7 @@
                             <button onclick="window.wipeLiveMatch('${id}')" class="bg-red-900/50 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 font-bold py-2.5 px-4 rounded-lg text-sm transition-colors" title="Wipe Error"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     </div>`;
-                } 
-                // Scheduled Match Cards
-                else if (m.match_status === "Scheduled" || !m.match_status) {
+                } else if (m.match_status === "Scheduled" || !m.match_status) {
                     const formatVal = m.format_override || "Auto";
                     schedHtml += `
                     <div class="bg-slate-800/80 p-4 rounded-xl border border-white/5 shadow relative">
@@ -1344,44 +1373,46 @@
                 }
             });
             
-            if(liveList) liveList.innerHTML = liveHtml || '<div class="col-span-1 md:col-span-2 text-slate-500 text-center py-10 italic border border-white/5 rounded-xl bg-slate-800/30">No matches currently active.</div>';
-            if(scheduledList) scheduledList.innerHTML = schedHtml || '<div class="col-span-1 md:col-span-3 text-slate-500 text-center py-10 italic border border-white/5 rounded-xl bg-slate-800/30">No scheduled matches pending.</div>';
+            if (liveList) liveList.innerHTML = liveHtml || '<div class="col-span-1 md:col-span-2 text-slate-500 text-center py-10 italic border border-white/5 rounded-xl bg-slate-800/30">No matches currently active.</div>';
+            if (scheduledList) scheduledList.innerHTML = schedHtml || '<div class="col-span-1 md:col-span-3 text-slate-500 text-center py-10 italic border border-white/5 rounded-xl bg-slate-800/30">No scheduled matches pending.</div>';
         });
-    } catch(e) { console.error("Firebase Snapshot Error", e); }
 
-    window.forceFinishLive = async function(id, p1, p2) {
-        const s1 = document.getElementById(`live-s1-${id}`).value; 
-        const s2 = document.getElementById(`live-s2-${id}`).value;
-        
-        if(!confirm(`FORCE FINISH MATCH:\n\n${p1} vs ${p2}\nFinal Score: ${s1} - ${s2}\n\nProceed?`)) return;
-        
-        try {
-            const res = await fetch('/api/admin/force_finish_live', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ id: id, s1: s1, s2: s2 }) 
-            });
-            const data = await res.json();
-            if(data.success) alert("✅ Match forced finished!"); 
-            else alert("❌ Error finishing match.");
-        } catch(e) { 
-            alert("Network Error"); 
-        }
-    };
+        window.forceFinishLive = async function(id, p1, p2) {
+            const s1 = document.getElementById(`live-s1-${id}`).value; 
+            const s2 = document.getElementById(`live-s2-${id}`).value;
+            
+            if (!confirm(`FORCE FINISH MATCH:\n\n${p1} vs ${p2}\nFinal Score: ${s1} - ${s2}\n\nProceed?`)) return;
+            
+            try {
+                const res = await fetch('/api/admin/force_finish_live', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ id: id, s1: s1, s2: s2 }) 
+                });
+                const data = await res.json();
+                if (data.success) alert("✅ Match forced finished!"); 
+                else alert("❌ Error finishing match.");
+            } catch(e) { 
+                alert("Network Error"); 
+            }
+        };
 
-    window.wipeLiveMatch = async function(id) {
-        if(!confirm(`WIPE MATCH:\n\nAre you sure you want to completely erase this match?`)) return;
-        try {
-            const res = await fetch('/api/admin/wipe_live', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ id: id }) 
-            });
-            const data = await res.json();
-            if(data.success) alert("🗑️ Match wiped successfully!"); 
-            else alert("❌ Error wiping match.");
-        } catch(e) { 
-            alert("Network Error"); 
-        }
-    };
+        window.wipeLiveMatch = async function(id) {
+            if (!confirm(`WIPE MATCH:\n\nAre you sure you want to completely erase this match?`)) return;
+            try {
+                const res = await fetch('/api/admin/wipe_live', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ id: id }) 
+                });
+                const data = await res.json();
+                if (data.success) alert("🗑️ Match wiped successfully!"); 
+                else alert("❌ Error wiping match.");
+            } catch(e) { 
+                alert("Network Error"); 
+            }
+        };
+    } catch(err) {
+        console.warn("Firebase Live Connection skipped/failed. Check rules or CORS (harmless locally).");
+    }
 </script>

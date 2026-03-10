@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Player Portal | GCTTA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: white; }</style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4 relative overflow-hidden">
+
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-600/20 blur-[100px] rounded-full pointer-events-none"></div>
+
+    <div class="bg-slate-800/80 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl max-w-md w-full relative z-10">
+        
+        <div class="flex justify-center mb-6">
+            <div class="bg-black/50 p-1 rounded-xl flex gap-1 border border-white/5">
+                <button onclick="toggleAuth('login')" id="btn-login-tab" class="px-6 py-2 rounded-lg text-sm font-bold bg-indigo-600 text-white shadow transition-all">Sign In</button>
+                <button onclick="toggleAuth('register')" id="btn-register-tab" class="px-6 py-2 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition-all">Register</button>
+            </div>
+        </div>
+
+        <div class="text-center mb-8">
+            <h1 class="text-2xl font-black text-white tracking-tight" id="auth-title">Welcome Back</h1>
+            <p class="text-xs text-slate-400 mt-2" id="auth-subtitle">Sign in to access your stats and the community hub.</p>
+        </div>
+
+        <div id="form-login" class="space-y-4 animate-fade-in">
+            <div>
+                <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Email Address</label>
+                <input type="email" id="log-email" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-indigo-500 transition-colors">
+            </div>
+            <div>
+                <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Password</label>
+                <input type="password" id="log-password" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-indigo-500 transition-colors">
+            </div>
+            <button onclick="loginPlayer()" id="log-submit-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl mt-4 transition-all shadow-[0_0_15px_rgba(79,70,229,0.3)]">Sign In <i class="fa-solid fa-arrow-right ml-2"></i></button>
+        </div>
+
+        <div id="form-register" class="space-y-4 hidden animate-fade-in">
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">First Name</label>
+                    <input type="text" id="reg-first" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 text-sm">
+                </div>
+                <div>
+                    <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Last Name</label>
+                    <input type="text" id="reg-last" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 text-sm">
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Date of Birth</label>
+                    <input type="date" id="reg-dob" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 text-sm cursor-pointer">
+                </div>
+                <div>
+                    <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Est. Rating (or RC ID)</label>
+                    <input type="text" id="reg-rating" placeholder="e.g. 1200" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 text-sm">
+                </div>
+            </div>
+
+            <div class="pt-2 border-t border-white/5">
+                <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Email Address</label>
+                <input type="email" id="reg-email" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 text-sm mb-3">
+                
+                <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Password</label>
+                <input type="password" id="reg-password" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 text-sm">
+            </div>
+
+            <button onclick="registerPlayer()" id="reg-submit-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl mt-4 transition-all shadow-[0_0_15px_rgba(79,70,229,0.3)]">Create Account</button>
+        </div>
+        
+        <div class="mt-6 text-center">
+            <a href="/" class="text-xs text-slate-500 hover:text-white transition"><i class="fa-solid fa-arrow-left mr-1"></i> Back to Homepage</a>
+        </div>
+    </div>
+
+    <script>
+        function toggleAuth(mode) {
+            const isLog = mode === 'login';
+            document.getElementById('form-login').classList.toggle('hidden', !isLog);
+            document.getElementById('form-register').classList.toggle('hidden', isLog);
+            
+            document.getElementById('btn-login-tab').className = isLog ? "px-6 py-2 rounded-lg text-sm font-bold bg-indigo-600 text-white shadow transition-all" : "px-6 py-2 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition-all";
+            document.getElementById('btn-register-tab').className = !isLog ? "px-6 py-2 rounded-lg text-sm font-bold bg-indigo-600 text-white shadow transition-all" : "px-6 py-2 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition-all";
+            
+            document.getElementById('auth-title').innerText = isLog ? "Welcome Back" : "Join the Club";
+            document.getElementById('auth-subtitle').innerText = isLog ? "Sign in to access your stats and the community hub." : "Create your official player profile.";
+        }
+
+        window.loginPlayer = function() {
+            const email = document.getElementById('log-email').value;
+            if(!email) return alert("Enter email.");
+            
+            const mockName = email.split('@')[0].replace('.', ' ');
+            localStorage.setItem('player_uid', 'usr_' + Date.now());
+            localStorage.setItem('player_name', mockName.charAt(0).toUpperCase() + mockName.slice(1));
+            window.location.href = '/dashboard';
+        };
+
+        window.registerPlayer = async function() {
+            const first = document.getElementById('reg-first').value.trim();
+            const last = document.getElementById('reg-last').value.trim();
+            const dob = document.getElementById('reg-dob').value;
+            const rating = document.getElementById('reg-rating').value;
+            const email = document.getElementById('reg-email').value.trim();
+            const pass = document.getElementById('reg-password').value;
+
+            if(!first || !last || !email || !pass) return alert("Please fill required fields.");
+
+            const btn = document.getElementById('reg-submit-btn');
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
+            btn.disabled = true;
+
+            const fullName = `${first} ${last}`;
+            const mockUid = 'usr_' + Date.now();
+
+            try {
+                await fetch('/api/hub/register', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ uid: mockUid, name: fullName, dob: dob, email: email, estimated_rating: rating })
+                });
+                
+                localStorage.setItem('player_uid', mockUid);
+                localStorage.setItem('player_name', fullName);
+                window.location.href = '/dashboard';
+            } catch(e) {
+                alert("Network Error");
+                btn.innerHTML = 'Create Account';
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

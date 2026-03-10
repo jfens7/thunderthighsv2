@@ -1,14 +1,22 @@
 <div id="tab-home" class="w-full max-w-6xl px-4 animate-fade-in block relative z-10 mx-auto mt-6 md:mt-12 mb-20">
-    <div class="text-center mb-8">
+    <div class="text-center mb-8 relative">
         <div class="inline-block relative">
             <div class="absolute inset-0 bg-yellow-500 blur-3xl opacity-20 rounded-full"></div>
             <img src="https://img.icons8.com/color/144/table-tennis.png" alt="Icon" class="w-24 h-24 md:w-32 md:h-32 relative z-10 drop-shadow-2xl opacity-90 hover:scale-110 transition-transform duration-500">
         </div>
         <h2 class="text-4xl md:text-5xl font-black text-white mb-4 tracking-tight drop-shadow-lg mt-6">GCTTA STATS</h2>
         <p class="text-slate-200 max-w-xl mx-auto text-base md:text-lg leading-relaxed font-light drop-shadow-md">Track your performance, view division standings, and analyze match history.</p>
+        
+        <div class="mt-10 flex flex-col items-center justify-center">
+            <span class="bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-3 shadow-[0_0_10px_rgba(79,70,229,0.8)] border border-indigo-400">🔥 Live Now</span>
+            <a href="/player_auth" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-lg md:text-xl px-10 py-5 rounded-2xl shadow-[0_0_30px_rgba(79,70,229,0.5)] transition-all transform hover:scale-105 flex items-center gap-3 border border-white/20">
+                <i class="fa-solid fa-user-astronaut text-2xl"></i> ENTER PLAYER PORTAL
+            </a>
+            <p class="text-xs text-slate-400 mt-4">Create your account to view custom schedules, join the forum, and access your profile.</p>
+        </div>
     </div>
 
-    <div class="flex flex-col lg:flex-row gap-6 items-start justify-center">
+    <div class="flex flex-col lg:flex-row gap-6 items-start justify-center mt-12">
         
         <div class="w-full lg:w-2/3 flex flex-col gap-6">
             <div class="bg-blue-900/30 border border-blue-500/40 rounded-2xl p-6 md:p-8 text-center shadow-2xl relative overflow-hidden group">
@@ -16,7 +24,7 @@
                 <i class="fa-solid fa-laptop-code text-3xl text-sky-400 mb-3 relative z-10 animate-pulse"></i>
                 <h3 class="text-xl font-black text-white mb-2 relative z-10">We're Upgrading!</h3>
                 <p class="text-sm md:text-base text-slate-300 mb-6 relative z-10 max-w-2xl mx-auto leading-relaxed">
-                    We are currently working on new and exciting features for the platform! Because of this, you might encounter a bug or two. If you spot an issue, have a feature request, or want to file a complaint, please let us know below.
+                    We are currently rolling out the new Player Portal and Community Hub! Because of this, you might encounter a bug or two. If you spot an issue, have a feature request, or want to file a complaint, please let us know below.
                 </p>
                 <button onclick="document.getElementById('feedbackModal').classList.remove('hidden')" class="relative z-10 bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 px-8 rounded-xl transition shadow-lg flex items-center justify-center gap-2 mx-auto">
                     <i class="fa-solid fa-bullhorn"></i> Submit Feedback

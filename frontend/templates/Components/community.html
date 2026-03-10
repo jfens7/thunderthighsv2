@@ -1,0 +1,158 @@
+<div id="tab-community" class="hidden w-full max-w-3xl mx-auto px-4 pt-6 pb-24 animate-fade-in relative z-10">
+    <div class="text-center mb-8">
+        <h2 class="text-3xl font-black text-white tracking-tight">Community Hub</h2>
+        <p class="text-sm text-slate-400 mt-2">Banter, lost & found, gear questions, and polls.</p>
+    </div>
+
+    <div class="bg-slate-800/80 backdrop-blur-xl p-5 rounded-2xl border border-white/10 mb-8 shadow-xl">
+        <div id="auth-prompt" class="text-center py-4">
+            <p class="text-slate-300 text-sm mb-4">You must be signed in to post, vote, and comment.</p>
+            <a href="/player_auth" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-6 rounded-lg text-sm transition shadow-[0_0_15px_rgba(79,70,229,0.4)]">Sign In / Register</a>
+        </div>
+
+        <div id="post-creator" class="hidden">
+            <textarea id="pub-forum-input" placeholder="Start a discussion..." class="w-full bg-slate-900/50 border border-white/5 rounded-xl p-4 text-white text-sm resize-none outline-none focus:border-indigo-500 transition-colors" rows="3"></textarea>
+            
+            <div id="pub-image-preview-container" class="hidden mt-3 relative inline-block">
+                <img id="pub-image-preview" src="" class="h-32 rounded-lg border border-white/10 object-cover shadow-lg">
+                <button onclick="pubRemoveImage()" class="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow hover:scale-110 transition"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div id="pub-poll-builder" class="hidden mt-3 p-4 bg-slate-900 rounded-xl border border-sky-500/30 space-y-2 relative">
+                <button onclick="document.getElementById('pub-poll-builder').classList.add('hidden')" class="absolute top-2 right-2 text-slate-500 hover:text-red-400"><i class="fa-solid fa-xmark"></i></button>
+                <div class="text-[10px] uppercase font-bold text-sky-400 mb-2 tracking-widest"><i class="fa-solid fa-chart-bar mr-1"></i> Create a Poll</div>
+                <input type="text" placeholder="Option 1" class="pub-poll-opt w-full bg-slate-800 text-sm p-2.5 rounded border border-white/10 outline-none focus:border-sky-500 text-white">
+                <input type="text" placeholder="Option 2" class="pub-poll-opt w-full bg-slate-800 text-sm p-2.5 rounded border border-white/10 outline-none focus:border-sky-500 text-white">
+            </div>
+
+            <div class="flex justify-between items-center mt-3 pt-3 border-t border-white/5">
+                <div class="flex gap-4">
+                    <button onclick="document.getElementById('pub-poll-builder').classList.toggle('hidden')" class="text-sky-400 hover:text-sky-300 text-sm font-bold flex items-center"><i class="fa-solid fa-chart-pie mr-1.5"></i> Poll</button>
+                    <label class="text-pink-400 hover:text-pink-300 text-sm font-bold cursor-pointer flex items-center">
+                        <i class="fa-solid fa-camera mr-1.5"></i> Photo
+                        <input type="file" accept="image/*" class="hidden" onchange="pubPreviewImage(event)">
+                    </label>
+                </div>
+                <button onclick="pubSubmitPost()" id="pub-btn-post" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-6 rounded-lg shadow text-sm transition">Post</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="pub-forum-feed" class="space-y-5"><div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-500"></i></div></div>
+</div>
+
+<script>
+    let pubBase64Image = null;
+
+    function pubPreviewImage(event) {
+        const file = event.target.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) { pubBase64Image = e.target.result; document.getElementById('pub-image-preview').src = pubBase64Image; document.getElementById('pub-image-preview-container').classList.remove('hidden'); };
+        reader.readAsDataURL(file);
+    }
+    
+    function pubRemoveImage() { pubBase64Image = null; document.getElementById('pub-image-preview-container').classList.add('hidden'); }
+
+    window.initCommunity = function() {
+        const uid = localStorage.getItem('player_uid');
+        if(!uid) {
+            document.getElementById('auth-prompt').classList.remove('hidden');
+            document.getElementById('post-creator').classList.add('hidden');
+        } else {
+            document.getElementById('auth-prompt').classList.add('hidden');
+            document.getElementById('post-creator').classList.remove('hidden');
+        }
+        pubLoadForum();
+    };
+
+    async function pubSubmitPost() {
+        const val = document.getElementById('pub-forum-input').value.trim();
+        const pollOpts = Array.from(document.querySelectorAll('.pub-poll-opt')).map(i => i.value.trim()).filter(v => v);
+        if(!val && !pubBase64Image && pollOpts.length === 0) return;
+
+        const btn = document.getElementById('pub-btn-post'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; btn.disabled = true;
+        try {
+            await fetch('/api/hub/post', { 
+                method: 'POST', headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ 
+                    uid: localStorage.getItem('player_uid'), 
+                    name: localStorage.getItem('player_name'), 
+                    content: val, 
+                    type: pollOpts.length > 0 ? 'Poll' : 'General', 
+                    image_url: pubBase64Image, 
+                    poll_options: pollOpts.length > 0 ? pollOpts : null 
+                }) 
+            });
+            document.getElementById('pub-forum-input').value = ''; pubRemoveImage();
+            document.querySelectorAll('.pub-poll-opt').forEach(i => i.value = ''); document.getElementById('pub-poll-builder').classList.add('hidden');
+            pubLoadForum();
+        } catch(e) {} finally { btn.innerHTML = 'Post'; btn.disabled = false; }
+    }
+
+    async function pubLoadForum() {
+        const feed = document.getElementById('pub-forum-feed');
+        const uid = localStorage.getItem('player_uid');
+        
+        try {
+            const res = await fetch('/api/hub/forum'); const posts = await res.json();
+            if(posts.length === 0) { feed.innerHTML = '<div class="text-center text-slate-500 italic py-10 bg-slate-800/50 rounded-2xl border border-white/5">Start the conversation!</div>'; return; }
+            
+            feed.innerHTML = posts.map(p => {
+                const imgHtml = p.image_url ? `<img src="${p.image_url}" class="mt-3 rounded-xl border border-white/5 max-h-80 w-full object-cover shadow-lg">` : '';
+                let pollHtml = '';
+                if (p.type === 'Poll' && p.poll) {
+                    let totalVotes = 0; for(const voters of Object.values(p.poll)) totalVotes += voters.length;
+                    pollHtml = `<div class="mt-4 space-y-2">`;
+                    for(const [opt, voters] of Object.entries(p.poll)) {
+                        const pct = totalVotes > 0 ? Math.round((voters.length / totalVotes) * 100) : 0;
+                        const hasVoted = uid ? voters.includes(uid) : false;
+                        const activeClass = hasVoted ? "border-sky-500 text-sky-400" : "border-white/10 hover:border-white/30 text-white";
+                        const barColor = hasVoted ? "bg-sky-600/30" : "bg-slate-700/50";
+                        
+                        pollHtml += `
+                        <div ${uid ? `onclick="pubVotePoll('${p.id}', '${opt.replace(/'/g, "\\'")}')"` : `onclick="alert('Please sign in to vote.')"`} class="relative overflow-hidden border rounded-lg p-3 cursor-pointer transition-all ${activeClass} bg-black/40">
+                            <div class="absolute top-0 left-0 h-full ${barColor} transition-all duration-500" style="width: ${pct}%"></div>
+                            <div class="relative flex justify-between items-center text-sm font-bold z-10"><span>${opt}</span><span>${pct}%</span></div>
+                        </div>`;
+                    }
+                    pollHtml += `<div class="text-[10px] text-slate-500 text-right mt-1 font-mono">${totalVotes} votes</div></div>`;
+                }
+
+                const upvotes = p.upvotes || []; const isLiked = uid ? upvotes.includes(uid) : false;
+                const comments = p.comments || [];
+                let commentsHtml = comments.length > 0 ? `<div class="mt-4 pt-4 border-t border-white/5 space-y-3">` + comments.map(c => `<div class="bg-slate-900/50 p-3 rounded-lg border border-white/5"><div class="text-[10px] text-indigo-400 font-bold mb-1">${c.author}</div><div class="text-xs text-slate-300">${c.content}</div></div>`).join('') + `</div>` : '';
+
+                return `
+                <div class="bg-slate-800 p-5 md:p-6 rounded-2xl border border-white/5 shadow-xl">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-full flex items-center justify-center font-black text-white shadow-lg">${p.author_name.charAt(0)}</div>
+                            <div><div class="text-sm font-bold text-white flex items-center gap-1">${p.author_name} <i class="fa-solid fa-circle-check text-sky-400 text-[10px]" title="Verified Profile"></i></div><div class="text-[10px] text-slate-400 font-mono">${p.time_str}</div></div>
+                        </div>
+                        ${p.type === 'Poll' ? '<span class="bg-sky-900/30 text-sky-400 border border-sky-500/30 text-[9px] px-2 py-0.5 rounded shadow uppercase font-bold tracking-widest">Poll</span>' : ''}
+                    </div>
+                    <p class="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">${p.content}</p>
+                    ${imgHtml}
+                    ${pollHtml}
+                    <div class="mt-5 flex items-center gap-6">
+                        <button ${uid ? `onclick="pubToggleLike('${p.id}')"` : `onclick="alert('Please sign in to like.')"`} class="flex items-center gap-2 text-sm font-bold transition-transform hover:scale-110 ${isLiked ? 'text-pink-500' : 'text-slate-400 hover:text-pink-400'}"><i class="fa-solid fa-heart"></i> ${upvotes.length}</button>
+                        <button onclick="document.getElementById('pub-comment-box-${p.id}').classList.toggle('hidden')" class="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-indigo-400 transition-colors"><i class="fa-solid fa-comment"></i> ${comments.length}</button>
+                    </div>
+                    ${commentsHtml}
+                    <div id="pub-comment-box-${p.id}" class="hidden mt-4 flex gap-2">
+                        <input type="text" id="pub-comment-input-${p.id}" placeholder="Write a reply..." class="flex-1 bg-slate-900 border border-white/10 rounded-lg px-4 py-2.5 text-xs text-white outline-none focus:border-indigo-500">
+                        <button ${uid ? `onclick="pubSubmitComment('${p.id}')"` : `onclick="alert('Please sign in to comment.')"`} class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-5 rounded-lg text-xs transition shadow"><i class="fa-solid fa-paper-plane"></i></button>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch(e) {}
+    }
+    
+    async function pubVotePoll(postId, option) { await fetch('/api/hub/vote', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ post_id: postId, option: option, uid: localStorage.getItem('player_uid') }) }); pubLoadForum(); }
+    async function pubToggleLike(postId) { await fetch('/api/hub/upvote', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ post_id: postId, uid: localStorage.getItem('player_uid') }) }); pubLoadForum(); }
+    async function pubSubmitComment(postId) {
+        const input = document.getElementById(`pub-comment-input-${postId}`); if(!input.value.trim()) return;
+        await fetch('/api/hub/comment', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ post_id: postId, name: localStorage.getItem('player_name'), content: input.value.trim() }) }); pubLoadForum();
+    }
+</script>

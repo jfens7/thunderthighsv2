@@ -28,9 +28,7 @@
             </div>
         </div>
         <div class="flex items-center gap-3">
-            <button onclick="window.forceRefresh()" class="bg-yellow-500 hover:bg-yellow-400 text-black text-[10px] font-black px-4 py-2 rounded uppercase tracking-widest transition shadow-[0_0_15px_rgba(234,179,8,0.3)] flex items-center gap-2">
-                <i class="fa-solid fa-bolt"></i> FORCE REFRESH
-            </button>
+            <button onclick="window.forceRefresh()" class="bg-yellow-500 hover:bg-yellow-400 text-black text-[10px] font-black px-4 py-2 rounded uppercase tracking-widest transition shadow-[0_0_15px_rgba(234,179,8,0.3)] flex items-center gap-2"><i class="fa-solid fa-bolt"></i> FORCE REFRESH</button>
             <a href="{{ url_for('logout') }}" class="text-xs text-slate-400 hover:text-white px-3 py-2 border border-white/10 rounded transition">Sign Out</a>
             <a href="/" class="text-xs font-bold text-sky-400 hover:text-sky-300 ml-2"><i class="fa-solid fa-house mr-1"></i> Public Site</a>
         </div>
@@ -48,20 +46,21 @@
         <button onclick="window.switchAdminTab('history')" id="tab-btn-history" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Full History</button>
         <button onclick="window.switchAdminTab('manual')" id="tab-btn-manual" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">+ Add Match</button>
         <button onclick="window.switchAdminTab('date-errors')" id="tab-btn-date-errors" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Date Errors <span id="date-badge" class="hidden ml-1 bg-red-500 text-white rounded-full px-1.5 py-0.5 text-[9px]"></span></button>
-        <button onclick="window.switchAdminTab('tournaments')" id="tab-btn-tournaments" class="px-4 py-2 text-xs font-bold text-amber-400 bg-amber-900/30 rounded-lg"><i class="fa-solid fa-trophy mr-1"></i> Tournaments (Stealth)</button>
+        <button onclick="window.switchAdminTab('tournaments')" id="tab-btn-tournaments" class="px-4 py-2 text-xs font-bold text-amber-400 bg-amber-900/30 rounded-lg"><i class="fa-solid fa-trophy mr-1"></i> Tournaments</button>
     </div>
 
     <div id="sub-players" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
-        <button onclick="window.switchAdminTab('players')" id="tab-btn-players" class="px-4 py-2 text-xs font-bold text-purple-400 bg-purple-900/30 rounded-lg">Player Editor & Merges</button>
+        <button onclick="window.switchAdminTab('players')" id="tab-btn-players" class="px-4 py-2 text-xs font-bold text-purple-400 bg-purple-900/30 rounded-lg">Player Editor</button>
         <button onclick="window.switchAdminTab('diagnostics')" id="tab-btn-diagnostics" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Glicko Simulator</button>
-        <button onclick="window.switchAdminTab('schedules')" id="tab-btn-schedules" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"><i class="fa-solid fa-file-pdf mr-1"></i> Upload PDF Schedules</button>
+        <button onclick="window.switchAdminTab('schedules')" id="tab-btn-schedules" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"><i class="fa-solid fa-file-pdf mr-1"></i> Upload PDFs</button>
     </div>
 
     <div id="sub-comms" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
         <button onclick="window.switchAdminTab('broadcast')" id="tab-btn-broadcast" class="px-4 py-2 text-xs font-bold text-sky-400 bg-sky-900/30 rounded-lg">SMS Broadcast</button>
         <button onclick="window.switchAdminTab('sms-inbox')" id="tab-btn-sms-inbox" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">SMS Inbox</button>
         <button onclick="window.switchAdminTab('notices')" id="tab-btn-notices" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Public Notices</button>
-        <button onclick="window.switchAdminTab('inbox-feedback')" id="tab-btn-inbox-feedback" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Feedback</button>
+        <button onclick="window.switchAdminTab('community-mod')" id="tab-btn-community-mod" class="px-4 py-2 text-xs font-bold text-red-400 hover:text-white"><i class="fa-solid fa-shield-halved mr-1"></i> Community Mod</button>
+        <button onclick="window.switchAdminTab('inbox-feedback')" id="tab-btn-inbox-feedback" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">App Feedback</button>
         <button onclick="window.switchAdminTab('donations')" id="tab-btn-donations" class="px-4 py-2 text-xs font-bold text-emerald-400 hover:text-white">Donations Ledger</button>
     </div>
 
@@ -72,6 +71,11 @@
 
     <div class="flex-1 overflow-y-auto p-6 pb-20">
         
+        <div id="admin-community-mod" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
+            <h2 class="text-red-400 font-bold uppercase tracking-widest text-sm border-b border-white/10 pb-4 mb-4"><i class="fa-solid fa-shield-halved mr-2"></i> Forum Moderation</h2>
+            <div id="mod-forum-feed" class="space-y-4"></div>
+        </div>
+
         <div id="admin-live" class="animate-fade-in w-full max-w-4xl mx-auto space-y-6">
             <div class="flex justify-between items-center mb-2 border-b border-white/10 pb-4">
                 <h2 class="text-blue-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-satellite-dish mr-2"></i> Live iPad Telemetry</h2>
@@ -223,7 +227,12 @@
                 <div class="w-16 h-16 bg-red-600/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl"><i class="fa-solid fa-file-pdf"></i></div>
                 <h2 class="text-white font-black text-xl mb-2">PDF Schedule Scraper</h2>
                 <p class="text-xs text-slate-400 mb-8">Upload the weekly fixture PDFs sent out by the club. The AI will extract the matchups and attach them to player profiles so they can see who they play next.</p>
-                <input type="text" id="pdf-division" placeholder="Division Name (e.g. Division 1)" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none mb-4 text-center">
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <input type="text" id="pdf-season" placeholder="Season (e.g. Summer 2026)" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none text-center">
+                    <input type="text" id="pdf-division" placeholder="Division Name (e.g. Division 1)" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none text-center">
+                </div>
+                
                 <input type="file" id="pdf-file-upload" accept=".pdf" class="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-red-900/30 file:text-red-400 hover:file:bg-red-900/50 mb-6 bg-black/20 p-4 border border-white/5 rounded-xl cursor-pointer">
                 <button onclick="window.uploadPdfSchedule()" id="pdf-upload-btn" class="w-full bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-xl shadow-[0_0_15px_rgba(220,38,38,0.3)] transition text-sm">EXTRACT MATCHUPS</button>
             </div>
@@ -315,8 +324,95 @@
         </div>
 
     </div>
+</script>
 
-    {% include 'Components/Admin/scripts.html' %}
+<script>
+    window.uploadPdfSchedule = async function() {
+        const fileInput = document.getElementById('pdf-file-upload'); 
+        const seasonInput = document.getElementById('pdf-season'); 
+        const divInput = document.getElementById('pdf-division'); 
+        const btn = document.getElementById('pdf-upload-btn');
+        
+        if (!fileInput.files.length) return alert("Please select a PDF file first.");
+        if (!seasonInput.value) return alert("Please specify the Season (e.g., Summer 2026).");
+        if (!divInput.value) return alert("Please specify the Division.");
+        
+        const formData = new FormData();
+        formData.append('pdf', fileInput.files[0]); 
+        formData.append('season', seasonInput.value);
+        formData.append('division', divInput.value);
+        
+        const originalText = btn.innerHTML; 
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> PARSING PDF...'; 
+        btn.disabled = true;
+        
+        try {
+            const res = await fetch('/api/admin/upload_schedule', { method: 'POST', body: formData });
+            const data = await res.json();
+            if(data.success) { 
+                alert(`✅ Success! AI extracted ${data.teams_found} teams and ${data.matches_found} matchups from the PDF.`); 
+                fileInput.value = ''; 
+                divInput.value = ''; 
+                seasonInput.value = '';
+            } else {
+                alert(`❌ Parsing Error: ${data.error}`);
+            }
+        } catch(e) { 
+            alert("Network Error"); 
+        } finally { 
+            btn.innerHTML = originalText; 
+            btn.disabled = false; 
+        }
+    };
+</script>
 
-</body>
-</html>
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, query, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    // Initialize Firebase Live Connection
+    const firebaseConfig = { apiKey: "AIzaSyDq05wFsKLHtt8G0Z5yLOG9pIk9UX24S4o", authDomain: "gctta-stats-live.firebaseapp.com", projectId: "gctta-stats-live", storageBucket: "gctta-stats-live.firebasestorage.app", messagingSenderId: "1070856258556", appId: "1:1070856258556:web:be438e04c1941abc3c6879" };
+    const app = initializeApp(firebaseConfig); const db = getFirestore(app);
+
+    window.setFormatOverride = async function(fixtureId, formatType) { try { await fetch('/api/admin/set_fixture_format', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fixture_id: fixtureId, format_type: formatType }) }); } catch(e) {} };
+
+    try {
+        onSnapshot(query(collection(db, "fixture_schedule")), (snapshot) => {
+            const liveList = document.getElementById("live-list"); const scheduledList = document.getElementById("scheduled-list");
+            let liveCount = 0; let liveHtml = ""; let schedHtml = "";
+            snapshot.forEach((doc) => {
+                const m = doc.data(); const id = doc.id;
+                const p1 = (m.home_players && m.home_players.length > 0) ? m.home_players[0] : m.home_team;
+                const p2 = (m.away_players && m.away_players.length > 0) ? m.away_players[0] : m.away_team;
+                if (m.match_status === "Live" || m.match_status === "Paused" || m.live_home_score > 0 || m.live_away_score > 0) {
+                    liveCount++; const s1 = m.live_home_sets || 0; const s2 = m.live_away_sets || 0;
+                    liveHtml += `<div class="bg-slate-800 p-5 rounded-xl border border-blue-500/30 shadow-lg relative overflow-hidden mb-4"><div class="absolute top-0 right-0 bg-blue-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-lg animate-pulse">ACTIVE NOW</div><div class="flex justify-between items-center mb-3 mt-1"><span class="text-xs text-slate-400 font-mono">Table ${m.table} • ${m.division}</span></div><div class="text-xl font-black text-white mb-4">${p1} <span class="text-slate-500 mx-2 text-sm">vs</span> ${p2}</div><div class="flex items-center gap-4 bg-black/40 p-4 rounded-xl border border-white/5 mb-4 shadow-inner"><div class="text-xs text-slate-400 font-bold uppercase tracking-widest">Adjust Final Score:</div><input type="number" id="live-s1-${id}" value="${s1}" class="w-14 bg-slate-900 border border-white/10 text-white font-bold font-mono text-center rounded py-2 focus:border-blue-500 outline-none text-lg"><span class="text-slate-500 font-black">-</span><input type="number" id="live-s2-${id}" value="${s2}" class="w-14 bg-slate-900 border border-white/10 text-white font-bold font-mono text-center rounded py-2 focus:border-blue-500 outline-none text-lg"></div><div class="flex gap-3"><button onclick="window.forceFinishLive('${id}', '${p1.replace(/'/g, "\\'")}', '${p2.replace(/'/g, "\\'")}')" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm transition-transform hover:scale-[1.02] shadow-[0_0_15px_rgba(37,99,235,0.4)] flex items-center justify-center gap-2"><i class="fa-solid fa-flag-checkered"></i> Force Finish</button><button onclick="window.wipeLiveMatch('${id}')" class="bg-red-900/50 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 font-bold py-2.5 px-4 rounded-lg text-sm transition-colors" title="Wipe Error"><i class="fa-solid fa-trash"></i></button></div></div>`;
+                } else if (m.match_status === "Scheduled" || !m.match_status) {
+                    const formatVal = m.format_override || "Auto";
+                    schedHtml += `<div class="bg-slate-800/80 p-4 rounded-xl border border-white/5 shadow relative"><div class="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1 border-b border-white/5 pb-1 flex justify-between"><span>Table ${m.table}</span><span class="text-blue-400">${m.division}</span></div><div class="font-bold text-white text-sm mt-2">${m.home_team} <br><span class="text-slate-500 text-xs font-normal">vs</span><br> ${m.away_team}</div><div class="mt-4 pt-3 border-t border-white/5"><label class="block text-[9px] text-slate-500 uppercase font-bold mb-1">Match Format</label><select onchange="window.setFormatOverride('${id}', this.value)" class="w-full bg-slate-900 border border-white/10 text-slate-300 font-bold text-xs rounded py-2 px-2 focus:border-blue-500 outline-none"><option value="Auto" ${formatVal === 'Auto' ? 'selected' : ''}>Auto-Detect</option><option value="2v2" ${formatVal === '2v2' ? 'selected' : ''}>Force 2v2 (5 Matches)</option><option value="3v3" ${formatVal === '3v3' ? 'selected' : ''}>Force 3v3 (11 Matches)</option></select></div></div>`;
+                }
+            });
+            if(liveList) liveList.innerHTML = liveHtml || '<div class="col-span-1 md:col-span-2 text-slate-500 text-center py-10 italic border border-white/5 rounded-xl bg-slate-800/30">No matches currently active.</div>';
+            if(scheduledList) scheduledList.innerHTML = schedHtml || '<div class="col-span-1 md:col-span-3 text-slate-500 text-center py-10 italic border border-white/5 rounded-xl bg-slate-800/30">No scheduled matches pending.</div>';
+        });
+    } catch(e) { console.error("Firebase Snapshot Error", e); }
+
+    window.forceFinishLive = async function(id, p1, p2) {
+        const s1 = document.getElementById(`live-s1-${id}`).value; const s2 = document.getElementById(`live-s2-${id}`).value;
+        if(!confirm(`FORCE FINISH MATCH:\n\n${p1} vs ${p2}\nFinal Score: ${s1} - ${s2}\n\nProceed?`)) return;
+        try {
+            const res = await fetch('/api/admin/force_finish_live', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, s1: s1, s2: s2 }) });
+            const data = await res.json();
+            if(data.success) alert("✅ Match forced finished!"); else alert("❌ Error finishing match.");
+        } catch(e) { alert("Network Error"); }
+    };
+
+    window.wipeLiveMatch = async function(id) {
+        if(!confirm(`WIPE MATCH:\n\nAre you sure you want to completely erase this match?`)) return;
+        try {
+            const res = await fetch('/api/admin/wipe_live', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id }) });
+            const data = await res.json();
+            if(data.success) alert("🗑️ Match wiped successfully!"); else alert("❌ Error wiping match.");
+        } catch(e) { alert("Network Error"); }
+    };
+</script>

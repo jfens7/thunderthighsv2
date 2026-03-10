@@ -18,7 +18,7 @@ app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=30)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Globals for Lazy Loading
+# Globals for Memory-Safe Lazy Loading
 db = None
 db_lock = threading.Lock()
 sync_lock = threading.Lock()
@@ -61,7 +61,7 @@ def watch_firebase_for_live_matches():
     except Exception as e:
         logger.error(f"Failed to attach listener: {e}")
 
-# LAZY LOAD ENGINE (Fixes the Render Gunicorn Crash!)
+# LAZY LOAD ENGINE (Fixes the Render Gunicorn Crash & OOM Error)
 @app.before_request
 def pre_request_setup():
     global db
@@ -126,9 +126,9 @@ def login():
         return redirect(url_for('admin'))
     return render_template('login.html')
 
-@app.route('/register')
-def register_page(): 
-    return render_template('register.html')
+@app.route('/player_auth')
+def player_auth_page(): 
+    return render_template('player_auth.html')
 
 @app.route('/dashboard')
 def player_dashboard(): 
@@ -313,12 +313,27 @@ def chaos_clear():
     if db: return jsonify({"success": db.admin_clear_chaos(session.get('admin_email'))})
     return jsonify({"success": False})
 
+# ---> TEAM & SEASON SETUP ROUTES <---
+@app.route('/api/admin/teams', methods=['GET'])
+@login_required
+def admin_teams(): 
+    if db: return jsonify(db.admin_get_teams())
+    return jsonify([])
+
+@app.route('/api/admin/update_team', methods=['POST'])
+@login_required
+def admin_update_team(): 
+    if db: return jsonify({"success": db.admin_update_team(request.json.get('team_id'), request.json.get('players'), session.get('admin_email'))})
+    return jsonify({"success": False})
+
 @app.route('/api/admin/upload_schedule', methods=['POST'])
 @login_required
 def upload_schedule():
     if not db: return jsonify({"success": False, "error": "DB Offline"})
     if 'pdf' not in request.files: return jsonify({"success": False, "error": "No file uploaded"})
-    return jsonify(db.admin_upload_pdf_schedule(request.form.get('division', 'Unknown'), request.files['pdf'], session.get('admin_email')))
+    season = request.form.get('season', 'Unknown')
+    division = request.form.get('division', 'Unknown')
+    return jsonify(db.admin_upload_pdf_schedule(season, division, request.files['pdf'], session.get('admin_email')))
 
 @app.route('/api/admin/export_zermelo/<tournament_id>', methods=['GET'])
 @login_required
@@ -395,6 +410,12 @@ def add_notice():
 @login_required
 def delete_notice(): 
     if db: return jsonify({"success": db.admin_delete_notice(request.json.get('notice_id'), session.get('admin_email'))})
+    return jsonify({"success": False})
+
+@app.route('/api/admin/delete_post', methods=['POST'])
+@login_required
+def delete_community_post():
+    if db: return jsonify({"success": db.admin_delete_community_post(request.json.get('post_id'), session.get('admin_email'))})
     return jsonify({"success": False})
 
 @app.route('/api/admin/messages')
