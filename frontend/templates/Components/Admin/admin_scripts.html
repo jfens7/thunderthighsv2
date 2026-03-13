@@ -170,7 +170,6 @@
                 return;
             }
 
-            // Populate Divisions Dropdown
             const divs = new Set(window.currentSmsContacts.map(c => c.division));
             const filterSelect = document.getElementById('sms-div-filter');
             if(filterSelect) {
@@ -180,12 +179,9 @@
                 });
             }
 
-            // Make everyone selected by default
             window.currentSmsContacts.forEach(c => c.selected = true);
-            
             const previewBox = document.getElementById('sms-preview-box');
             if(previewBox) previewBox.classList.remove('hidden');
-            
             window.renderSmsPreviewList();
             
         } catch(e) {
@@ -259,7 +255,6 @@
         const msgInput = document.getElementById('broadcast-input');
         if(!msgInput) return alert("Message box not found.");
         const msg = msgInput.value.trim();
-        
         if (!msg) return alert("Please enter a custom message.");
         
         const selectedPhones = window.currentSmsContacts.filter(c => c.selected).map(c => c.phone);
@@ -305,68 +300,74 @@
         try {
             const res = await fetch('/api/admin/chaos_config');
             const data = await res.json();
-        } catch(e) {
-            console.error("Failed to load chaos config", e);
-        }
+        } catch(e) {}
     };
 
     // ==========================================
     // GLICKO SIMULATOR & MATH MULTIPLIERS
     // ==========================================
     window.runDiagnostics = async function() {
-        const p1 = document.getElementById('diag-p1-search').value;
-        const p2 = document.getElementById('diag-p2-search').value;
-        const s1 = document.getElementById('diag-s1').value;
+        const p1 = document.getElementById('diag-p1-search').value; 
+        const p2 = document.getElementById('diag-p2-search').value; 
+        const s1 = document.getElementById('diag-s1').value; 
         const s2 = document.getElementById('diag-s2').value;
-
-        if(!p1 || !p2) return alert("Select both players.");
-
+        const resultsBox = document.getElementById('diag-results'); 
         const btn = document.getElementById('diag-btn');
-        const orig = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running...';
-        btn.disabled = true;
-
+        
+        if(!p1 || !p2) return alert("Please select both players.");
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Calculating...';
+        
         try {
-            const res = await fetch('/api/admin/glicko_calc', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({p1: p1, p2: p2, s1: s1, s2: s2})
+            const res = await fetch('/api/admin/glicko_calc', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ p1: p1, p2: p2, s1: s1, s2: s2 }) 
             });
-            const data = await res.json();
-            
-            if(data.success && data.data) {
-                const r = data.data;
-                const resDiv = document.getElementById('diag-results');
-                resDiv.innerHTML = `
-                    <div class="bg-black/30 p-4 rounded-xl border border-emerald-500/30 mt-4 shadow-lg animate-fade-in">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase tracking-widest mb-3 text-center"><i class="fa-solid fa-chart-line mr-1"></i> Simulation Results</h4>
-                        <div class="grid grid-cols-2 gap-4 text-center">
+            const d = await res.json();
+            if(d.success) {
+                const math = d.data;
+                const renderPlayerMath = (pData) => {
+                    const deltaColor = pData.delta > 0 ? "text-emerald-400" : "text-red-400";
+                    const deltaSign = pData.delta > 0 ? "+" : "";
+                    const rdColor = pData.rd_delta > 0 ? "text-red-400" : "text-emerald-400"; // RD going down is good
+                    const rdSign = pData.rd_delta > 0 ? "+" : "";
+
+                    return `
+                    <div class="bg-slate-800 p-5 rounded-xl border border-white/5 relative">
+                        <div class="font-black text-white text-lg mb-4 border-b border-white/10 pb-2">${pData.name}</div>
+                        <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <div class="text-white font-black truncate">${r.p1}</div>
-                                <div class="text-[10px] text-slate-400 mb-1">Old: ${Math.round(r.p1_before)}</div>
-                                <div class="text-3xl font-black ${r.p1_delta >= 0 ? 'text-emerald-500' : 'text-red-500'}">
-                                    ${r.p1_delta > 0 ? '+' : ''}${r.p1_delta.toFixed(1)}
-                                </div>
-                                <div class="text-sm font-bold text-white mt-1 border-t border-white/5 pt-1">New: ${Math.round(r.p1_after)}</div>
+                                <div class="text-[10px] uppercase font-bold text-slate-500 mb-1">Current Rating</div>
+                                <div class="text-xl font-mono text-white">${Math.round(pData.old_rating)}</div>
                             </div>
                             <div>
-                                <div class="text-white font-black truncate">${r.p2}</div>
-                                <div class="text-[10px] text-slate-400 mb-1">Old: ${Math.round(r.p2_before)}</div>
-                                <div class="text-3xl font-black ${r.p2_delta >= 0 ? 'text-emerald-500' : 'text-red-500'}">
-                                    ${r.p2_delta > 0 ? '+' : ''}${r.p2_delta.toFixed(1)}
-                                </div>
-                                <div class="text-sm font-bold text-white mt-1 border-t border-white/5 pt-1">New: ${Math.round(r.p2_after)}</div>
+                                <div class="text-[10px] uppercase font-bold text-slate-500 mb-1">Deviation (RD)</div>
+                                <div class="text-xl font-mono text-slate-400">±${Math.round(pData.old_rd)}</div>
                             </div>
                         </div>
-                    </div>
-                `;
-                resDiv.classList.remove('hidden');
-            } else {
-                alert("Error running simulation.");
+                        <div class="mt-4 pt-4 border-t border-white/10 flex flex-col gap-2 bg-black/20 p-3 rounded-lg">
+                            <div class="flex justify-between items-center">
+                                <div class="text-[10px] uppercase font-bold text-slate-500">Rating Shift</div>
+                                <div class="text-lg font-black font-mono ${deltaColor}">${deltaSign}${pData.delta.toFixed(1)} pts</div>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <div class="text-[10px] uppercase font-bold text-slate-500">RD Shift</div>
+                                <div class="text-sm font-black font-mono ${rdColor}">${rdSign}${pData.rd_delta.toFixed(1)}</div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center mt-3 pt-3 border-t border-white/5">
+                            <span class="text-[10px] uppercase text-slate-500 font-bold">New Stats: </span>
+                            <span class="text-white font-mono font-bold">${Math.round(pData.new_rating)} <span class="text-slate-400 text-xs ml-1">±${Math.round(pData.new_rd)}</span></span>
+                        </div>
+                    </div>`;
+                };
+                resultsBox.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">${renderPlayerMath(math.p1)}${renderPlayerMath(math.p2)}</div>`;
+                resultsBox.classList.remove('hidden');
             }
-        } catch(e) { alert("Network Error."); } finally {
-            btn.innerHTML = orig;
-            btn.disabled = false;
+        } catch(e) { 
+            alert("Network Error"); 
+        } finally { 
+            btn.innerHTML = '<i class="fa-solid fa-microchip"></i> Run Simulation'; 
         }
     };
 

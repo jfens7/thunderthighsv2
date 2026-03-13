@@ -18,19 +18,34 @@ except ImportError:
 DEFAULT_RATING = 1000.0
 DEFAULT_RD = 300.0  
 
-def calculate_match(w, l, s1, s2, k_win=1.0, k_loss=1.4, anti_riot=True):
+def calculate_match(w, l, s1, s2, k_win=1.0, k_loss=1.4, anti_riot=True, point_scalar=1.0):
     total_sets = s1 + s2
     if total_sets == 0: return {'winner': w, 'loser': l}
-    w_score = 0.7 + 0.3 * ((s1 - s2) / total_sets); l_score = 1.0 - w_score
-    E_w = 1.0 / (1.0 + 10.0 ** ((l['rating'] - w['rating']) / 400.0)); E_l = 1.0 - E_w
-    K_w = max(30.0, w['rd'] * k_win); K_l = max(40.0, l['rd'] * k_loss)
-    w_shift = K_w * (w_score - E_w); l_shift = K_l * (l_score - E_l)
-    w_rd_shift = -4.0; l_rd_shift = -4.0
+    
+    w_score = 0.7 + 0.3 * ((s1 - s2) / total_sets)
+    l_score = 1.0 - w_score
+    
+    E_w = 1.0 / (1.0 + 10.0 ** ((l['rating'] - w['rating']) / 400.0))
+    E_l = 1.0 - E_w
+    
+    K_w = max(30.0, w['rd'] * k_win) * point_scalar
+    K_l = max(40.0, l['rd'] * k_loss) * point_scalar
+    
+    w_shift = K_w * (w_score - E_w)
+    l_shift = K_l * (l_score - E_l)
+    
+    w_rd_shift = -4.0
+    l_rd_shift = -4.0
+    
     if anti_riot:
         if w_shift < 0: w_shift = 0.0; w_rd_shift = 5.0 
         if l_shift > 0: l_shift = 0.0; l_rd_shift = 2.0 
-    w['rating'] += w_shift; l['rating'] += l_shift
-    w['rd'] = max(20.0, min(350.0, w['rd'] + w_rd_shift)); l['rd'] = max(20.0, min(350.0, l['rd'] + l_rd_shift))
+        
+    w['rating'] += w_shift
+    l['rating'] += l_shift
+    w['rd'] = max(20.0, min(350.0, w['rd'] + w_rd_shift))
+    l['rd'] = max(20.0, min(350.0, l['rd'] + l_rd_shift))
+    
     return {'winner': w, 'loser': l}
 
 RESULTS_SPREADSHEET_ID = "1tpxuUCl8ddpnBBr69vc4P1foRCRKWpts5-HaFPYb4po" 
@@ -48,12 +63,39 @@ class RatingEngine:
             if rd_val < 0: rd_val = DEFAULT_RD
             self.players[name] = {'rating': r_val, 'rd': rd_val, 'vol': float(vol) if vol is not None else 0.06}
         except ValueError: pass
-    def update_match(self, p1_name, p2_name, s1, s2, k_win=1.0, k_loss=1.4, anti_riot=True):
+        
+    def update_match(self, p1_name, p2_name, s1, s2, game_history='', k_win=1.0, k_loss=1.4, anti_riot=True):
         p1_stats = self.get_rating(p1_name); p2_stats = self.get_rating(p2_name)
         r1_old = p1_stats['rating']; rd1_old = p1_stats['rd']; r2_old = p2_stats['rating']; rd2_old = p2_stats['rd']
+        
         if s1 == s2: return {'p1_delta': 0, 'p2_delta': 0, 'p1_before': r1_old, 'p1_rd_before': rd1_old, 'p1_after': r1_old, 'p1_rd_after': rd1_old, 'p2_before': r2_old, 'p2_rd_before': rd2_old, 'p2_after': r2_old, 'p2_rd_after': rd2_old}
-        if s1 > s2: res = calculate_match(p1_stats, p2_stats, s1, s2, k_win, k_loss, anti_riot); self.players[p1_name] = res['winner']; self.players[p2_name] = res['loser']
-        else: res = calculate_match(p2_stats, p1_stats, s2, s1, k_win, k_loss, anti_riot); self.players[p2_name] = res['winner']; self.players[p1_name] = res['loser']
+        
+        point_scalar = 1.0
+        if game_history:
+            try:
+                p1_pts = 0; p2_pts = 0
+                for g in str(game_history).split(','):
+                    pts = g.strip().split('-')
+                    if len(pts) == 2:
+                        p1_pts += int(pts[0])
+                        p2_pts += int(pts[1])
+                
+                if p1_pts > 0 and p2_pts > 0:
+                    ratio = (p1_pts / p2_pts) if s1 > s2 else (p2_pts / p1_pts)
+                    if ratio >= 2.0: point_scalar = 1.25      
+                    elif ratio >= 1.5: point_scalar = 1.10    
+                    elif ratio < 1.15: point_scalar = 0.85    
+            except: pass
+
+        if s1 > s2: 
+            res = calculate_match(p1_stats, p2_stats, s1, s2, k_win, k_loss, anti_riot, point_scalar)
+            self.players[p1_name] = res['winner']
+            self.players[p2_name] = res['loser']
+        else: 
+            res = calculate_match(p2_stats, p1_stats, s2, s1, k_win, k_loss, anti_riot, point_scalar)
+            self.players[p2_name] = res['winner']
+            self.players[p1_name] = res['loser']
+            
         return {'p1_delta': self.players[p1_name]['rating'] - r1_old, 'p2_delta': self.players[p2_name]['rating'] - r2_old, 'p1_before': r1_old, 'p1_rd_before': rd1_old, 'p1_after': self.players[p1_name]['rating'], 'p1_rd_after': self.players[p1_name]['rd'], 'p2_before': r2_old, 'p2_rd_before': rd2_old, 'p2_after': self.players[p2_name]['rating'], 'p2_rd_after': self.players[p2_name]['rd']}
 
 class ThunderData:
@@ -158,22 +200,43 @@ class ThunderData:
     def undo_audit_action(self, log_id, super_admin_email):
         if not self.db: return False
         try:
-            doc_ref = self.db.collection('admin_audit_logs').document(log_id); doc = doc_ref.get()
+            doc_ref = self.db.collection('admin_audit_logs').document(log_id)
+            doc = doc_ref.get()
             if not doc.exists or doc.to_dict().get('status') == 'undone': return False
-            data = doc.to_dict(); action = data.get('action'); payload = json.loads(data.get('undo_payload', '{}'))
-            if action == 'OVERRIDE_RATING': self.db.collection('rating_overrides').document(re.sub(r'[^a-zA-Z0-9]', '_', payload.get('name')).lower()).delete()
+            data = doc.to_dict()
+            action = data.get('action')
+            payload = json.loads(data.get('undo_payload', '{}'))
+            
+            if action == 'OVERRIDE_RATING': 
+                self.db.collection('rating_overrides').document(re.sub(r'[^a-zA-Z0-9]', '_', payload.get('name', '')).lower()).delete()
             elif action in ['UPDATE_MATCH', 'ADD_MATCH']: 
                 if payload.get('correction_id'): self.db.collection('match_corrections').document(payload.get('correction_id')).delete()
                 if payload.get('result_id'): self.db.collection('match_results').document(payload.get('result_id')).delete()
-            elif action == 'OVERRIDE_DELTAS': self.db.collection('match_delta_overrides').document(payload.get('match_id')).delete()
+            elif action == 'OVERRIDE_DELTAS': 
+                self.db.collection('match_delta_overrides').document(payload.get('match_id')).delete()
             elif action in ['FORCE_FINISH_LIVE', 'WIPE_LIVE']:
-                if action == 'FORCE_FINISH_LIVE': self.db.collection('match_results').document(payload.get('result_id')).delete()
-                if payload.get('schedule_id') and payload.get('fixture_data'): self.db.collection('fixture_schedule').document(payload.get('schedule_id')).set(payload.get('fixture_data'))
+                if action == 'FORCE_FINISH_LIVE' and payload.get('result_id'): 
+                    self.db.collection('match_results').document(payload.get('result_id')).delete()
+                if payload.get('schedule_id') and payload.get('fixture_data'): 
+                    self.db.collection('fixture_schedule').document(payload.get('schedule_id')).set(payload.get('fixture_data'))
             elif action == 'BULK_DATE_FIX':
                 if 'rule_id' in payload: self.db.collection('bulk_date_rules').document(payload['rule_id']).delete()
-            doc_ref.update({'status': 'undone', 'undone_by': super_admin_email}); self.refresh_data()
+            elif action == 'UPDATE_MATH':
+                old_k_win = payload.get('old_k_win', 1.0)
+                old_k_loss = payload.get('old_k_loss', 1.4)
+                self.db.collection('system_config').document('main').set({
+                    'k_win_scale': float(old_k_win),
+                    'k_loss_scale': float(old_k_loss)
+                }, merge=True)
+                self.k_win = float(old_k_win)
+                self.k_loss = float(old_k_loss)
+                
+            doc_ref.update({'status': 'undone', 'undone_by': super_admin_email})
+            self.refresh_data()
             return True
-        except: return False
+        except Exception as e: 
+            logger.error(f"Undo error: {e}")
+            return False
 
     def _clean_name(self, name): return self.alias_map.get(" ".join(str(name).split()).lower(), " ".join(str(name).split()).title()) if name else ""
     def _get_val(self, row, keys, default=''):
@@ -614,7 +677,7 @@ class ThunderData:
                 else:
                     m_week = str(m.get('week', '')).lower()
                     is_chaos = self.chaos_config['active'] and m_week in [w.lower() for w in self.chaos_config['weeks']]
-                    deltas = self.rating_engine.update_match(m['p1'], m['p2'], m['s1'], m['s2'], self.k_win, self.k_loss, not is_chaos)
+                    deltas = self.rating_engine.update_match(m['p1'], m['p2'], m['s1'], m['s2'], m.get('game_history', ''), self.k_win, self.k_loss, not is_chaos)
             
             p1_delta = deltas.get('p1_delta', 0); p2_delta = deltas.get('p2_delta', 0)
             match_hash = f"{d_str}_{m['season']}_{m['week']}_{players[0]}_{players[1]}_{m['s1']}-{m['s2']}"
@@ -684,15 +747,25 @@ class ThunderData:
         data = self.all_players if season == "Career" else self.season_stats.get(season, {})
         if player_name not in data: return None
         raw = data[player_name]; rat = self.rating_engine.get_rating(player_name)
+        
         def format_bucket(stats):
             hist = stats['history']
             if division != "All": hist = [m for m in hist if m.get('division') == division]
             wins = sum(1 for m in hist if m['result'] == "Win"); win_rate = round((wins / len(hist)) * 100, 1) if hist else 0
             disp_hist = list(hist); disp_hist.reverse()
             return {'matches': len(hist), 'wins': wins, 'losses': len(hist)-wins, 'win_rate': f"{win_rate}%", 'match_history': disp_hist}
-        return {'name': player_name, 'rating': int(rat['rating']), 'rd': int(rat['rd']), 'vol': rat.get('vol', 0.06), 'combined': format_bucket(raw['combined']), 'peterman_id': self.all_players.get(player_name, {}).get('peterman_id', '')}
+            
+        return {
+            'name': player_name, 
+            'rating': int(rat['rating']), 
+            'rd': int(rat['rd']), 
+            'vol': rat.get('vol', 0.06), 
+            'combined': format_bucket(raw['combined']), 
+            'regular': format_bucket(raw['regular']), 
+            'fillin': format_bucket(raw['fillin']), 
+            'peterman_id': self.all_players.get(player_name, {}).get('peterman_id', '')
+        }
 
-    # NEW: Admin Math Functions
     def admin_glicko_math(self, p1, p2, s1, s2):
         p1_clean = self._clean_name(p1)
         p2_clean = self._clean_name(p2)
@@ -706,28 +779,49 @@ class ThunderData:
         r_eng.players[p1_clean] = p1_stats
         r_eng.players[p2_clean] = p2_stats
 
-        res = r_eng.update_match(p1_clean, p2_clean, s1, s2, self.k_win, self.k_loss, True)
+        res = r_eng.update_match(p1_clean, p2_clean, s1, s2, '', self.k_win, self.k_loss, True)
 
         return {
-            "p1": p1_clean, "p2": p2_clean,
-            "p1_before": res['p1_before'], "p1_after": res['p1_after'], "p1_delta": res['p1_delta'],
-            "p2_before": res['p2_before'], "p2_after": res['p2_after'], "p2_delta": res['p2_delta']
+            "p1": {
+                "name": p1_clean,
+                "old_rating": res['p1_before'],
+                "new_rating": res['p1_after'],
+                "delta": res['p1_delta'],
+                "old_rd": res['p1_rd_before'],
+                "new_rd": res['p1_rd_after'],
+                "rd_delta": res['p1_rd_after'] - res['p1_rd_before']
+            },
+            "p2": {
+                "name": p2_clean,
+                "old_rating": res['p2_before'],
+                "new_rating": res['p2_after'],
+                "delta": res['p2_delta'],
+                "old_rd": res['p2_rd_before'],
+                "new_rd": res['p2_rd_after'],
+                "rd_delta": res['p2_rd_after'] - res['p2_rd_before']
+            }
         }
         
     def admin_set_rating_scales(self, k_win, k_loss, admin_email="Unknown"):
         if not self.db: return False
         try:
+            doc = self.db.collection('system_config').document('main').get()
+            old_k_win = 1.0; old_k_loss = 1.4
+            if doc.exists:
+                data = doc.to_dict()
+                old_k_win = data.get('k_win_scale', 1.0)
+                old_k_loss = data.get('k_loss_scale', 1.4)
+
             self.db.collection('system_config').document('main').set({
                 'k_win_scale': float(k_win),
                 'k_loss_scale': float(k_loss)
             }, merge=True)
             self.k_win = float(k_win)
             self.k_loss = float(k_loss)
-            self._log_audit(admin_email, 'UPDATE_MATH', f"Set K-Win to {k_win}, K-Loss to {k_loss}", {})
+            self._log_audit(admin_email, 'UPDATE_MATH', f"Set K-Win to {k_win}, K-Loss to {k_loss}", {"old_k_win": old_k_win, "old_k_loss": old_k_loss})
             return True
         except: return False
 
-    # NEW: Head to Head Fetcher
     def get_head_to_head(self, p1, p2):
         if not p1 or not p2: return {"error": "Missing players"}
         p1_clean = self._clean_name(p1)
@@ -876,7 +970,6 @@ class ThunderData:
         try: self.db.collection('notices').document(notice_id).delete(); self._log_audit(admin_email, 'DELETE_NOTICE', f"Deleted notice ID: {notice_id}", {}); return True
         except: return False
 
-    # NEW: Admin Messaging Fetcher
     def get_admin_messages(self):
         if not self.db: return []
         try:
@@ -891,7 +984,6 @@ class ThunderData:
             return res
         except Exception as e: return []
 
-    # NEW: Admin Message Submitter
     def add_admin_message(self, message, admin_email="Unknown"):
         if not self.db: return False
         try:
