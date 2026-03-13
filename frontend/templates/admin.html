@@ -52,7 +52,7 @@
     <div id="sub-players" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
         <button onclick="window.switchAdminTab('players')" id="tab-btn-players" class="px-4 py-2 text-xs font-bold text-purple-400 bg-purple-900/30 rounded-lg">Player Editor</button>
         <button onclick="window.switchAdminTab('diagnostics')" id="tab-btn-diagnostics" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Glicko Simulator</button>
-        <button onclick="window.switchAdminTab('schedules')" id="tab-btn-schedules" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"><i class="fa-solid fa-file-pdf mr-1"></i> Upload PDFs</button>
+        <button onclick="window.switchAdminTab('schedules')" id="tab-btn-schedules" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"><i class="fa-solid fa-calendar-days mr-1"></i> Schedule Manager</button>
         <button onclick="window.switchAdminTab('pending-accounts')" id="tab-btn-pending-accounts" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"><i class="fa-solid fa-link mr-1"></i> Account Approvals</button>
     </div>
 
@@ -144,27 +144,91 @@
             <div id="dateErrorsList" class="w-full"></div>
         </div>
 
-        <div id="admin-tournaments" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
+        <div id="admin-tournaments" class="hidden animate-fade-in w-full max-w-6xl mx-auto">
             <div class="flex justify-between items-center mb-6 border-b border-amber-500/30 pb-4">
-                <h2 class="text-amber-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-user-secret mr-2"></i> Stealth Tournament Engine</h2>
-                <span class="bg-amber-900/50 text-amber-400 border border-amber-500/50 text-[10px] font-bold px-2 py-1 rounded shadow-inner animate-pulse">BETA MODE ACTIVE</span>
+                <h2 class="text-amber-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-trophy mr-2"></i> Tournament Director</h2>
+                <span class="bg-amber-900/50 text-amber-400 border border-amber-500/50 text-[10px] font-bold px-2 py-1 rounded shadow-inner animate-pulse">SMART ENGINE ACTIVE</span>
             </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-slate-800 p-6 rounded-xl border border-white/5">
-                    <h3 class="text-white font-bold mb-4 text-sm border-b border-white/10 pb-2">Create Registration Event</h3>
-                    <input type="text" placeholder="Event Name (e.g. Open Singles)" class="w-full bg-black/40 border border-white/10 rounded px-4 py-2 text-white mb-3 text-sm focus:outline-none">
-                    <div class="grid grid-cols-2 gap-3 mb-4">
-                        <input type="number" placeholder="Price ($)" class="w-full bg-black/40 border border-white/10 rounded px-4 py-2 text-white text-sm focus:outline-none">
-                        <input type="number" placeholder="Max Players" class="w-full bg-black/40 border border-white/10 rounded px-4 py-2 text-white text-sm focus:outline-none">
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-1 bg-slate-800 p-6 rounded-xl border border-white/5 h-fit shadow-xl">
+                    <h3 class="text-white font-black mb-4 text-lg border-b border-white/10 pb-2">1. New Tournament</h3>
+                    <input type="text" id="t-name" placeholder="e.g., Gold Coast Open 2026" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white mb-3 text-sm focus:outline-none focus:border-amber-500">
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Start Date</label>
+                            <input type="date" id="t-start" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-slate-300 text-sm focus:outline-none focus:border-amber-500">
+                        </div>
+                        <div>
+                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">End Date</label>
+                            <input type="date" id="t-end" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-slate-300 text-sm focus:outline-none focus:border-amber-500">
+                        </div>
                     </div>
-                    <button class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-2.5 rounded-lg transition shadow-lg text-xs">CREATE EVENT (HIDDEN)</button>
+                    <button onclick="window.adminCreateTournament()" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-3 rounded-lg transition shadow-lg text-sm mt-2">CREATE TOURNAMENT</button>
                 </div>
-                <div class="bg-slate-800 p-6 rounded-xl border border-amber-500/20 text-center flex flex-col justify-center">
-                    <div class="text-5xl text-amber-400 mb-4"><i class="fa-solid fa-file-csv"></i></div>
-                    <h3 class="text-white font-bold text-lg mb-1">Zermelo Engine</h3>
-                    <p class="text-xs text-slate-400 mb-6">Instantly compile all registered players and Ratings Central IDs into a Zermelo-ready import file.</p>
-                    <a href="/api/admin/export_zermelo/test_event_001" class="bg-white text-black hover:bg-slate-200 font-black py-3 rounded-lg transition shadow-[0_0_15px_rgba(255,255,255,0.2)] text-sm"><i class="fa-solid fa-download mr-2"></i> EXPORT TO ZERMELO</a>
+
+                <div class="lg:col-span-2 bg-slate-800 p-6 rounded-xl border border-amber-500/20 shadow-xl relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-amber-500 text-black text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-lg">STEP 2</div>
+                    <h3 class="text-white font-black mb-4 text-lg border-b border-white/10 pb-2">2. Add Events to Tournament</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Tournament ID (Copy from DB for now)</label>
+                            <input type="text" id="e-tournament-id" placeholder="e.g., gc-open-2026" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-500">
+                        </div>
+                        <div>
+                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Event Name</label>
+                            <input type="text" id="e-name" placeholder="e.g., <1500 Singles" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-500">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                        <div>
+                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Type</label>
+                            <select id="e-type" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500">
+                                <option value="Singles">Singles</option>
+                                <option value="Doubles">Doubles</option>
+                                <option value="Team">Team</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Price ($)</label>
+                            <input type="number" id="e-price" value="25" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500">
+                        </div>
+                        <div>
+                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Max Players</label>
+                            <input type="number" id="e-max-players" value="64" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500">
+                        </div>
+                        <div>
+                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Time Block</label>
+                            <select id="e-time" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500">
+                                <option value="Saturday AM">Saturday AM</option>
+                                <option value="Saturday PM">Saturday PM</option>
+                                <option value="Sunday AM">Sunday AM</option>
+                                <option value="Sunday PM">Sunday PM</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-amber-900/10 border border-amber-500/20 rounded-lg mb-6">
+                        <h4 class="text-amber-400 font-bold text-[10px] uppercase tracking-widest mb-3"><i class="fa-solid fa-lock mr-1"></i> Smart Eligibility Rules</h4>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label class="text-[9px] text-slate-400 uppercase font-bold tracking-widest block mb-1">Max Rating</label>
+                                <input type="number" id="e-max-rating" placeholder="e.g. 1499" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500">
+                            </div>
+                            <div>
+                                <label class="text-[9px] text-slate-400 uppercase font-bold tracking-widest block mb-1">Max Age</label>
+                                <input type="number" id="e-max-age" placeholder="e.g. 17" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500">
+                            </div>
+                            <div>
+                                <label class="text-[9px] text-slate-400 uppercase font-bold tracking-widest block mb-1">Min Age</label>
+                                <input type="number" id="e-min-age" placeholder="e.g. 40" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button onclick="window.adminCreateEvent()" class="w-full bg-white hover:bg-slate-200 text-black font-black py-3 rounded-lg transition shadow-[0_0_15px_rgba(255,255,255,0.2)] text-sm"><i class="fa-solid fa-plus mr-2"></i> ADD EVENT TO TOURNAMENT</button>
                 </div>
             </div>
         </div>
@@ -229,19 +293,39 @@
             </div>
         </div>
 
-        <div id="admin-schedules" class="hidden animate-fade-in w-full max-w-3xl mx-auto">
-            <div class="bg-slate-800 p-8 rounded-xl border border-white/10 shadow-xl text-center">
-                <div class="w-16 h-16 bg-red-600/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl"><i class="fa-solid fa-file-pdf"></i></div>
-                <h2 class="text-white font-black text-xl mb-2">PDF Schedule Scraper</h2>
-                <p class="text-xs text-slate-400 mb-8">Upload the weekly fixture PDFs sent out by the club. The AI will extract the matchups and attach them to player profiles so they can see who they play next.</p>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <input type="text" id="pdf-season" placeholder="Season (e.g. Summer 2026)" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none text-center">
-                    <input type="text" id="pdf-division" placeholder="Division Name (e.g. Division 1)" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none text-center">
+        <div id="admin-schedules" class="hidden animate-fade-in w-full max-w-6xl mx-auto">
+            <div class="flex justify-between items-center mb-6 border-b border-red-500/30 pb-4">
+                <h2 class="text-red-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-calendar-days mr-2"></i> Schedule & Fixture Manager</h2>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-1 bg-slate-800 p-6 rounded-xl border border-white/5 h-fit shadow-xl">
+                    <div class="w-12 h-12 bg-red-600/20 text-red-500 rounded-full flex items-center justify-center mb-4 text-xl"><i class="fa-solid fa-file-pdf"></i></div>
+                    <h3 class="text-white font-black mb-2 text-lg">PDF Scraper</h3>
+                    <p class="text-[10px] text-slate-400 mb-6">Upload the weekly fixture PDFs sent out by the club. The AI will extract the matchups.</p>
+                    
+                    <input type="text" id="pdf-season" placeholder="Season (e.g. Summer 2026)" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none text-sm mb-3">
+                    <input type="text" id="pdf-division" placeholder="Division Name (e.g. Division 1)" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none text-sm mb-3">
+                    
+                    <input type="file" id="pdf-file-upload" accept=".pdf" class="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-bold file:bg-red-900/30 file:text-red-400 hover:file:bg-red-900/50 mb-4 bg-black/20 p-3 border border-white/5 rounded-lg cursor-pointer">
+                    <button onclick="window.uploadPdfSchedule(event)" id="pdf-upload-btn" class="w-full bg-red-600 hover:bg-red-500 text-white font-black py-3 rounded-lg shadow-[0_0_15px_rgba(220,38,38,0.3)] transition text-xs">EXTRACT MATCHUPS</button>
                 </div>
-                
-                <input type="file" id="pdf-file-upload" accept=".pdf" class="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-red-900/30 file:text-red-400 hover:file:bg-red-900/50 mb-6 bg-black/20 p-4 border border-white/5 rounded-xl cursor-pointer">
-                <button onclick="window.uploadPdfSchedule()" id="pdf-upload-btn" class="w-full bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-xl shadow-[0_0_15px_rgba(220,38,38,0.3)] transition text-sm">EXTRACT MATCHUPS</button>
+
+                <div class="lg:col-span-2 bg-slate-800 p-6 rounded-xl border border-white/5 shadow-xl relative">
+                    <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-2">
+                        <h3 class="text-white font-bold text-sm">Extracted Matches Dashboard</h3>
+                        <button onclick="window.loadSchedules()" class="text-[10px] text-slate-400 hover:text-white uppercase font-bold tracking-widest bg-slate-900 px-3 py-1.5 rounded transition"><i class="fa-solid fa-rotate mr-1"></i> Refresh</button>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <select id="schedule-div-filter" onchange="window.renderSchedules()" class="w-full md:w-64 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-xs focus:outline-none">
+                            <option value="All">All Divisions</option>
+                        </select>
+                    </div>
+
+                    <div id="schedules-list" class="space-y-2 h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                        </div>
+                </div>
             </div>
         </div>
 

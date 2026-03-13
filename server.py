@@ -209,6 +209,12 @@ def top_donors(): return jsonify(db.get_top_donors()) if db else jsonify([])
 def get_notices(): return jsonify(db.get_notices()) if db else jsonify([])
 
 # --- ADMIN REST APIS ---
+@app.route('/api/admin/pending_accounts')
+@login_required
+def get_pending_accounts():
+    if db: return jsonify(db.admin_get_pending_accounts())
+    return jsonify([])
+
 @app.route('/api/admin/reports')
 @login_required
 def get_reports(): 
@@ -296,6 +302,16 @@ def upload_schedule():
     season = request.form.get('season', 'Unknown')
     division = request.form.get('division', 'Unknown')
     return jsonify(db.admin_upload_pdf_schedule(season, division, request.files['pdf'], session.get('admin_email')))
+
+@app.route('/api/admin/upcoming_schedules', methods=['GET'])
+@login_required
+def get_upcoming_schedules():
+    return jsonify(db.admin_get_upcoming_schedules()) if db else jsonify([])
+
+@app.route('/api/admin/delete_schedule', methods=['POST'])
+@login_required
+def delete_schedule():
+    return jsonify({"success": db.admin_delete_upcoming_schedule(request.json.get('schedule_id'), session.get('admin_email'))}) if db else jsonify({"success": False})
 
 @app.route('/api/admin/export_zermelo/<tournament_id>', methods=['GET'])
 @login_required
@@ -429,9 +445,33 @@ def force_refresh():
     threading.Thread(target=scheduled_refresh).start()
     return jsonify({"success": True, "status": "Refreshed"})
 
-# --- PLAYER HUB PUBLIC APIS ---
+@app.route('/api/admin/tournaments/create', methods=['POST'])
+@login_required
+def create_tournament():
+    if not db: return jsonify({"success": False, "error": "DB Offline"}), 503
+    req = request.get_json(silent=True)
+    return jsonify(db.admin_create_tournament(req, session.get('admin_email')))
+
+@app.route('/api/admin/tournaments/events/create', methods=['POST'])
+@login_required
+def create_event():
+    if not db: return jsonify({"success": False, "error": "DB Offline"}), 503
+    req = request.get_json(silent=True)
+    return jsonify(db.admin_create_event(req.get('tournament_id'), req.get('event_data', {}), session.get('admin_email')))
+
 @app.route('/api/hub/register', methods=['POST'])
 def hub_register(): return jsonify(db.register_player_account(request.json.get('name'), request.json.get('dob'), request.json.get('email'), request.json.get('uid'), request.json.get('estimated_rating'))) if db else jsonify({"success": False})
+
+@app.route('/api/hub/tournaments/check_eligibility', methods=['POST'])
+def hub_check_eligibility():
+    if not db: return jsonify({"eligible": False, "reasons": ["Database offline"]})
+    req = request.get_json(silent=True)
+    uid = req.get('uid')
+    event_data = req.get('event_data', {})
+    partner_uid = req.get('partner_uid')
+    eligible, reasons = db.check_eligibility(uid, event_data, partner_uid)
+    return jsonify({"eligible": eligible, "reasons": reasons})
+
 @app.route('/api/hub/forum', methods=['GET'])
 def get_forum(): return jsonify(db.get_community_feed()) if db else jsonify([])
 @app.route('/api/hub/post', methods=['POST'])

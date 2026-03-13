@@ -2,6 +2,29 @@
     console.log("✅ Admin UI Script Loaded Successfully!");
 
     // ==========================================
+    // AUTO LOGOUT TIMER (2 MINS INACTIVITY)
+    // ==========================================
+    const inactivityTime = function () {
+        let time;
+        window.onload = resetTimer;
+        document.onmousemove = resetTimer;
+        document.onkeypress = resetTimer;
+        document.ontouchstart = resetTimer;
+        document.onclick = resetTimer;
+
+        function logout() {
+            alert("You have been logged out due to 2 minutes of inactivity.");
+            window.location.href = '/logout';
+        }
+
+        function resetTimer() {
+            clearTimeout(time);
+            time = setTimeout(logout, 120000); // 120000ms = 2 minutes
+        }
+    };
+    inactivityTime();
+
+    // ==========================================
     // UI NAVIGATION ENGINE
     // ==========================================
     window.setAdminCategory = function(catId) {
@@ -63,6 +86,8 @@
         if (tabId === 'team-editor') window.loadTeams();
         if (tabId === 'pending-accounts') window.loadPendingAccounts();
         
+        if (tabId === 'schedules') window.loadSchedules();
+        
         if (tabId === 'history') {
             const histDivFilter = document.getElementById('hist-div-filter');
             if (histDivFilter && histDivFilter.options.length <= 1) {
@@ -93,6 +118,275 @@
             const data = await res.json();
             if (data.success) alert("✅ Sync triggered! Changes will appear momentarily."); else alert("❌ Sync failed.");
         } catch(e) { alert("❌ Network Error."); } finally { if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; } }
+    };
+
+    // ==========================================
+    // SMS BROADCASTING & CONTACT LIST ENGINE
+    // ==========================================
+    window.currentSmsContacts = [];
+
+    window.copyContactList = async function(type) {
+        const btn = document.getElementById(`btn-copy-${type}`);
+        if(!btn) return;
+        const origHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Fetching...';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch('/api/admin/contacts');
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+
+            const textToCopy = type === 'emails' ? data.emails : data.phones;
+            if (!textToCopy) {
+                alert(`No ${type} found.`);
+            } else {
+                await navigator.clipboard.writeText(textToCopy);
+                alert(`✅ Copied ${textToCopy.split(',').length} ${type} to clipboard!`);
+            }
+        } catch(e) {
+            alert("Error: " + e.message);
+        } finally {
+            btn.innerHTML = origHTML;
+            btn.disabled = false;
+        }
+    };
+
+    window.verifySmsList = async function() {
+        const btn = document.getElementById('btn-verify-sms');
+        if(!btn) return;
+        const origHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch('/api/admin/contacts');
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+
+            window.currentSmsContacts = data.preview || [];
+            if (window.currentSmsContacts.length === 0) {
+                alert("No opted-in phone numbers found.");
+                return;
+            }
+
+            // Populate Divisions Dropdown
+            const divs = new Set(window.currentSmsContacts.map(c => c.division));
+            const filterSelect = document.getElementById('sms-div-filter');
+            if(filterSelect) {
+                filterSelect.innerHTML = '<option value="All">All Divisions</option>';
+                divs.forEach(d => {
+                    if(d) filterSelect.innerHTML += `<option value="${d}">${d}</option>`;
+                });
+            }
+
+            // Make everyone selected by default
+            window.currentSmsContacts.forEach(c => c.selected = true);
+            
+            const previewBox = document.getElementById('sms-preview-box');
+            if(previewBox) previewBox.classList.remove('hidden');
+            
+            window.renderSmsPreviewList();
+            
+        } catch(e) {
+            alert("Error: " + e.message);
+        } finally {
+            btn.innerHTML = origHTML;
+            btn.disabled = false;
+        }
+    };
+
+    window.renderSmsPreviewList = function() {
+        const filterEl = document.getElementById('sms-div-filter');
+        const filter = filterEl ? filterEl.value : 'All';
+        const listEl = document.getElementById('preview-list');
+        if(!listEl) return;
+        
+        let html = '';
+        let visibleCount = 0;
+        let selectedCount = 0;
+
+        window.currentSmsContacts.forEach((c, idx) => {
+            if (c.selected) selectedCount++;
+            if (filter === 'All' || c.division === filter) {
+                visibleCount++;
+                html += `
+                <div class="flex justify-between items-center bg-black/20 p-2 rounded border border-white/5">
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" id="sms-cb-${idx}" ${c.selected ? 'checked' : ''} onchange="window.toggleSmsSelection(${idx}, this.checked)" class="w-4 h-4 rounded bg-slate-900 border-white/10 text-emerald-500 focus:ring-emerald-500">
+                        <div>
+                            <div class="font-bold text-white text-sm leading-tight">${c.name}</div>
+                            <div class="text-[10px] text-slate-500 font-mono">${c.phone}</div>
+                        </div>
+                    </div>
+                    <div class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-white/10">${c.division}</div>
+                </div>`;
+            }
+        });
+
+        if (visibleCount === 0) {
+            html = '<div class="text-center py-4 text-slate-500 italic text-xs">No players match this filter.</div>';
+        }
+
+        listEl.innerHTML = html;
+        const countEl = document.getElementById('preview-count');
+        if(countEl) countEl.innerText = selectedCount;
+    };
+
+    window.toggleSmsSelection = function(idx, isChecked) {
+        if (window.currentSmsContacts[idx]) {
+            window.currentSmsContacts[idx].selected = isChecked;
+            const countEl = document.getElementById('preview-count');
+            if(countEl) countEl.innerText = window.currentSmsContacts.filter(c => c.selected).length;
+        }
+    };
+
+    window.filterSmsList = function() {
+        window.renderSmsPreviewList();
+    };
+
+    window.toggleAllSms = function() {
+        const filterEl = document.getElementById('sms-div-filter');
+        const filter = filterEl ? filterEl.value : 'All';
+        const visibleContacts = window.currentSmsContacts.filter(c => filter === 'All' || c.division === filter);
+        const allChecked = visibleContacts.every(c => c.selected);
+        
+        visibleContacts.forEach(c => c.selected = !allChecked);
+        window.renderSmsPreviewList();
+    };
+
+    window.sendSmsBroadcast = async function() {
+        const msgInput = document.getElementById('broadcast-input');
+        if(!msgInput) return alert("Message box not found.");
+        const msg = msgInput.value.trim();
+        
+        if (!msg) return alert("Please enter a custom message.");
+        
+        const selectedPhones = window.currentSmsContacts.filter(c => c.selected).map(c => c.phone);
+        if (selectedPhones.length === 0) return alert("Please select at least one recipient first using the verification tool.");
+
+        if (!confirm(`You are about to send an SMS to ${selectedPhones.length} players.\n\nProceed?`)) return;
+
+        const btn = document.getElementById('btn-send-sms');
+        const origHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> SENDING...';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch('/api/admin/send_sms', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: msg, phones: selectedPhones })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                alert("✅ " + data.message);
+                msgInput.value = '';
+                msgInput.dispatchEvent(new Event('input'));
+                window.currentSmsContacts = [];
+                const previewBox = document.getElementById('sms-preview-box');
+                if(previewBox) previewBox.classList.add('hidden');
+            } else {
+                alert("❌ Failed: " + data.error);
+            }
+        } catch(e) {
+            alert("Network error while sending SMS.");
+        } finally {
+            btn.innerHTML = origHTML;
+            btn.disabled = false;
+        }
+    };
+
+    // ==========================================
+    // CHAOS CONFIG
+    // ==========================================
+    window.loadChaosConfig = async function() {
+        try {
+            const res = await fetch('/api/admin/chaos_config');
+            const data = await res.json();
+        } catch(e) {
+            console.error("Failed to load chaos config", e);
+        }
+    };
+
+    // ==========================================
+    // GLICKO SIMULATOR & MATH MULTIPLIERS
+    // ==========================================
+    window.runDiagnostics = async function() {
+        const p1 = document.getElementById('diag-p1-search').value;
+        const p2 = document.getElementById('diag-p2-search').value;
+        const s1 = document.getElementById('diag-s1').value;
+        const s2 = document.getElementById('diag-s2').value;
+
+        if(!p1 || !p2) return alert("Select both players.");
+
+        const btn = document.getElementById('diag-btn');
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running...';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch('/api/admin/glicko_calc', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({p1: p1, p2: p2, s1: s1, s2: s2})
+            });
+            const data = await res.json();
+            
+            if(data.success && data.data) {
+                const r = data.data;
+                const resDiv = document.getElementById('diag-results');
+                resDiv.innerHTML = `
+                    <div class="bg-black/30 p-4 rounded-xl border border-emerald-500/30 mt-4 shadow-lg animate-fade-in">
+                        <h4 class="text-emerald-400 font-bold text-xs uppercase tracking-widest mb-3 text-center"><i class="fa-solid fa-chart-line mr-1"></i> Simulation Results</h4>
+                        <div class="grid grid-cols-2 gap-4 text-center">
+                            <div>
+                                <div class="text-white font-black truncate">${r.p1}</div>
+                                <div class="text-[10px] text-slate-400 mb-1">Old: ${Math.round(r.p1_before)}</div>
+                                <div class="text-3xl font-black ${r.p1_delta >= 0 ? 'text-emerald-500' : 'text-red-500'}">
+                                    ${r.p1_delta > 0 ? '+' : ''}${r.p1_delta.toFixed(1)}
+                                </div>
+                                <div class="text-sm font-bold text-white mt-1 border-t border-white/5 pt-1">New: ${Math.round(r.p1_after)}</div>
+                            </div>
+                            <div>
+                                <div class="text-white font-black truncate">${r.p2}</div>
+                                <div class="text-[10px] text-slate-400 mb-1">Old: ${Math.round(r.p2_before)}</div>
+                                <div class="text-3xl font-black ${r.p2_delta >= 0 ? 'text-emerald-500' : 'text-red-500'}">
+                                    ${r.p2_delta > 0 ? '+' : ''}${r.p2_delta.toFixed(1)}
+                                </div>
+                                <div class="text-sm font-bold text-white mt-1 border-t border-white/5 pt-1">New: ${Math.round(r.p2_after)}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                resDiv.classList.remove('hidden');
+            } else {
+                alert("Error running simulation.");
+            }
+        } catch(e) { alert("Network Error."); } finally {
+            btn.innerHTML = orig;
+            btn.disabled = false;
+        }
+    };
+
+    window.saveMathMultipliers = async function() {
+        const kWin = document.getElementById('math-k-win').value;
+        const kLoss = document.getElementById('math-k-loss').value;
+        if(!confirm(`Are you sure you want to change the global rating modifiers?\n\nK-Win: ${kWin}\nK-Loss: ${kLoss}\n\nThis will trigger a full history recalculation.`)) return;
+
+        try {
+            const res = await fetch('/api/admin/set_rating_scales', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({k_win: kWin, k_loss: kLoss})
+            });
+            const data = await res.json();
+            if(data.success) {
+                alert("✅ Modifiers saved! The server will now recalculate all ratings.");
+                window.forceRefresh();
+            } else alert("❌ Failed to save modifiers.");
+        } catch(e) { alert("Network Error."); }
     };
 
     // ==========================================
@@ -230,6 +524,120 @@
             const data = await res.json();
             if (data.success) { alert("✅ Account approved!"); window.loadPendingAccounts(); } else alert("❌ Failed to link account.");
         } catch(e) { alert("Network Error"); }
+    };
+
+    // ==========================================
+    // SCHEDULE / FIXTURE MANAGER
+    // ==========================================
+    window.upcomingSchedules = [];
+
+    window.loadSchedules = async function() {
+        const listEl = document.getElementById('schedules-list');
+        if(!listEl) return;
+        listEl.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-red-500"></i></div>';
+        
+        try {
+            const res = await fetch('/api/admin/upcoming_schedules');
+            window.upcomingSchedules = await res.json();
+            
+            const divs = new Set(window.upcomingSchedules.map(s => s.division));
+            const filterEl = document.getElementById('schedule-div-filter');
+            if (filterEl && filterEl.options.length <= 1) {
+                divs.forEach(d => {
+                    if(d) filterEl.innerHTML += `<option value="${d}">${d}</option>`;
+                });
+            }
+            window.renderSchedules();
+        } catch(e) { 
+            listEl.innerHTML = '<div class="text-red-500 text-xs text-center py-4">Failed to load schedules.</div>'; 
+        }
+    };
+
+    window.renderSchedules = function() {
+        const filterObj = document.getElementById('schedule-div-filter');
+        const filter = filterObj ? filterObj.value : 'All';
+        const listEl = document.getElementById('schedules-list');
+        if(!listEl) return;
+        
+        let filtered = window.upcomingSchedules;
+        if (filter !== 'All') {
+            filtered = filtered.filter(s => s.division === filter);
+        }
+        
+        if (filtered.length === 0) {
+            listEl.innerHTML = '<div class="text-slate-500 text-center py-10 italic border border-white/5 rounded-xl bg-black/20">No matches extracted yet. Upload a PDF first.</div>';
+            return;
+        }
+        
+        let html = '';
+        filtered.forEach(s => {
+            html += `
+            <div class="bg-black/30 border border-white/5 p-4 rounded-lg flex justify-between items-center group transition-colors hover:bg-slate-800">
+                <div>
+                    <div class="flex items-center gap-2 mb-1.5">
+                        <span class="bg-blue-900/30 text-blue-400 border border-blue-500/20 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-widest">${s.division}</span>
+                        <span class="text-xs text-slate-400 font-mono"><i class="fa-regular fa-calendar mr-1"></i>${s.date_text}</span>
+                    </div>
+                    <div class="text-sm font-black text-white">${s.home_team} <span class="text-slate-500 text-xs font-normal mx-2 text-[10px] uppercase">vs</span> ${s.away_team}</div>
+                </div>
+                <button onclick="window.deleteSchedule('${s.id}')" title="Delete Duplicate Match" class="text-red-500 hover:text-white bg-red-900/20 hover:bg-red-600 border border-red-500/20 rounded px-3 py-2 transition opacity-0 group-hover:opacity-100 shadow"><i class="fa-solid fa-trash"></i></button>
+            </div>`;
+        });
+        listEl.innerHTML = html;
+    };
+
+    window.deleteSchedule = async function(id) {
+        if(!confirm("Are you sure you want to delete this match from the schedule?")) return;
+        try {
+            const res = await fetch('/api/admin/delete_schedule', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({schedule_id: id})
+            });
+            const data = await res.json();
+            if(data.success) {
+                window.loadSchedules();
+            } else alert("Failed to delete schedule.");
+        } catch(e) { alert("Network Error"); }
+    };
+
+    window.uploadPdfSchedule = async function(event) {
+        if (event) event.preventDefault();
+        
+        const fileInput = document.getElementById('pdf-file-upload'); 
+        const seasonInput = document.getElementById('pdf-season');
+        const divInput = document.getElementById('pdf-division');
+        
+        if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+            return alert("Please select a PDF file first. If you did, hard refresh the page (Cmd+Shift+R) to clear your cache.");
+        }
+        
+        const season = seasonInput ? seasonInput.value : 'Unknown Season';
+        const division = divInput ? divInput.value : 'Unknown Division';
+
+        const formData = new FormData();
+        formData.append('pdf', fileInput.files[0]);
+        formData.append('season', season);
+        formData.append('division', division);
+
+        const btn = document.getElementById('pdf-upload-btn');
+        const origHtml = btn ? btn.innerHTML : 'EXTRACT MATCHUPS';
+        if (btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> PARSING...'; btn.disabled = true; }
+
+        try {
+            const res = await fetch('/api/admin/upload_schedule', { method: 'POST', body: formData });
+            const data = await res.json();
+            
+            if (data.success) {
+                alert(`✅ Extraction Complete!\n\nFound ${data.teams_found} teams and ${data.matches_found} matchups.`);
+                window.loadSchedules();
+            } else alert("❌ Failed to parse PDF: " + data.error);
+        } catch(e) {
+            alert("❌ Network error while uploading PDF.");
+        } finally {
+            if (btn) { btn.innerHTML = origHtml; btn.disabled = false; }
+            if (fileInput) fileInput.value = '';
+        }
     };
 
     // ==========================================
@@ -535,6 +943,61 @@
             if (data.success) window.loadAdminUsers();
         } catch(e) {}
     }
+
+    // ==========================================
+    // TOURNAMENT CREATOR ENGINE
+    // ==========================================
+    window.adminCreateTournament = async function() {
+        const name = document.getElementById('t-name').value;
+        const start = document.getElementById('t-start').value;
+        const end = document.getElementById('t-end').value;
+
+        if(!name || !start) return alert("Tournament Name and Start Date are required.");
+
+        try {
+            const res = await fetch('/api/admin/tournaments/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, start_date: start, end_date: end })
+            });
+            const data = await res.json();
+            if(data.success) {
+                alert(`✅ Tournament created!\n\nID: ${data.tournament_id}\n\nCopy this ID to attach events to it.`);
+                document.getElementById('e-tournament-id').value = data.tournament_id;
+            } else alert("❌ Error: " + data.error);
+        } catch(e) { alert("Network Error"); }
+    };
+
+    window.adminCreateEvent = async function() {
+        const tid = document.getElementById('e-tournament-id').value;
+        if(!tid) return alert("Please enter the Tournament ID first.");
+
+        const payload = {
+            name: document.getElementById('e-name').value,
+            type: document.getElementById('e-type').value,
+            price: document.getElementById('e-price').value,
+            max_players: document.getElementById('e-max-players').value,
+            time_block: document.getElementById('e-time').value,
+            max_rating: document.getElementById('e-max-rating').value,
+            max_age: document.getElementById('e-max-age').value,
+            min_age: document.getElementById('e-min-age').value
+        };
+
+        if(!payload.name) return alert("Event Name is required.");
+
+        try {
+            const res = await fetch('/api/admin/tournaments/events/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tournament_id: tid, event_data: payload })
+            });
+            const data = await res.json();
+            if(data.success) {
+                alert("✅ Event successfully attached to tournament!");
+                document.getElementById('e-name').value = '';
+            } else alert("❌ Error: " + data.error);
+        } catch(e) { alert("Network Error"); }
+    };
 </script>
 
 <script type="module">

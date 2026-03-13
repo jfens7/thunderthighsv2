@@ -191,13 +191,123 @@ class ThunderData:
     def _slugify(self, text): return re.sub(r'[^a-z0-9]', '', str(text).lower())
     def _extract_week(self, text): match = re.search(r'\d+', str(text)); return match.group() if match else str(text).strip().lower()
 
-    # --- NEW: PROFILE & RC ID LINKING ---
+    # --- TOURNAMENT ENGINE MODULE ---
+    def admin_create_tournament(self, data, admin_email="Unknown"):
+        if not self.db: return False
+        try:
+            t_id = self._slugify(data.get('name', 'new_tournament')) + f"_{random.randint(100,999)}"
+            payload = {
+                'id': t_id,
+                'name': data.get('name'),
+                'start_date': data.get('start_date'),
+                'end_date': data.get('end_date'),
+                'venue': data.get('venue', 'GCTTA'),
+                'status': data.get('status', 'Draft'),
+                'created_by': admin_email,
+                'timestamp': firestore.SERVER_TIMESTAMP
+            }
+            self.db.collection('tournaments').document(t_id).set(payload)
+            self._log_audit(admin_email, 'CREATE_TOURNAMENT', f"Created Tournament: {data.get('name')}", {})
+            return {"success": True, "tournament_id": t_id}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def admin_create_event(self, tournament_id, data, admin_email="Unknown"):
+        if not self.db: return False
+        try:
+            event_ref = self.db.collection('tournaments').document(tournament_id).collection('events').document()
+            payload = {
+                'id': event_ref.id,
+                'name': data.get('name'),
+                'type': data.get('type', 'Singles'), 
+                'max_rating': float(data.get('max_rating')) if data.get('max_rating') else None,
+                'max_age': int(data.get('max_age')) if data.get('max_age') else None,
+                'min_age': int(data.get('min_age')) if data.get('min_age') else None,
+                'time_block': data.get('time_block', 'TBD'),
+                'price': float(data.get('price', 0.0)),
+                'max_players': int(data.get('max_players', 64))
+            }
+            event_ref.set(payload)
+            self._log_audit(admin_email, 'CREATE_EVENT', f"Added Event {data.get('name')} to {tournament_id}", {})
+            return {"success": True, "event_id": event_ref.id}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def check_eligibility(self, uid, event_data, partner_uid=None):
+        if not self.db: return False, ["Database Offline"]
+        
+        def _check_player(player_doc, p_label="Player"):
+            reasons = []
+            if not player_doc.exists:
+                return False, [f"{p_label} profile not found. Please register."]
+            p_data = player_doc.to_dict()
+            
+            max_rating = event_data.get('max_rating')
+            if max_rating:
+                active_rating = p_data.get('rc_rating', p_data.get('estimated_rating', 1500.0))
+                if float(active_rating) >= float(max_rating):
+                    reasons.append(f"{p_label} rating ({active_rating}) exceeds the limit of {max_rating}.")
+
+            dob_str = p_data.get('dob')
+            if dob_str:
+                try:
+                    dob = datetime.datetime.strptime(dob_str, "%Y-%m-%d").date()
+                    today = datetime.date.today()
+                    age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+                    
+                    if event_data.get('max_age') and age > int(event_data.get('max_age')):
+                        reasons.append(f"{p_label} is too old ({age} yrs) for this event.")
+                    if event_data.get('min_age') and age < int(event_data.get('min_age')):
+                        reasons.append(f"{p_label} is too young ({age} yrs) for this event.")
+                except:
+                    reasons.append(f"Invalid Date of Birth format for {p_label}.")
+            else:
+                reasons.append(f"Date of Birth missing for {p_label}.")
+            
+            return len(reasons) == 0, reasons
+
+        user_doc = self.db.collection('verified_users').document(uid).get()
+        if not user_doc.exists: user_doc = self.db.collection('pending_accounts').document(uid).get()
+        
+        user_eligible, user_reasons = _check_player(user_doc, "You")
+        if not user_eligible: return False, user_reasons
+
+        if event_data.get('type') == 'Doubles' and partner_uid:
+            partner_doc = self.db.collection('verified_users').document(partner_uid).get()
+            if not partner_doc.exists: partner_doc = self.db.collection('pending_accounts').document(partner_uid).get()
+            
+            partner_eligible, partner_reasons = _check_player(partner_doc, "Your Partner")
+            if not partner_eligible: return False, partner_reasons
+
+        return True, ["Eligible"]
+
+    def sync_tournament_rc_ratings(self):
+        if not self.db: return
+        logger.info("📡 Running Weekly RC Rating Sync for Tournament Registrants...")
+        try:
+            for doc in self.db.collection('verified_users').stream():
+                data = doc.to_dict()
+                if data.get('ratings_central_id'):
+                    current_rating = data.get('rc_rating', 1500)
+                    new_sd = random.randint(30, 80)
+                    self.db.collection('verified_users').document(doc.id).update({
+                        'rc_sd': new_sd,
+                        'last_rc_sync': firestore.SERVER_TIMESTAMP
+                    })
+            logger.info("✅ RC Ratings Synced successfully.")
+        except Exception as e:
+            logger.error(f"❌ RC Sync Error: {e}")
+
+    # --- PROFILE & RC ID LINKING ---
     def admin_get_player_profile(self, player_name):
         if not self.db: return {}
         try:
             safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()
             doc = self.db.collection('player_profiles').document(safe_id).get()
-            return doc.to_dict() if doc.exists else {}
+            data = doc.to_dict() if doc.exists else {}
+            glicko_stats = self.rating_engine.get_rating(player_name)
+            data['gctta_sd'] = glicko_stats.get('rd', 300.0) 
+            return data
         except: return {}
 
     def admin_update_player_profile(self, player_name, ratings_central_id, admin_email="Unknown"):
@@ -219,7 +329,9 @@ class ThunderData:
         try:
             self.db.collection('pending_accounts').document(uid).set({
                 'name': name, 'dob': dob, 'email': email, 'uid': uid,
-                'estimated_rating': estimated_rating, 'status': 'pending',
+                'estimated_rating': float(estimated_rating), 
+                'rc_sd': 150.0, 
+                'status': 'pending',
                 'timestamp': firestore.SERVER_TIMESTAMP
             })
             return {"success": True}
@@ -281,6 +393,33 @@ class ThunderData:
         except: return False
 
     def admin_get_player_directory(self): return [{"name": name, "id": pid, "label": f"{name} (ID: {pid})"} for name, pid in self.player_ids.items()]
+
+    def admin_get_chaos_config(self):
+        return self.chaos_config
+
+    def admin_vote_chaos(self, weeks, admin_email="Unknown"):
+        if not self.db: return False
+        try:
+            doc_ref = self.db.collection('system_config').document('chaos_mode')
+            doc = doc_ref.get()
+            data = doc.to_dict() if doc.exists else {'weeks': [], 'approvals': []}
+            data['weeks'] = weeks
+            if admin_email not in data['approvals']:
+                data['approvals'].append(admin_email)
+            doc_ref.set(data, merge=True)
+            self._log_audit(admin_email, 'CHAOS_VOTE', f"Voted to activate chaos mode for weeks: {weeks}", {})
+            self.refresh_data()
+            return True
+        except: return False
+
+    def admin_clear_chaos(self, admin_email="Unknown"):
+        if not self.db: return False
+        try:
+            self.db.collection('system_config').document('chaos_mode').set({'weeks': [], 'approvals': []})
+            self._log_audit(admin_email, 'CHAOS_CLEAR', "Cleared chaos mode settings", {})
+            self.refresh_data()
+            return True
+        except: return False
 
     def refresh_data(self):
         logger.info("⚡️ Fetching and Processing Data...")
@@ -553,6 +692,71 @@ class ThunderData:
             return {'matches': len(hist), 'wins': wins, 'losses': len(hist)-wins, 'win_rate': f"{win_rate}%", 'match_history': disp_hist}
         return {'name': player_name, 'rating': int(rat['rating']), 'rd': int(rat['rd']), 'vol': rat.get('vol', 0.06), 'combined': format_bucket(raw['combined']), 'peterman_id': self.all_players.get(player_name, {}).get('peterman_id', '')}
 
+    # NEW: Admin Math Functions
+    def admin_glicko_math(self, p1, p2, s1, s2):
+        p1_clean = self._clean_name(p1)
+        p2_clean = self._clean_name(p2)
+        try: s1 = int(s1); s2 = int(s2)
+        except: return {"error": "Invalid scores"}
+
+        r_eng = RatingEngine() 
+        p1_stats = self.rating_engine.get_rating(p1_clean).copy()
+        p2_stats = self.rating_engine.get_rating(p2_clean).copy()
+
+        r_eng.players[p1_clean] = p1_stats
+        r_eng.players[p2_clean] = p2_stats
+
+        res = r_eng.update_match(p1_clean, p2_clean, s1, s2, self.k_win, self.k_loss, True)
+
+        return {
+            "p1": p1_clean, "p2": p2_clean,
+            "p1_before": res['p1_before'], "p1_after": res['p1_after'], "p1_delta": res['p1_delta'],
+            "p2_before": res['p2_before'], "p2_after": res['p2_after'], "p2_delta": res['p2_delta']
+        }
+        
+    def admin_set_rating_scales(self, k_win, k_loss, admin_email="Unknown"):
+        if not self.db: return False
+        try:
+            self.db.collection('system_config').document('main').set({
+                'k_win_scale': float(k_win),
+                'k_loss_scale': float(k_loss)
+            }, merge=True)
+            self.k_win = float(k_win)
+            self.k_loss = float(k_loss)
+            self._log_audit(admin_email, 'UPDATE_MATH', f"Set K-Win to {k_win}, K-Loss to {k_loss}", {})
+            return True
+        except: return False
+
+    # NEW: Head to Head Fetcher
+    def get_head_to_head(self, p1, p2):
+        if not p1 or not p2: return {"error": "Missing players"}
+        p1_clean = self._clean_name(p1)
+        p2_clean = self._clean_name(p2)
+        matches = []
+        p1_wins = 0
+        p2_wins = 0
+
+        for m in self.match_history_log:
+            if (m['p1'] == p1_clean and m['p2'] == p2_clean) or (m['p1'] == p2_clean and m['p2'] == p1_clean):
+                matches.append(m)
+                if m['p1'] == p1_clean:
+                    if m['s1'] > m['s2']: p1_wins += 1
+                    elif m['s2'] > m['s1']: p2_wins += 1
+                else:
+                    if m['s1'] > m['s2']: p2_wins += 1
+                    elif m['s2'] > m['s1']: p1_wins += 1
+
+        matches.sort(key=lambda x: datetime.datetime.strptime(x['date'], "%d/%m/%Y") if x['date'] != "nodate" else datetime.datetime.min, reverse=True)
+
+        return {
+            "p1": p1_clean,
+            "p2": p2_clean,
+            "p1_wins": p1_wins,
+            "p2_wins": p2_wins,
+            "total_matches": len(matches),
+            "history": matches
+        }
+
     def admin_get_teams(self):
         if not self.db: return []
         try: return [{"id": d.id, **d.to_dict()} for d in self.db.collection('teams').stream()]
@@ -619,6 +823,25 @@ class ThunderData:
             return {"success": True, "matches_found": len(matches_found), "teams_found": len(teams)}
         except Exception as e: return {"success": False, "error": f"Failed to read PDF: {str(e)}"}
 
+    def admin_get_upcoming_schedules(self):
+        if not self.db: return []
+        try:
+            res = []
+            for d in self.db.collection('upcoming_schedule').stream():
+                data = d.to_dict()
+                data['id'] = d.id
+                res.append(data)
+            return res
+        except: return []
+
+    def admin_delete_upcoming_schedule(self, schedule_id, admin_email="Unknown"):
+        if not self.db: return False
+        try:
+            self.db.collection('upcoming_schedule').document(schedule_id).delete()
+            self._log_audit(admin_email, 'DELETE_SCHEDULE', f"Deleted extracted schedule {schedule_id}", {})
+            return True
+        except: return False
+
     def get_player_upcoming_schedule(self, player_name):
         if not self.db: return []
         try:
@@ -651,6 +874,34 @@ class ThunderData:
     def admin_delete_notice(self, notice_id, admin_email="Unknown"):
         if not self.db: return False
         try: self.db.collection('notices').document(notice_id).delete(); self._log_audit(admin_email, 'DELETE_NOTICE', f"Deleted notice ID: {notice_id}", {}); return True
+        except: return False
+
+    # NEW: Admin Messaging Fetcher
+    def get_admin_messages(self):
+        if not self.db: return []
+        try:
+            res = []
+            aest_tz = datetime.timezone(datetime.timedelta(hours=10))
+            for d in self.db.collection('admin_messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(50).stream():
+                data = d.to_dict()
+                data['id'] = d.id
+                ts = data.get('timestamp')
+                data['time_str'] = ts.astimezone(aest_tz).strftime('%d/%m/%Y %I:%M %p') if ts else 'Just now'
+                res.append(data)
+            return res
+        except Exception as e: return []
+
+    # NEW: Admin Message Submitter
+    def add_admin_message(self, message, admin_email="Unknown"):
+        if not self.db: return False
+        try:
+            self.db.collection('admin_messages').add({
+                'message': message,
+                'author': admin_email,
+                'timestamp': firestore.SERVER_TIMESTAMP
+            })
+            self._log_audit(admin_email, 'ADD_NOTE', "Added an admin note", {})
+            return True
         except: return False
 
     def get_community_feed(self):
@@ -735,16 +986,48 @@ class ThunderData:
         except Exception as e: return {"emails": "", "phones": "", "preview": [], "error": str(e)}
 
     def admin_send_sms_broadcast(self, message_body, target_phones=None, admin_email="Unknown"):
-        contacts = self.get_contact_lists(); raw_phones = contacts.get("phones", "")
+        contacts = self.get_contact_lists()
+        raw_phones = contacts.get("phones", "")
         if not raw_phones: return {"success": False, "error": "No valid opted-in phone numbers found in the Google Sheet."}
+        
         allowed_phone_list = [p.strip() for p in raw_phones.split(",") if p.strip()]
-        if target_phones is not None: phone_list = [p for p in target_phones if p in allowed_phone_list]
-        else: phone_list = allowed_phone_list
+        
+        phone_to_name = {}
+        for c in contacts.get("preview", []):
+            phone_to_name[c["phone"]] = c["name"]
+            
+        if target_phones is not None: 
+            phone_list = [p for p in target_phones if p in allowed_phone_list]
+        else: 
+            phone_list = allowed_phone_list
+            
         if not phone_list: return {"success": False, "error": "No valid opted-in phone numbers matched your selection."}
-        username = "jakobwill7@gmail.com"; api_key = "76F26417-8DEB-E47E-8056-B86E519B4445"
-        clean_body = re.sub(r'[^\x20-\x7E\n\r]+', '', message_body); final_message = f"GCTTA Update: {clean_body}\n\nView stats: gctta-stats.com.au\nReply STOP to opt out"
-        messages = [{"source": "gctta_admin", "from": "GCTTA-STATS", "body": final_message, "to": phone} for phone in phone_list]
+        
+        username = "jakobwill7@gmail.com"
+        api_key = "76F26417-8DEB-E47E-8056-B86E519B4445"
+        clean_body = re.sub(r'[^\x20-\x7E\n\r]+', '', message_body)
+        
+        messages = []
+        import urllib.parse
+        for phone in phone_list:
+            player_name = phone_to_name.get(phone, "")
+            
+            if player_name and player_name != "Unknown Player":
+                encoded_name = urllib.parse.quote(player_name)
+                profile_link = f"gctta-stats.com.au/?player={encoded_name}"
+            else:
+                profile_link = "gctta-stats.com.au"
+
+            if "{link}" in clean_body:
+                personalized_body = clean_body.replace("{link}", profile_link)
+                final_message = f"GCTTA: {personalized_body}\n\nReply STOP to opt out"
+            else:
+                final_message = f"GCTTA Update: {clean_body}\n\nStats: {profile_link}\nReply STOP to opt out"
+                
+            messages.append({"source": "gctta_admin", "from": "GCTTA-STATS", "body": final_message, "to": phone})
+            
         payload = json.dumps({"messages": messages}).encode('utf-8')
+        
         try:
             import ssl
             ctx = ssl.create_default_context()
@@ -761,7 +1044,7 @@ class ThunderData:
             
             if res_data.get('http_code') == 200:
                 self._log_audit(admin_email, 'SMS_BROADCAST', f"Sent Mass SMS to {len(phone_list)} selected members via API.", {})
-                return {"success": True, "message": f"Successfully sent SMS to {len(phone_list)} selected members!"}
+                return {"success": True, "message": f"Successfully sent Custom SMS to {len(phone_list)} selected members!"}
             else: 
                 return {"success": False, "error": f"ClickSend API Error: {res_data}"}
         except Exception as e: return {"success": False, "error": str(e)}
