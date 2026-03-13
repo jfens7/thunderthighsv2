@@ -30,7 +30,7 @@ def calculate_match(w, l, s1, s2, k_win=1.0, k_loss=1.4, anti_riot=True):
         if w_shift < 0: w_shift = 0.0; w_rd_shift = 5.0 
         if l_shift > 0: l_shift = 0.0; l_rd_shift = 2.0 
     w['rating'] += w_shift; l['rating'] += l_shift
-    w['rd'] = max(50.0, min(350.0, w['rd'] + w_rd_shift)); l['rd'] = max(50.0, min(350.0, l['rd'] + l_rd_shift))
+    w['rd'] = max(20.0, min(350.0, w['rd'] + w_rd_shift)); l['rd'] = max(20.0, min(350.0, l['rd'] + l_rd_shift))
     return {'winner': w, 'loser': l}
 
 RESULTS_SPREADSHEET_ID = "1tpxuUCl8ddpnBBr69vc4P1foRCRKWpts5-HaFPYb4po" 
@@ -190,6 +190,62 @@ class ThunderData:
     def _generate_player_id(self): return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(6))
     def _slugify(self, text): return re.sub(r'[^a-z0-9]', '', str(text).lower())
     def _extract_week(self, text): match = re.search(r'\d+', str(text)); return match.group() if match else str(text).strip().lower()
+
+    # --- NEW: PROFILE & RC ID LINKING ---
+    def admin_get_player_profile(self, player_name):
+        if not self.db: return {}
+        try:
+            safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()
+            doc = self.db.collection('player_profiles').document(safe_id).get()
+            return doc.to_dict() if doc.exists else {}
+        except: return {}
+
+    def admin_update_player_profile(self, player_name, ratings_central_id, admin_email="Unknown"):
+        if not self.db: return False
+        try:
+            safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()
+            self.db.collection('player_profiles').document(safe_id).set({
+                'ratings_central_id': ratings_central_id,
+                'last_updated': firestore.SERVER_TIMESTAMP
+            }, merge=True)
+            self._log_audit(admin_email, 'UPDATE_PROFILE', f"Updated Profile DB for {player_name}. RC ID set to: {ratings_central_id}", {})
+            return True
+        except Exception as e: 
+            logger.error(f"Profile Update Error: {e}")
+            return False
+
+    def register_player_account(self, name, dob, email, uid, estimated_rating):
+        if not self.db: return {"success": False, "error": "DB Offline"}
+        try:
+            self.db.collection('pending_accounts').document(uid).set({
+                'name': name, 'dob': dob, 'email': email, 'uid': uid,
+                'estimated_rating': estimated_rating, 'status': 'pending',
+                'timestamp': firestore.SERVER_TIMESTAMP
+            })
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def admin_get_pending_accounts(self):
+        if not self.db: return []
+        try: return [{"id": d.id, **d.to_dict()} for d in self.db.collection('pending_accounts').where('status', '==', 'pending').stream()]
+        except: return []
+
+    def admin_link_player_account(self, uid, official_player_name, admin_email="Unknown"):
+        if not self.db: return False
+        try:
+            doc = self.db.collection('pending_accounts').document(uid).get()
+            if not doc.exists: return False
+            data = doc.to_dict()
+            data['linked_player_name'] = official_player_name
+            data['status'] = 'approved'
+            data['approved_by'] = admin_email
+            
+            self.db.collection('verified_users').document(uid).set(data)
+            self.db.collection('pending_accounts').document(uid).delete()
+            self._log_audit(admin_email, 'APPROVE_ACCOUNT', f"Linked UID {uid} to official player {official_player_name}", {})
+            return True
+        except: return False
 
     def admin_bulk_fix_date(self, season, division, week, new_date, admin_email="Unknown"):
         if not self.db: return False
@@ -382,10 +438,24 @@ class ThunderData:
             except: pass
 
         player_set = set(); player_overrides_applied = set()
+        
+        last_played_dates = {}; DECAY_PER_WEEK = 2.0
+        
         for m in cleaned_matches:
             players = sorted([m['p1'], m['p2']]); d_str = m['date'].strftime("%d/%m/%Y") if m['date'] else "nodate"; d_str_fmt = m['date'].strftime("%Y-%m-%d") if m['date'] else "1900-01-01"
             raw_id_string = f"{d_str}_{players[0]}_{players[1]}_{m['s1']}_{m['s2']}"; match_id = hashlib.md5(raw_id_string.encode()).hexdigest()[:6].upper()
             
+            if m['date'] > RATING_START_DATE:
+                for p in [m['p1'], m['p2']]:
+                    if p in last_played_dates:
+                        days_inactive = (m['date'] - last_played_dates[p]).days
+                        if days_inactive >= 7:
+                            weeks_missed = days_inactive // 7
+                            p_stats = self.rating_engine.get_rating(p)
+                            new_rd = min(350.0, p_stats['rd'] + (weeks_missed * DECAY_PER_WEEK))
+                            self.rating_engine.players[p]['rd'] = new_rd
+                    last_played_dates[p] = m['date']
+
             for p in [m['p1'], m['p2']]:
                 if p in overrides_dict and p not in player_overrides_applied:
                     if d_str_fmt >= overrides_dict[p]['date']:
@@ -400,7 +470,7 @@ class ThunderData:
                     p1_stats = self.rating_engine.get_rating(m['p1']); p2_stats = self.rating_engine.get_rating(m['p2'])
                     p1_before = p1_stats['rating']; p1_rd_before = p1_stats['rd']; p2_before = p2_stats['rating']; p2_rd_before = p2_stats['rd']
                     self.rating_engine.players[m['p1']]['rating'] += p1_d; self.rating_engine.players[m['p2']]['rating'] += p2_d
-                    self.rating_engine.players[m['p1']]['rd'] = max(50.0, self.rating_engine.players[m['p1']]['rd'] - 4.0); self.rating_engine.players[m['p2']]['rd'] = max(50.0, self.rating_engine.players[m['p2']]['rd'] - 4.0)
+                    self.rating_engine.players[m['p1']]['rd'] = max(20.0, self.rating_engine.players[m['p1']]['rd'] - 4.0); self.rating_engine.players[m['p2']]['rd'] = max(20.0, self.rating_engine.players[m['p2']]['rd'] - 4.0)
                     deltas = {'p1_delta': p1_d, 'p2_delta': p2_d, 'p1_before': p1_before, 'p1_rd_before': p1_rd_before, 'p1_after': self.rating_engine.players[m['p1']]['rating'], 'p1_rd_after': self.rating_engine.players[m['p1']]['rd'], 'p2_before': p2_before, 'p2_rd_before': p2_rd_before, 'p2_after': self.rating_engine.players[m['p2']]['rating'], 'p2_rd_after': self.rating_engine.players[m['p2']]['rd']}
                 else:
                     m_week = str(m.get('week', '')).lower()
@@ -676,13 +746,24 @@ class ThunderData:
         messages = [{"source": "gctta_admin", "from": "GCTTA-STATS", "body": final_message, "to": phone} for phone in phone_list]
         payload = json.dumps({"messages": messages}).encode('utf-8')
         try:
+            import ssl
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
             auth_str = f"{username}:{api_key}"; auth_bytes = base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')
-            req = urllib.request.Request("https://rest.clicksend.com/v3/sms/send", data=payload); req.add_header("Content-Type", "application/json"); req.add_header("Authorization", f"Basic {auth_bytes}")
-            response = urllib.request.urlopen(req); res_data = json.loads(response.read().decode('utf-8'))
+            req = urllib.request.Request("https://rest.clicksend.com/v3/sms/send", data=payload)
+            req.add_header("Content-Type", "application/json")
+            req.add_header("Authorization", f"Basic {auth_bytes}")
+            
+            response = urllib.request.urlopen(req, context=ctx)
+            res_data = json.loads(response.read().decode('utf-8'))
+            
             if res_data.get('http_code') == 200:
                 self._log_audit(admin_email, 'SMS_BROADCAST', f"Sent Mass SMS to {len(phone_list)} selected members via API.", {})
                 return {"success": True, "message": f"Successfully sent SMS to {len(phone_list)} selected members!"}
-            else: return {"success": False, "error": f"ClickSend API Error: {res_data}"}
+            else: 
+                return {"success": False, "error": f"ClickSend API Error: {res_data}"}
         except Exception as e: return {"success": False, "error": str(e)}
 
     def get_sms_inbox(self):
@@ -690,9 +771,12 @@ class ThunderData:
         try:
             res = []; aest_tz = datetime.timezone(datetime.timedelta(hours=10))
             for d in self.db.collection('sms_replies').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(50).stream():
-                data = d.to_dict(); data['id'] = d.id; ts = data.get('timestamp'); data['time_str'] = ts.astimezone(aest_tz).strftime('%d/%m/%Y %I:%M %p') if ts else 'Just now'; res.append(data)
+                data = d.to_dict(); data['id'] = d.id; ts = data.get('timestamp')
+                data['time_str'] = ts.astimezone(aest_tz).strftime('%d/%m/%Y %I:%M %p') if ts else 'Just now'
+                data['timestamp'] = str(ts) 
+                res.append(data)
             return res
-        except: return []
+        except Exception as e: return []
 
     def admin_get_all_donations(self):
         if not self.db: return []

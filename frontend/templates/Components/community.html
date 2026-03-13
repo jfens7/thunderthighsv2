@@ -43,6 +43,10 @@
 
 <script>
     let pubBase64Image = null;
+    const authHeaders = () => ({
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + (localStorage.getItem('player_token') || '')
+    });
 
     function pubPreviewImage(event) {
         const file = event.target.files[0];
@@ -74,7 +78,7 @@
         const btn = document.getElementById('pub-btn-post'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; btn.disabled = true;
         try {
             await fetch('/api/hub/post', { 
-                method: 'POST', headers: {'Content-Type': 'application/json'}, 
+                method: 'POST', headers: authHeaders(), 
                 body: JSON.stringify({ 
                     uid: localStorage.getItem('player_uid'), 
                     name: localStorage.getItem('player_name'), 
@@ -149,10 +153,10 @@
         } catch(e) {}
     }
     
-    async function pubVotePoll(postId, option) { await fetch('/api/hub/vote', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ post_id: postId, option: option, uid: localStorage.getItem('player_uid') }) }); pubLoadForum(); }
-    async function pubToggleLike(postId) { await fetch('/api/hub/upvote', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ post_id: postId, uid: localStorage.getItem('player_uid') }) }); pubLoadForum(); }
+    async function pubVotePoll(postId, option) { await fetch('/api/hub/vote', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ post_id: postId, option: option, uid: localStorage.getItem('player_uid') }) }); pubLoadForum(); }
+    async function pubToggleLike(postId) { await fetch('/api/hub/upvote', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ post_id: postId, uid: localStorage.getItem('player_uid') }) }); pubLoadForum(); }
     async function pubSubmitComment(postId) {
         const input = document.getElementById(`pub-comment-input-${postId}`); if(!input.value.trim()) return;
-        await fetch('/api/hub/comment', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ post_id: postId, name: localStorage.getItem('player_name'), content: input.value.trim() }) }); pubLoadForum();
+        await fetch('/api/hub/comment', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ post_id: postId, name: localStorage.getItem('player_name'), content: input.value.trim() }) }); pubLoadForum();
     }
 </script>
