@@ -1049,3 +1049,60 @@
         };
     } catch(err) { console.warn("Firebase Live Connection skipped/failed."); }
 </script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+      function generateStars() {
+        const numberOfStars = 200; 
+        const starContainer = document.createElement('div');
+        
+        // Pushes it securely into the background behind everything else
+        starContainer.className = 'fixed inset-0 overflow-hidden pointer-events-none z-[-1] bg-[#0f172a]'; 
+        
+        // Slight variations of white, blue, and yellow for realistic temperature
+        const colors = ['#ffffff', '#e0f7fa', '#fff9c4', '#ffffff', '#bbdefb']; 
+
+        for (let i = 0; i < numberOfStars; i++) {
+          const star = document.createElement('div');
+          
+          const xPos = Math.random() * 100;
+          const yPos = Math.random() * 100;
+          const size = Math.random() * 2.5 + 0.5; 
+          const animDuration = Math.random() * 3 + 1.5; 
+          const animDelay = Math.random() * 2; 
+          const starColor = colors[Math.floor(Math.random() * colors.length)];
+
+          star.className = 'absolute rounded-full';
+          star.style.left = `${xPos}vw`;
+          star.style.top = `${yPos}vh`;
+          star.style.width = `${size}px`;
+          star.style.height = `${size}px`;
+          star.style.backgroundColor = starColor;
+          star.style.opacity = Math.random();
+          
+          star.style.boxShadow = `0 0 ${size * 2}px ${starColor}`;
+          star.style.animation = `twinkle ${animDuration}s ease-in-out ${animDelay}s infinite alternate`;
+
+          starContainer.appendChild(star);
+        }
+
+        document.body.prepend(starContainer);
+
+        if (!document.getElementById('star-animations')) {
+          const style = document.createElement('style');
+          style.id = 'star-animations';
+          style.innerHTML = `
+            @keyframes twinkle {
+              0% { opacity: 0.1; transform: scale(0.8); }
+              100% { opacity: 1; transform: scale(1.2); }
+            }
+            /* Overrides the solid color in the main file so you can actually see the stars */
+            body { background-color: transparent !important; } 
+          `;
+          document.head.appendChild(style);
+        }
+      }
+
+      generateStars();
+    });
+</script>
