@@ -16,7 +16,7 @@ except ImportError:
     except: SkyEngine = None
 
 DEFAULT_RATING = 1000.0
-DEFAULT_RD = 300.0  
+DEFAULT_RD = 300.0
 
 def calculate_match(w, l, s1, s2, k_win=1.0, k_loss=1.4, anti_riot=True, point_scalar=1.0):
     total_sets = s1 + s2
@@ -38,8 +38,8 @@ def calculate_match(w, l, s1, s2, k_win=1.0, k_loss=1.4, anti_riot=True, point_s
     l_rd_shift = -4.0
     
     if anti_riot:
-        if w_shift < 0: w_shift = 0.0; w_rd_shift = 5.0 
-        if l_shift > 0: l_shift = 0.0; l_rd_shift = 2.0 
+        if w_shift < 0: w_shift = 0.0; w_rd_shift = 5.0
+        if l_shift > 0: l_shift = 0.0; l_rd_shift = 2.0
         
     w['rating'] += w_shift
     l['rating'] += l_shift
@@ -48,15 +48,17 @@ def calculate_match(w, l, s1, s2, k_win=1.0, k_loss=1.4, anti_riot=True, point_s
     
     return {'winner': w, 'loser': l}
 
-RESULTS_SPREADSHEET_ID = "1tpxuUCl8ddpnBBr69vc4P1foRCRKWpts5-HaFPYb4po" 
+RESULTS_SPREADSHEET_ID = "1tpxuUCl8ddpnBBr69vc4P1foRCRKWpts5-HaFPYb4po"
 RATING_START_DATE = datetime.date(2025, 12, 25)
 SUPER_ADMIN_EMAIL = "jakobwill7@gmail.com"
 
 class RatingEngine:
-    def __init__(self): self.players = {} 
+    def __init__(self): self.players = {}
+    
     def get_rating(self, name):
         if name not in self.players: self.players[name] = {'rating': DEFAULT_RATING, 'rd': DEFAULT_RD, 'vol': 0.06}
         return self.players[name]
+        
     def set_seed(self, name, rating, rd=None, vol=None):
         try:
             r_val = float(rating); rd_val = float(rd) if rd and str(rd).strip() else DEFAULT_RD
@@ -82,16 +84,16 @@ class RatingEngine:
                 
                 if p1_pts > 0 and p2_pts > 0:
                     ratio = (p1_pts / p2_pts) if s1 > s2 else (p2_pts / p1_pts)
-                    if ratio >= 2.0: point_scalar = 1.25      
-                    elif ratio >= 1.5: point_scalar = 1.10    
-                    elif ratio < 1.15: point_scalar = 0.85    
+                    if ratio >= 2.0: point_scalar = 1.25
+                    elif ratio >= 1.5: point_scalar = 1.10
+                    elif ratio < 1.15: point_scalar = 0.85
             except: pass
 
-        if s1 > s2: 
+        if s1 > s2:
             res = calculate_match(p1_stats, p2_stats, s1, s2, k_win, k_loss, anti_riot, point_scalar)
             self.players[p1_name] = res['winner']
             self.players[p2_name] = res['loser']
-        else: 
+        else:
             res = calculate_match(p2_stats, p1_stats, s2, s1, k_win, k_loss, anti_riot, point_scalar)
             self.players[p2_name] = res['winner']
             self.players[p1_name] = res['loser']
@@ -100,9 +102,9 @@ class RatingEngine:
 
 class ThunderData:
     def __init__(self):
-        self.scopes = ["https://www.googleapis.com/auth/spreadsheets"]; self.client = None; self.sheet_results = None; self.db = None 
-        self.rating_engine = RatingEngine(); self.all_players = {}; self.season_stats = {}; self.seasons_list = ["Career"] 
-        self.divisions_list = set(); self.date_lookup = {}; self.weekly_matches = {}; self.player_ids = {}; self.id_to_name = {}; self.alias_map = {}; self.date_to_week_map = {} 
+        self.scopes = ["https://www.googleapis.com/auth/spreadsheets"]; self.client = None; self.sheet_results = None; self.db = None
+        self.rating_engine = RatingEngine(); self.all_players = {}; self.season_stats = {}; self.seasons_list = ["Career"]
+        self.divisions_list = set(); self.date_lookup = {}; self.weekly_matches = {}; self.player_ids = {}; self.id_to_name = {}; self.alias_map = {}; self.date_to_week_map = {}
         self.match_history_log = []; self.k_win = 1.0; self.k_loss = 1.4; self.chaos_config = {'active': False, 'weeks': [], 'approvals': [], 'req': 3}
         self._authenticate()
 
@@ -387,13 +389,17 @@ class ThunderData:
             logger.error(f"Profile Update Error: {e}")
             return False
 
-    def register_player_account(self, name, dob, email, uid, estimated_rating):
+    def register_player_account(self, name, dob, email, uid, estimated_rating, club="Unknown"):
         if not self.db: return {"success": False, "error": "DB Offline"}
         try:
             self.db.collection('pending_accounts').document(uid).set({
-                'name': name, 'dob': dob, 'email': email, 'uid': uid,
-                'estimated_rating': float(estimated_rating), 
-                'rc_sd': 150.0, 
+                'name': name,
+                'dob': dob,
+                'email': email,
+                'uid': uid,
+                'estimated_rating': float(estimated_rating) if estimated_rating else 1500.0,
+                'club': club,
+                'rc_sd': 150.0,
                 'status': 'pending',
                 'timestamp': firestore.SERVER_TIMESTAMP
             })
@@ -864,58 +870,115 @@ class ThunderData:
         except: return False
 
     def admin_upload_pdf_schedule(self, season, division, file_stream, admin_email="Unknown"):
-        if not self.db: return {"success": False, "error": "DB Offline"}
+        if not self.db:
+            return {"success": False, "error": "DB Offline"}
         try:
-            import pdfplumber; import re
-            matches_found = []; teams = {}
-            with pdfplumber.open(file_stream) as pdf:
-                for page in pdf.pages:
-                    for table in page.extract_tables():
-                        if not table or len(table) < 2: continue
-                        headers = [str(x).lower().replace('\n', ' ') for x in table[0] if x]
-                        if any("team name" in h for h in headers) or any("player" in h for h in headers):
-                            for row in table[1:]:
-                                if not row or not row[0]: continue
-                                nums = str(row[0]).split('\n'); names = str(row[1]).split('\n') if len(row) > 1 else []
-                                p1_block = str(row[2]).split('\n') if len(row) > 2 else []; p2_block = str(row[3]).split('\n') if len(row) > 3 else []; p3_block = str(row[4]).split('\n') if len(row) > 4 else []
-                                def clean_p(block, idx):
-                                    text_lines = [line.strip() for line in block if re.search(r'[A-Za-z]', line)]
-                                    if idx < len(text_lines): return re.sub(r'[^A-Za-z\s-]', '', re.sub(r'\s+C$', '', text_lines[idx]).strip()).strip()
-                                    return ""
-                                for i in range(len(nums)):
-                                    num = nums[i].strip()
-                                    if not num.isdigit(): continue
-                                    t_name = names[i].strip() if i < len(names) else f"Team {num}"; t_name = re.sub(r'[^A-Za-z0-9\s]', '', t_name).strip()
-                                    players = [clean_p(p1_block, i), clean_p(p2_block, i), clean_p(p3_block, i)]; players = [p.title() for p in players if len(p) > 2]
-                                    teams[num] = {"name": t_name, "players": players}
-                        if any("date" in h for h in headers) or any("match" in h for h in headers):
-                            for row in table[1:]:
-                                if not row: continue
-                                date_val_1 = str(row[0]).replace('\n', ' ').strip()
-                                if date_val_1 and len(date_val_1) >= 4 and not date_val_1.isdigit():
-                                    for cell in row[1:5]: 
-                                        if not cell: continue
-                                        match = re.search(r'(\d+)\s*vs\s*(\d+)', str(cell).replace('\n', ' '), re.IGNORECASE)
-                                        if match: matches_found.append({'date_text': date_val_1, 't1': match.group(1), 't2': match.group(2)})
-                                if len(row) > 6:
-                                    date_val_2 = str(row[6]).replace('\n', ' ').strip() 
-                                    if date_val_2 and len(date_val_2) >= 4 and not date_val_2.isdigit():
-                                        for cell in row[7:]:
-                                            if not cell: continue
-                                            match = re.search(r'(\d+)\s*vs\s*(\d+)', str(cell).replace('\n', ' '), re.IGNORECASE)
-                                            if match: matches_found.append({'date_text': date_val_2, 't1': match.group(1), 't2': match.group(2)})
-            if not matches_found: return {"success": False, "error": "No schedule detected in the PDF."}
+            import PyPDF2
+            import re
+            import datetime
+
+            pdf_reader = PyPDF2.PdfReader(file_stream)
+            raw_text = ""
+            for page in pdf_reader.pages:
+                raw_text += page.extract_text() + "\n"
+
+            lines = raw_text.split('\n')
+            teams = {}
+            fixtures = []
+
+            parsing_teams = False
+            parsing_fixtures = False
+            current_date = None
+
+            team_pattern = re.compile(r'^(\d+)\s+([A-Z\s]+)\s+([A-Z\s]+)')
+            match_pattern = re.compile(r'(\d+)\s*v[s]?\s*(\d+)(?:\s*\(\s*(\d+)\s*\))?', re.IGNORECASE)
+            date_pattern = re.compile(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}', re.IGNORECASE)
+
+            for i, line in enumerate(lines):
+                line = line.strip()
+                if not line:
+                    continue
+
+                if "TEAMS" in line.upper():
+                    parsing_teams = True
+                    parsing_fixtures = False
+                    continue
+                if "FIXTURE SCHEDULE" in line.upper() or ("DATE" in line.upper() and "MATCH" in line.upper()):
+                    parsing_teams = False
+                    parsing_fixtures = True
+                    continue
+
+                if parsing_teams:
+                    if re.match(r'^\d+', line):
+                        parts = re.split(r'\s{2,}', line)
+                        if len(parts) >= 2:
+                            team_id = parts[0].strip()
+                            team_name = parts[1].strip()
+                            players = []
+                            for p in parts[2:]:
+                                cleaned_name = re.sub(r'[\d\-\|\(\)]', '', p).replace(' C ', '').replace(' LEFTY', '').strip()
+                                if cleaned_name and len(cleaned_name) > 2:
+                                    players.append(cleaned_name)
+                            teams[team_id] = {
+                                "name": team_name,
+                                "players": players
+                            }
+
+                if parsing_fixtures:
+                    date_match = date_pattern.search(line)
+                    if date_match:
+                        season_year = re.search(r'\d{4}', season)
+                        year_str = season_year.group() if season_year else str(datetime.datetime.now().year)
+                        current_date = f"{date_match.group()} {year_str}"
+                    
+                    matches = match_pattern.findall(line)
+                    for m in matches:
+                        team_home_id = m[0]
+                        team_away_id = m[1]
+                        
+                        if current_date and team_home_id in teams and team_away_id in teams:
+                            fixture_data = {
+                                "season": season,
+                                "division": division,
+                                "date_text": current_date,
+                                "home_team": teams[team_home_id]["name"],
+                                "away_team": teams[team_away_id]["name"],
+                                "home_players": teams[team_home_id]["players"],
+                                "away_players": teams[team_away_id]["players"]
+                            }
+                            fixtures.append(fixture_data)
+
+            if len(fixtures) == 0:
+                return {"success": False, "error": "Could not extract any matches. Check PDF format."}
+
             batch = self.db.batch()
-            for m in matches_found:
-                home = teams.get(m['t1'], {"name": f"Team {m['t1']}", "players": []}); away = teams.get(m['t2'], {"name": f"Team {m['t2']}", "players": []})
-                batch.set(self.db.collection('upcoming_schedule').document(), {'season': season, 'division': division, 'date_text': m['date_text'], 'home_team': home['name'], 'away_team': away['name'], 'home_players': home['players'], 'away_players': away['players']})
+            
+            # Save all the extracted match fixtures
+            for fix in fixtures:
+                doc_ref = self.db.collection('upcoming_schedule').document()
+                batch.set(doc_ref, fix)
+
+            # Save the extracted team rosters
             for t_num, t_data in teams.items():
                 team_doc_id = f"{self._slugify(season)}_{self._slugify(division)}_{self._slugify(t_data['name'])}"
-                batch.set(self.db.collection('teams').document(team_doc_id), {'season': season, 'division': division, 'team_name': t_data['name'], 'players': t_data['players'], 'timestamp': firestore.SERVER_TIMESTAMP}, merge=True)
+                batch.set(self.db.collection('teams').document(team_doc_id), {
+                    'season': season,
+                    'division': division,
+                    'team_name': t_data['name'],
+                    'players': t_data['players'],
+                    'timestamp': firestore.SERVER_TIMESTAMP
+                }, merge=True)
+
             batch.commit()
-            self._log_audit(admin_email, 'UPLOAD_SCHEDULE', f"Parsed PDF for {season} {division}. Extracted {len(teams)} teams and {len(matches_found)} matchups.", {})
-            return {"success": True, "matches_found": len(matches_found), "teams_found": len(teams)}
-        except Exception as e: return {"success": False, "error": f"Failed to read PDF: {str(e)}"}
+            self._log_audit(admin_email, 'UPLOAD_SCHEDULE', f"Parsed PDF for {season} {division}. Extracted {len(teams)} teams and {len(fixtures)} matchups.", {})
+
+            return {
+                "success": True,
+                "matches_found": len(fixtures),
+                "teams_found": len(teams)
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to read PDF: {str(e)}"}
 
     def admin_get_upcoming_schedules(self):
         if not self.db: return []

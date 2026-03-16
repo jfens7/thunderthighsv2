@@ -1,78 +1,61 @@
-<div class="bg-slate-800 p-8 rounded-xl border border-white/10 shadow-xl mb-8 relative overflow-hidden">
-    <div class="absolute left-0 top-0 bottom-0 w-1 bg-purple-500"></div>
-    <h2 class="text-purple-400 font-black text-xl mb-2 pl-2"><i class="fa-solid fa-address-card mr-2"></i> Player Profile Editor</h2>
-    <p class="text-xs text-slate-400 mb-6 pl-2">Assign external links like Ratings Central IDs to a player's internal Glicko profile.</p>
-    
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pl-2">
-        <div class="relative md:col-span-1">
-            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Search Player</label>
-            <input type="text" id="profile-edit-search" placeholder="Enter player name..." class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-purple-500 outline-none text-sm" autocomplete="off">
-            <div id="profile-edit-sugg" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 rounded shadow-xl hidden border border-white/10 max-h-48 overflow-y-auto custom-scrollbar"></div>
-        </div>
-
-        <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-                <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Ratings Central ID</label>
-                <input type="text" id="profile-rc-id" placeholder="e.g. 123456" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-purple-500 outline-none text-sm font-mono transition-colors disabled:opacity-50" disabled>
-            </div>
-            <div class="flex items-end">
-                <button id="profile-save-btn" onclick="window.savePlayerProfile()" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-3 rounded-lg shadow-[0_0_15px_rgba(147,51,234,0.3)] transition text-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>SAVE PROFILE</button>
-            </div>
-        </div>
-    </div>
+<div class="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
+    <h2 class="text-purple-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-users mr-2"></i> Player Directory & Editor</h2>
+    <button onclick="window.loadPlayers()" class="text-xs text-slate-400 hover:text-white transition"><i class="fa-solid fa-rotate mr-1"></i> Refresh</button>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-    <div class="bg-slate-800 p-8 rounded-xl border border-white/10 shadow-xl">
-        <h2 class="text-white font-black text-xl mb-2"><i class="fa-solid fa-wrench text-yellow-500 mr-2"></i> Math Override</h2>
-        <p class="text-xs text-slate-400 mb-8">Force a player's rating to a specific number. This skips the mathematical formula completely.</p>
-        
-        <div class="relative mb-6">
-            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Player Name</label>
-            <input type="text" id="override-search" placeholder="Search..." class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-yellow-500 outline-none text-sm" autocomplete="off">
-            <div id="override-suggestions" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 rounded shadow-xl max-h-48 overflow-y-auto hidden border border-white/10 custom-scrollbar"></div>
-            <input type="hidden" id="override-id">
+<div class="bg-slate-800 p-5 rounded-xl border border-red-500/20 mb-6 shadow-lg">
+    <h3 class="text-red-400 font-bold uppercase tracking-widest text-xs mb-3"><i class="fa-solid fa-code-merge mr-2"></i> Merge Duplicate Players</h3>
+    <p class="text-[10px] text-slate-400 mb-4">Warning: This will move all matches from the Duplicate Name to the Target Name and delete the Duplicate profile. This cannot be undone.</p>
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+        <div class="md:col-span-2">
+            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Duplicate Name (To Delete)</label>
+            <input type="text" id="merge-bad-name" placeholder="e.g. John Doee" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-red-500 text-sm">
         </div>
-
-        <div class="grid grid-cols-2 gap-4 mb-6">
-            <div>
-                <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">New Exact Rating</label>
-                <input type="number" id="override-score" placeholder="e.g. 1450" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-yellow-500 outline-none text-sm font-mono font-bold">
-            </div>
-            <div class="flex items-center mt-6">
-                <label class="flex items-center gap-3 cursor-pointer group">
-                    <input type="checkbox" id="override-retro" class="form-checkbox h-5 w-5 text-yellow-500 bg-black border-white/10 rounded focus:ring-0 focus:ring-offset-0" checked>
-                    <span class="text-xs font-bold text-slate-300 group-hover:text-white transition">Apply Retroactively</span>
-                </label>
-            </div>
-        </div>
-
-        <div id="override-context" class="mb-6 text-xs text-slate-400 font-mono"></div>
-
-        <button onclick="window.submitRatingOverride()" class="w-full bg-yellow-600 hover:bg-yellow-500 text-black font-black py-4 rounded-xl shadow-[0_0_15px_rgba(202,138,4,0.3)] transition text-sm">AUTHORIZE OVERRIDE</button>
-        <div class="mt-4 pt-4 border-t border-white/5 text-center">
-            <button onclick="window.bulkSetRatings()" class="text-xs font-bold text-slate-500 hover:text-white transition"><i class="fa-solid fa-triangle-exclamation mr-1 text-red-500"></i> BULK IMPORT FROM SHEET</button>
+        <div class="text-center text-slate-600 hidden md:block mb-2"><i class="fa-solid fa-arrow-right"></i></div>
+        <div class="md:col-span-2">
+            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Target Name (To Keep)</label>
+            <input type="text" id="merge-good-name" placeholder="e.g. John Doe" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-red-500 text-sm">
         </div>
     </div>
+    <button onclick="window.adminMergePlayers()" id="btn-merge-exec" class="w-full mt-4 bg-red-900/50 hover:bg-red-600 text-white font-bold py-3 rounded-lg border border-red-500/30 transition text-sm">Execute Merge</button>
+</div>
 
-    <div class="bg-slate-800 p-8 rounded-xl border border-white/10 shadow-xl">
-        <h2 class="text-white font-black text-xl mb-2"><i class="fa-solid fa-code-merge text-red-500 mr-2"></i> Identity Merge</h2>
-        <p class="text-xs text-slate-400 mb-8">Fix duplicate players. This will permanently map the "Bad Name" to the "Good Name" across all future calculations.</p>
-        
-        <div class="relative mb-6">
-            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Duplicate / Bad Name</label>
-            <input type="text" id="merge-bad-search" placeholder="Search bad name..." class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-red-500 outline-none text-sm border-l-4 border-l-red-500" autocomplete="off">
-            <div id="merge-bad-suggestions" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 rounded shadow-xl max-h-48 overflow-y-auto hidden border border-white/10 custom-scrollbar"></div>
+<input type="text" id="player-search" onkeyup="window.filterPlayers()" placeholder="Search players by name or ID..." class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white mb-4 focus:outline-none focus:border-purple-500">
+<div id="players-list" class="space-y-2 h-[500px] overflow-y-auto custom-scrollbar pr-2">
+    <div class="text-center py-6 text-slate-500 text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i> Loading players...</div>
+</div>
+
+<div id="player-editor-modal" class="fixed inset-0 bg-black/80 z-[100] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in">
+        <div class="flex justify-between items-center bg-slate-800 px-6 py-4 border-b border-white/5">
+            <h3 class="text-white font-black text-lg" id="editor-title">Edit Player</h3>
+            <button onclick="window.closePlayerEditor()" class="text-slate-400 hover:text-white transition"><i class="fa-solid fa-xmark text-xl"></i></button>
         </div>
-
-        <div class="flex justify-center mb-4"><i class="fa-solid fa-arrow-down text-red-500 text-xl animate-bounce"></i></div>
-
-        <div class="relative mb-8">
-            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Official / Good Name</label>
-            <input type="text" id="merge-good-search" placeholder="Search official name..." class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm border-l-4 border-l-emerald-500" autocomplete="off">
-            <div id="merge-good-suggestions" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 rounded shadow-xl max-h-48 overflow-y-auto hidden border border-white/10 custom-scrollbar"></div>
+        <div class="p-6 space-y-4">
+            <input type="hidden" id="editor-uid">
+            <input type="hidden" id="editor-name">
+            
+            <div>
+                <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Email Address</label>
+                <input type="email" id="editor-email" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-indigo-500 text-sm">
+            </div>
+            <div>
+                <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Phone Number</label>
+                <input type="text" id="editor-phone" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-indigo-500 text-sm">
+            </div>
+            <div>
+                <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Ratings Central ID</label>
+                <input type="text" id="editor-rc" placeholder="Type 'delink' to remove" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-indigo-500 text-sm">
+                <p class="text-[9px] text-slate-500 mt-1">Type <strong>delink</strong> to completely remove their official RC connection.</p>
+            </div>
+            
+            <div class="pt-4 border-t border-white/10 mt-2">
+                <button onclick="window.adminForcePasswordReset()" class="w-full bg-slate-800 hover:bg-slate-700 text-red-400 font-bold py-3 rounded-lg border border-red-500/20 transition-colors text-sm flex items-center justify-center gap-2"><i class="fa-solid fa-key"></i> Force Password Reset</button>
+            </div>
         </div>
-
-        <button onclick="window.submitPlayerMerge()" class="w-full bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-xl shadow-[0_0_15px_rgba(220,38,38,0.3)] transition text-sm">MERGE IDENTITIES</button>
+        <div class="bg-slate-800 px-6 py-4 border-t border-white/5 flex justify-end gap-3">
+            <button onclick="window.closePlayerEditor()" class="px-4 py-2 rounded text-slate-400 hover:text-white text-sm font-bold transition">Cancel</button>
+            <button onclick="window.savePlayerDetails()" id="btn-save-editor" class="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg shadow-[0_0_10px_rgba(79,70,229,0.3)] text-sm font-bold transition">Save Changes</button>
+        </div>
     </div>
 </div>

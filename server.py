@@ -460,7 +460,15 @@ def create_event():
     return jsonify(db.admin_create_event(req.get('tournament_id'), req.get('event_data', {}), session.get('admin_email')))
 
 @app.route('/api/hub/register', methods=['POST'])
-def hub_register(): return jsonify(db.register_player_account(request.json.get('name'), request.json.get('dob'), request.json.get('email'), request.json.get('uid'), request.json.get('estimated_rating'))) if db else jsonify({"success": False})
+def hub_register(): 
+    return jsonify(db.register_player_account(
+        request.json.get('name'), 
+        request.json.get('dob'), 
+        request.json.get('email'), 
+        request.json.get('uid'), 
+        request.json.get('estimated_rating'),
+        request.json.get('club')
+    )) if db else jsonify({"success": False})
 
 @app.route('/api/hub/tournaments/check_eligibility', methods=['POST'])
 def hub_check_eligibility():
