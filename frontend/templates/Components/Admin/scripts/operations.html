@@ -1,0 +1,206 @@
+<script>
+    console.log("✅ Admin Operations Module Loaded");
+
+    window.upcomingSchedules = [];
+    window.loadSchedules = async function() {
+        const listEl = document.getElementById('schedules-list'); if(!listEl) return;
+        listEl.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-red-500"></i></div>';
+        try {
+            const res = await fetch('/api/admin/upcoming_schedules'); window.upcomingSchedules = await res.json();
+            window.populateScheduleFilters(window.upcomingSchedules); window.renderSchedules();
+        } catch(e) {}
+    };
+
+    window.populateScheduleFilters = function(data) {
+        const years = new Set(); const seasons = new Set(); const divs = new Set();
+        data.forEach(item => {
+            const raw = item.season || "Unknown";
+            const ym = raw.match(/\d{4}/); if (ym) years.add(ym[0]);
+            const tm = raw.replace(/\d{4}/g, '').trim(); if (tm) seasons.add(tm);
+            if (item.division) divs.add(item.division);
+        });
+        const buildOptions = (set, defaultText) => { let html = `<option value="All">${defaultText}</option>`; Array.from(set).sort().forEach(val => { html += `<option value="${val}">${val}</option>`; }); return html; };
+        if(document.getElementById('schedule-year-filter')) document.getElementById('schedule-year-filter').innerHTML = buildOptions(years, "All Years");
+        if(document.getElementById('schedule-season-filter')) document.getElementById('schedule-season-filter').innerHTML = buildOptions(seasons, "All Seasons");
+        if(document.getElementById('schedule-div-filter')) document.getElementById('schedule-div-filter').innerHTML = buildOptions(divs, "All Divisions");
+    }
+
+    window.renderSchedules = function() {
+        const list = document.getElementById('schedules-list'); if (!list) return;
+        const yF = document.getElementById('schedule-year-filter')?.value || 'All'; const sF = document.getElementById('schedule-season-filter')?.value || 'All'; const dF = document.getElementById('schedule-div-filter')?.value || 'All';
+        const filtered = window.upcomingSchedules.filter(item => {
+            const raw = item.season || "";
+            return (yF === 'All' || raw.includes(yF)) && (sF === 'All' || raw.includes(sF)) && (dF === 'All' || item.division === dF);
+        });
+        if (filtered.length === 0) { list.innerHTML = '<div class="text-center py-10 text-slate-500 text-sm italic">No matches found.</div>'; return; }
+        filtered.sort((a,b) => (a.date_text || '').localeCompare(b.date_text || ''));
+        let html = '';
+        filtered.forEach(s => {
+            html += `
+            <div class="bg-black/30 border border-white/5 p-4 rounded-lg flex justify-between items-center group transition-colors hover:bg-slate-800">
+                <div>
+                    <div class="flex items-center gap-2 mb-1.5">
+                        <span class="bg-slate-800 text-slate-300 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border border-white/10">${s.season || 'Unknown'}</span>
+                        <span class="bg-red-900/30 text-red-400 border border-red-500/20 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-widest">${s.division}</span>
+                        <span class="text-xs text-slate-400 font-mono"><i class="fa-regular fa-calendar mr-1"></i>${s.date_text}</span>
+                    </div>
+                    <div class="text-sm font-black text-white">${s.home_team} <span class="text-slate-500 text-xs font-normal mx-2 text-[10px] uppercase">vs</span> ${s.away_team}</div>
+                </div>
+                <button onclick="window.deleteSchedule('${s.id}')" title="Delete Match" class="text-red-500 hover:text-white bg-red-900/20 hover:bg-red-600 border border-red-500/20 rounded px-3 py-2 transition opacity-0 group-hover:opacity-100 shadow"><i class="fa-solid fa-trash"></i></button>
+            </div>`;
+        });
+        list.innerHTML = html;
+    };
+
+    window.deleteSchedule = async function(id) {
+        if(!confirm("Delete this match from the schedule?")) return;
+        try { const res = await fetch('/api/admin/delete_schedule', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({schedule_id: id}) }); if((await res.json()).success) window.loadSchedules(); } catch(e) {}
+    };
+
+    window.uploadPdfSchedule = async function(event) {
+        if (event) event.preventDefault();
+        const fileInput = document.getElementById('pdf-file-upload'); 
+        if (!fileInput || !fileInput.files || fileInput.files.length === 0) return alert("Select a PDF first.");
+        const yearStr = document.getElementById('pdf-year') ? document.getElementById('pdf-year').value : new Date().getFullYear();
+        const seasonStr = document.getElementById('pdf-season') ? document.getElementById('pdf-season').value : 'Summer';
+        const division = document.getElementById('pdf-division') ? document.getElementById('pdf-division').value : 'Unknown Division';
+        const formData = new FormData(); formData.append('pdf', fileInput.files[0]); formData.append('season', `${seasonStr} ${yearStr}`); formData.append('division', division);
+        try {
+            const res = await fetch('/api/admin/upload_schedule', { method: 'POST', body: formData }); const data = await res.json();
+            if (data.success) { alert(`✅ Extracted ${data.teams_found} teams and ${data.matches_found} matchups.`); window.loadSchedules(); } else alert("❌ Failed: " + data.error);
+        } catch(e) {}
+    };
+
+    window.submitManualMatch = async function() {
+        const p1 = document.getElementById('manual-p1').value; const p2 = document.getElementById('manual-p2').value; const date = document.getElementById('manual-date').value; const scores = document.getElementById('manual-scores').value;
+        if (!p1 || !p2 || !date) return alert("Fields missing.");
+        if (!confirm(`Create match: ${p1} vs ${p2}?`)) return;
+        try { const res = await fetch('/api/admin/manual_match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ p1: p1, p2: p2, date: date, scores: scores }) }); if ((await res.json()).success) alert("✅ Match injected!"); } catch(e) {}
+    };
+
+    window.searchHistory = async function() {
+        const q = document.getElementById('history-search').value.trim(); const dF = document.getElementById('hist-div-filter')?.value || 'All'; const sF = document.getElementById('hist-source-filter')?.value || 'All';
+        const list = document.getElementById('historyList'); list.innerHTML = '<div class="text-center py-10 text-indigo-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
+        try {
+            const res = await fetch(`/api/admin/history?q=${encodeURIComponent(q)}&source=${encodeURIComponent(sF)}`); let matches = await res.json();
+            if (dF !== 'All') matches = matches.filter(m => m.division.toLowerCase() === dF.toLowerCase());
+            if (matches.length === 0) { list.innerHTML = '<div class="text-slate-500 text-center py-10 italic">No matches found.</div>'; return; }
+            let html = '';
+            matches.forEach(m => {
+                const sB = m.source === 'Spreadsheet' ? `<span class="bg-green-900/30 text-green-400 border border-green-500/20 text-[9px] px-1.5 py-0.5 rounded"><i class="fa-solid fa-file-excel mr-1"></i>Sheet</span>` : `<span class="bg-blue-900/30 text-blue-400 border border-blue-500/20 text-[9px] px-1.5 py-0.5 rounded"><i class="fa-solid fa-tablet mr-1"></i>App</span>`;
+                html += `
+                <div class="bg-black/30 p-4 rounded-xl border border-white/5 mb-3 flex flex-col hover:bg-slate-800 transition-colors">
+                    <div class="flex flex-col md:flex-row justify-between items-center gap-4 w-full">
+                        <div class="flex-1 w-full">
+                            <div class="flex flex-wrap items-center gap-2 mb-1"><span class="bg-slate-800 text-slate-300 px-2 py-0.5 rounded text-[10px] font-mono">ID: ${m.match_id}</span><span class="bg-indigo-900/30 text-indigo-400 text-[10px] px-2 py-0.5 rounded font-bold">${m.division}</span>${sB}</div>
+                            <div class="text-lg font-black text-white">${m.p1} <span class="text-slate-500 mx-2 text-sm">vs</span> ${m.p2}</div>
+                        </div>
+                        <div class="flex items-center gap-3 bg-slate-900/80 p-3 rounded-xl border border-white/10 shrink-0">
+                            <div class="flex flex-col w-14"><span class="text-[8px] text-slate-500 text-center">S1</span><input type="number" id="s1-${m.id}" value="${m.s1}" class="w-full bg-slate-800 border border-white/10 text-white font-bold text-center rounded py-1 text-sm"></div>
+                            <span class="text-slate-600 font-black">-</span>
+                            <div class="flex flex-col w-14"><span class="text-[8px] text-slate-500 text-center">S2</span><input type="number" id="s2-${m.id}" value="${m.s2}" class="w-full bg-slate-800 border border-white/10 text-white font-bold text-center rounded py-1 text-sm"></div>
+                            <div class="flex flex-col w-28 ml-2"><span class="text-[8px] text-slate-500 text-center">Date</span><input type="text" id="date-${m.id}" value="${m.date}" class="w-full bg-slate-800 border border-white/10 text-white font-bold text-center rounded py-1 text-sm"></div>
+                            <button onclick="window.adminSaveHistoryEdit('${m.p1.replace(/'/g, "\\'")}', '${m.p2.replace(/'/g, "\\'")}', '${m.date}', '${m.id}')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg mt-3"><i class="fa-solid fa-floppy-disk"></i></button>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            list.innerHTML = html;
+        } catch(e) {}
+    };
+
+    window.adminSaveHistoryEdit = async function(p1, p2, oldDate, id) {
+        const s1 = document.getElementById(`s1-${id}`).value; const s2 = document.getElementById(`s2-${id}`).value; const newDate = document.getElementById(`date-${id}`).value;
+        try { const res = await fetch('/api/admin/update_match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ p1: p1, p2: p2, date: oldDate, s1: s1, s2: s2, new_date: newDate }) }); if ((await res.json()).success) alert("✅ Updated!"); } catch(e) {}
+    };
+
+    window.submitRatingOverride = async function() {
+        const id = document.getElementById('override-id').value; const rating = document.getElementById('override-score').value; const sd = document.getElementById('override-sd').value; const isRetro = document.getElementById('override-retro').checked;
+        if (!id || !rating) return alert("Select player and rating.");
+        try { const res = await fetch('/api/admin/override_rating', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ player_id: id, rating: rating, sd: sd, retroactive: isRetro }) }); if ((await res.json()).success) alert("✅ Applied!"); } catch(e) {}
+    };
+
+    window.submitPlayerMerge = async function() {
+        const bad = document.getElementById('merge-bad-search').value.trim(); const good = document.getElementById('merge-good-search').value.trim();
+        if(!bad || !good) return alert("Select both players.");
+        if(!confirm(`Merge ${bad} into ${good}?`)) return;
+        try { const res = await fetch('/api/admin/merge', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({bad_name: bad, good_name: good}) }); if ((await res.json()).success) alert("✅ Players merged!"); } catch(e) {}
+    };
+
+    window.loadDateErrors = async function() {
+        const dList = document.getElementById('dateErrorsList'); const dBadge = document.getElementById('date-badge');
+        if (!dList) return; dList.innerHTML = '<div class="text-center py-10 text-orange-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
+        try {
+            const res = await fetch('/api/admin/date_errors'); const errors = await res.json();
+            if (dBadge) { dBadge.innerText = errors.length; errors.length > 0 ? dBadge.classList.remove('hidden') : dBadge.classList.add('hidden'); }
+            if (errors.length === 0) { dList.innerHTML = '<div class="text-slate-600 text-center py-10 italic">No missing dates found.</div>'; return; }
+            let html = "";
+            errors.forEach(m => {
+                html += `
+                <div id="date-card-${m.id}" class="bg-slate-800 p-4 rounded-xl border border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 mb-3">
+                    <div class="flex-1 font-black text-white">${m.home_players[0]} vs ${m.away_players[0]}</div>
+                    <div class="flex items-center gap-3"><input type="text" id="fix-date-${m.id}" placeholder="e.g. 14/02/2026" class="w-28 bg-slate-900 border border-white/10 text-white font-bold text-center rounded py-1 px-2"><button onclick="window.adminBulkDateFix('${m.season}', '${m.division}', '${m.week}', '${m.id}')" class="bg-orange-600 hover:bg-orange-500 text-white font-bold py-1.5 px-3 rounded">FIX</button></div>
+                </div>`;
+            });
+            dList.innerHTML = html;
+        } catch(e) {}
+    };
+
+    window.adminBulkDateFix = async function(season, division, week, id) {
+        const newDate = document.getElementById(`fix-date-${id}`).value;
+        try { const res = await fetch('/api/admin/bulk_fix_date', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ season: season, division: division, week: week, date: newDate }) }); if ((await res.json()).success) document.getElementById(`date-card-${id}`).remove(); } catch(e) {}
+    };
+
+    window.loadPendingReports = async function() {
+        const list = document.getElementById('feedbackList'); if (!list) return; 
+        try { const res = await fetch('/api/admin/reports'); const reports = await res.json(); list.innerHTML = reports.length > 0 ? reports.map(r => `<div class="bg-slate-800 p-4 rounded mb-3 text-sm text-slate-300">${r.problem}</div>`).join('') : '<div class="text-center italic">No new feedback.</div>'; } catch(e) {}
+    };
+
+    window.loadAdminNotices = async function() {
+        const list = document.getElementById('adminNoticesList'); if (!list) return;
+        try { const res = await fetch('/api/notices'); const notices = await res.json(); list.innerHTML = notices.length > 0 ? notices.map(n => `<div class="bg-slate-800 p-4 rounded flex justify-between"><h4 class="text-white font-bold">${n.title}</h4><button onclick="window.deleteNotice('${n.id}')" class="text-red-500"><i class="fa-solid fa-trash"></i></button></div>`).join('') : '<div class="text-center italic">No notices.</div>'; } catch(e) {}
+    };
+
+    window.submitNotice = async function() {
+        const title = document.getElementById('notice-title').value; const msg = document.getElementById('notice-message').value;
+        try { const res = await fetch('/api/admin/add_notice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title, type: 'General', message: msg }) }); if ((await res.json()).success) window.loadAdminNotices(); } catch(e) {}
+    };
+
+    window.deleteNotice = async function(id) { try { const res = await fetch('/api/admin/delete_notice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notice_id: id }) }); if ((await res.json()).success) window.loadAdminNotices(); } catch(e) {} };
+
+    window.loadSmsInbox = async function() {
+        const list = document.getElementById('smsInboxList'); if (!list) return;
+        try { const res = await fetch('/api/admin/sms_inbox'); const msg = await res.json(); list.innerHTML = msg.length > 0 ? msg.map(m => `<div class="bg-slate-800 p-4 rounded mb-2 text-sm text-white">${m.body}</div>`).join('') : '<div class="text-center italic">No replies.</div>'; } catch(e) {}
+    };
+
+    window.loadAdminChat = async function() {
+        const list = document.getElementById('adminChatList'); if (!list) return;
+        try { const res = await fetch('/api/admin/messages'); const msgs = await res.json(); list.innerHTML = msgs.length > 0 ? msgs.map(m => `<div class="bg-slate-900 p-3 rounded mb-2 text-sm text-slate-300">${m.message}</div>`).join('') : ''; } catch(e) {}
+    };
+
+    window.postAdminMessage = async function() {
+        const msg = document.getElementById('admin-chat-input').value.trim(); if (!msg) return;
+        try { const res = await fetch('/api/admin/add_message', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) }); if ((await res.json()).success) window.loadAdminChat(); } catch(e) {}
+    };
+
+    window.loadDonations = async function() {
+        const list = document.getElementById('donationsList'); if (!list) return;
+        try { const res = await fetch('/api/admin/donations'); const data = await res.json(); list.innerHTML = data.length > 0 ? data.map(d => `<div class="bg-slate-800 p-3 rounded flex justify-between text-emerald-400"><span>${d.name}</span><span>$${d.amount}</span></div>`).join('') : ''; } catch (e) {}
+    };
+
+    window.loadTrafficStats = async function() { try { const res = await fetch('/api/admin/traffic'); const data = await res.json(); document.getElementById('dash-traffic-views').innerText = data.views; document.getElementById('dash-traffic-uniques').innerText = data.uniques; } catch(e) {} };
+
+    window.loadAuditLogs = async function() {
+        const list = document.getElementById('auditLogList'); if (!list) return;
+        try { const res = await fetch('/api/admin/audit_logs'); const logs = await res.json(); list.innerHTML = logs.length > 0 ? logs.map(l => `<div class="bg-slate-800 p-3 rounded flex justify-between text-xs text-slate-300 mb-2"><span>${l.action}: ${l.description}</span><button onclick="window.undoAction('${l.id}')" class="text-red-500">UNDO</button></div>`).join('') : '<div class="text-center italic">No logs.</div>'; } catch(e) {}
+    };
+
+    window.undoAction = async function(logId) { try { const res = await fetch('/api/admin/undo_action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({log_id: logId}) }); if ((await res.json()).success) window.loadAuditLogs(); } catch(e) {} };
+
+    window.loadAdminUsers = async function() {
+        const list = document.getElementById('adminUsersList'); if (!list) return;
+        try { const res = await fetch('/api/admin/users'); const users = await res.json(); list.innerHTML = users.map(u => `<div class="bg-slate-800 p-3 rounded flex justify-between text-sm text-white mb-2"><span>${u.email}</span><button onclick="window.manageUser('${u.email}', 'revoke')" class="text-red-400">Revoke</button></div>`).join(''); } catch(e) {}
+    };
+
+    window.manageUser = async function(email, action) { try { const res = await fetch('/api/admin/approve_user', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({email: email, action: action}) }); if ((await res.json()).success) window.loadAdminUsers(); } catch(e) {} };
+</script>

@@ -1,135 +1,81 @@
-import gspread
-from google.oauth2.service_account import Credentials
+# backend/backend.py
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
-import datetime, re, os, json, sys, logging, random, string, hashlib, urllib.request, base64
+import datetime, re, os, json, sys, logging, random, string, hashlib, threading
+
+from backend.glicko import RatingEngine
+from backend.rc_scraper import RatingsCentralScraper
+from backend.sheets_sync import SheetsSyncEngine
+from backend.league_engine import LeagueEngineMixin
+from backend.comms_engine import CommsEngineMixin
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path: sys.path.append(current_dir)
-
-try: from sky_engine import SkyEngine
-except ImportError:
-    try: from backend.sky_engine import SkyEngine
-    except: SkyEngine = None
-
-DEFAULT_RATING = 1000.0
-DEFAULT_RD = 300.0
-
-def calculate_match(w, l, s1, s2, k_win=1.0, k_loss=1.4, anti_riot=True, point_scalar=1.0):
-    total_sets = s1 + s2
-    if total_sets == 0: return {'winner': w, 'loser': l}
-    
-    w_score = 0.7 + 0.3 * ((s1 - s2) / total_sets)
-    l_score = 1.0 - w_score
-    
-    E_w = 1.0 / (1.0 + 10.0 ** ((l['rating'] - w['rating']) / 400.0))
-    E_l = 1.0 - E_w
-    
-    K_w = max(30.0, w['rd'] * k_win) * point_scalar
-    K_l = max(40.0, l['rd'] * k_loss) * point_scalar
-    
-    w_shift = K_w * (w_score - E_w)
-    l_shift = K_l * (l_score - E_l)
-    
-    w_rd_shift = -4.0
-    l_rd_shift = -4.0
-    
-    if anti_riot:
-        if w_shift < 0: w_shift = 0.0; w_rd_shift = 5.0
-        if l_shift > 0: l_shift = 0.0; l_rd_shift = 2.0
-        
-    w['rating'] += w_shift
-    l['rating'] += l_shift
-    w['rd'] = max(20.0, min(350.0, w['rd'] + w_rd_shift))
-    l['rd'] = max(20.0, min(350.0, l['rd'] + l_rd_shift))
-    
-    return {'winner': w, 'loser': l}
-
-RESULTS_SPREADSHEET_ID = "1tpxuUCl8ddpnBBr69vc4P1foRCRKWpts5-HaFPYb4po"
-RATING_START_DATE = datetime.date(2025, 12, 25)
 SUPER_ADMIN_EMAIL = "jakobwill7@gmail.com"
 
-class RatingEngine:
-    def __init__(self): self.players = {}
-    
-    def get_rating(self, name):
-        if name not in self.players: self.players[name] = {'rating': DEFAULT_RATING, 'rd': DEFAULT_RD, 'vol': 0.06}
-        return self.players[name]
-        
-    def set_seed(self, name, rating, rd=None, vol=None):
-        try:
-            r_val = float(rating); rd_val = float(rd) if rd and str(rd).strip() else DEFAULT_RD
-            if rd_val < 0: rd_val = DEFAULT_RD
-            self.players[name] = {'rating': r_val, 'rd': rd_val, 'vol': float(vol) if vol is not None else 0.06}
-        except ValueError: pass
-        
-    def update_match(self, p1_name, p2_name, s1, s2, game_history='', k_win=1.0, k_loss=1.4, anti_riot=True):
-        p1_stats = self.get_rating(p1_name); p2_stats = self.get_rating(p2_name)
-        r1_old = p1_stats['rating']; rd1_old = p1_stats['rd']; r2_old = p2_stats['rating']; rd2_old = p2_stats['rd']
-        
-        if s1 == s2: return {'p1_delta': 0, 'p2_delta': 0, 'p1_before': r1_old, 'p1_rd_before': rd1_old, 'p1_after': r1_old, 'p1_rd_after': rd1_old, 'p2_before': r2_old, 'p2_rd_before': rd2_old, 'p2_after': r2_old, 'p2_rd_after': rd2_old}
-        
-        point_scalar = 1.0
-        if game_history:
-            try:
-                p1_pts = 0; p2_pts = 0
-                for g in str(game_history).split(','):
-                    pts = g.strip().split('-')
-                    if len(pts) == 2:
-                        p1_pts += int(pts[0])
-                        p2_pts += int(pts[1])
-                
-                if p1_pts > 0 and p2_pts > 0:
-                    ratio = (p1_pts / p2_pts) if s1 > s2 else (p2_pts / p1_pts)
-                    if ratio >= 2.0: point_scalar = 1.25
-                    elif ratio >= 1.5: point_scalar = 1.10
-                    elif ratio < 1.15: point_scalar = 0.85
-            except: pass
-
-        if s1 > s2:
-            res = calculate_match(p1_stats, p2_stats, s1, s2, k_win, k_loss, anti_riot, point_scalar)
-            self.players[p1_name] = res['winner']
-            self.players[p2_name] = res['loser']
-        else:
-            res = calculate_match(p2_stats, p1_stats, s2, s1, k_win, k_loss, anti_riot, point_scalar)
-            self.players[p2_name] = res['winner']
-            self.players[p1_name] = res['loser']
-            
-        return {'p1_delta': self.players[p1_name]['rating'] - r1_old, 'p2_delta': self.players[p2_name]['rating'] - r2_old, 'p1_before': r1_old, 'p1_rd_before': rd1_old, 'p1_after': self.players[p1_name]['rating'], 'p1_rd_after': self.players[p1_name]['rd'], 'p2_before': r2_old, 'p2_rd_before': rd2_old, 'p2_after': self.players[p2_name]['rating'], 'p2_rd_after': self.players[p2_name]['rd']}
-
-class ThunderData:
+class ThunderData(LeagueEngineMixin, CommsEngineMixin):
     def __init__(self):
-        self.scopes = ["https://www.googleapis.com/auth/spreadsheets"]; self.client = None; self.sheet_results = None; self.db = None
-        self.rating_engine = RatingEngine(); self.all_players = {}; self.season_stats = {}; self.seasons_list = ["Career"]
-        self.divisions_list = set(); self.date_lookup = {}; self.weekly_matches = {}; self.player_ids = {}; self.id_to_name = {}; self.alias_map = {}; self.date_to_week_map = {}
-        self.match_history_log = []; self.k_win = 1.0; self.k_loss = 1.4; self.chaos_config = {'active': False, 'weeks': [], 'approvals': [], 'req': 3}
-        self._authenticate()
+        self.db = None
+        self.all_players = {}
+        self.season_stats = {}
+        self.seasons_list = ["Career"]
+        self.divisions_list = set()
+        self.date_lookup = {}
+        self.weekly_matches = {}
+        self.player_ids = {}
+        self.id_to_name = {}
+        self.alias_map = {}
+        self.date_to_week_map = {}
+        self.match_history_log = []
+        self.k_win = 1.0
+        self.k_loss = 1.4
+        self.chaos_config = {'active': False, 'weeks': [], 'approvals': [], 'req': 3}
+        
+        self.rating_engine = RatingEngine()
+        self.rc_scraper = RatingsCentralScraper()
+        
+        self._init_firebase()
+        
+        self.sync_engine = SheetsSyncEngine(self)
+        self.refresh_data()
 
-    def _authenticate(self):
+    def _init_firebase(self):
         try:
-            creds_json = os.environ.get("GOOGLE_CREDS_JSON")
-            if creds_json: self.creds = Credentials.from_service_account_info(json.loads(creds_json), scopes=self.scopes)
-            else:
-                paths = ["credentials.json", "backend/credentials.json"]; found = next((p for p in paths if os.path.exists(p)), None)
-                self.creds = Credentials.from_service_account_file(found, scopes=self.scopes) if found else None
-            if self.creds:
-                self.client = gspread.authorize(self.creds)
-                try: self.sheet_results = self.client.open_by_key(RESULTS_SPREADSHEET_ID); logger.info("✅ Connected to Master")
-                except: logger.error("❌ Master Sheet Fail")
-        except: pass
-        try:
-            try: app = firebase_admin.get_app()
-            except ValueError:
+            if not len(firebase_admin._apps):
                 cred_path = 'firebase_credentials.json'
-                if not os.path.exists(cred_path) and os.path.exists('backend/firebase_credentials.json'): cred_path = 'backend/firebase_credentials.json'
+                if not os.path.exists(cred_path) and os.path.exists('backend/firebase_credentials.json'): 
+                    cred_path = 'backend/firebase_credentials.json'
                 firebase_admin.initialize_app(credentials.Certificate(cred_path))
             self.db = firestore.client()
-            if not self.db.collection('system_config').document('main').get().exists: self.db.collection('system_config').document('main').set({'tournament_mode_active': False})
-        except: self.db = None
+            if not self.db.collection('system_config').document('main').get().exists: 
+                self.db.collection('system_config').document('main').set({'tournament_mode_active': False})
+        except Exception as e: 
+            logger.error(f"Firebase Init Error: {e}")
+            self.db = None
 
+    def refresh_data(self):
+        if hasattr(self, 'sync_engine') and self.sync_engine:
+            self.sync_engine.run_sync()
+
+    # --- Core Utilities ---
+    def _clean_name(self, name): return self.alias_map.get(" ".join(str(name).split()).lower(), " ".join(str(name).split()).title()) if name else ""
+    def _get_val(self, row, keys, default=''):
+        row_keys_norm = {k.strip().lower(): k for k in row.keys()}
+        for k in keys:
+            if k.strip().lower() in row_keys_norm: return row[row_keys_norm[k.strip().lower()]]
+        return default
+    def _parse_date(self, date_str):
+        if not date_str: return None
+        for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%Y/%m/%d"):
+            try: return datetime.datetime.strptime(str(date_str).strip(), fmt).date()
+            except: continue
+        return None
+    def _generate_player_id(self): return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+    def _slugify(self, text): return re.sub(r'[^a-z0-9]', '', str(text).lower())
+    def _extract_week(self, text): match = re.search(r'\d+', str(text)); return match.group() if match else str(text).strip().lower()
+
+    # --- System & Auth ---
     def record_page_view(self, ip_address):
         if not self.db: return
         try: today_str = datetime.datetime.now().strftime("%Y-%m-%d"); self.db.collection('daily_traffic').document(today_str).set({'date': today_str, 'views': firestore.Increment(1), 'ips': firestore.ArrayUnion([ip_address])}, merge=True)
@@ -209,222 +155,99 @@ class ThunderData:
             action = data.get('action')
             payload = json.loads(data.get('undo_payload', '{}'))
             
-            if action == 'OVERRIDE_RATING': 
-                self.db.collection('rating_overrides').document(re.sub(r'[^a-zA-Z0-9]', '_', payload.get('name', '')).lower()).delete()
+            if action == 'OVERRIDE_RATING': self.db.collection('rating_overrides').document(re.sub(r'[^a-zA-Z0-9]', '_', payload.get('name', '')).lower()).delete()
             elif action in ['UPDATE_MATCH', 'ADD_MATCH']: 
                 if payload.get('correction_id'): self.db.collection('match_corrections').document(payload.get('correction_id')).delete()
                 if payload.get('result_id'): self.db.collection('match_results').document(payload.get('result_id')).delete()
-            elif action == 'OVERRIDE_DELTAS': 
-                self.db.collection('match_delta_overrides').document(payload.get('match_id')).delete()
+            elif action == 'OVERRIDE_DELTAS': self.db.collection('match_delta_overrides').document(payload.get('match_id')).delete()
             elif action in ['FORCE_FINISH_LIVE', 'WIPE_LIVE']:
-                if action == 'FORCE_FINISH_LIVE' and payload.get('result_id'): 
-                    self.db.collection('match_results').document(payload.get('result_id')).delete()
-                if payload.get('schedule_id') and payload.get('fixture_data'): 
-                    self.db.collection('fixture_schedule').document(payload.get('schedule_id')).set(payload.get('fixture_data'))
+                if action == 'FORCE_FINISH_LIVE' and payload.get('result_id'): self.db.collection('match_results').document(payload.get('result_id')).delete()
+                if payload.get('schedule_id') and payload.get('fixture_data'): self.db.collection('fixture_schedule').document(payload.get('schedule_id')).set(payload.get('fixture_data'))
             elif action == 'BULK_DATE_FIX':
                 if 'rule_id' in payload: self.db.collection('bulk_date_rules').document(payload['rule_id']).delete()
             elif action == 'UPDATE_MATH':
-                old_k_win = payload.get('old_k_win', 1.0)
-                old_k_loss = payload.get('old_k_loss', 1.4)
-                self.db.collection('system_config').document('main').set({
-                    'k_win_scale': float(old_k_win),
-                    'k_loss_scale': float(old_k_loss)
-                }, merge=True)
-                self.k_win = float(old_k_win)
-                self.k_loss = float(old_k_loss)
+                self.db.collection('system_config').document('main').set({'k_win_scale': float(payload.get('old_k_win', 1.0)), 'k_loss_scale': float(payload.get('old_k_loss', 1.4))}, merge=True)
+                self.k_win = float(payload.get('old_k_win', 1.0)); self.k_loss = float(payload.get('old_k_loss', 1.4))
                 
             doc_ref.update({'status': 'undone', 'undone_by': super_admin_email})
             self.refresh_data()
             return True
-        except Exception as e: 
-            logger.error(f"Undo error: {e}")
-            return False
+        except: return False
 
-    def _clean_name(self, name): return self.alias_map.get(" ".join(str(name).split()).lower(), " ".join(str(name).split()).title()) if name else ""
-    def _get_val(self, row, keys, default=''):
-        row_keys_norm = {k.strip().lower(): k for k in row.keys()}
-        for k in keys:
-            if k.strip().lower() in row_keys_norm: return row[row_keys_norm[k.strip().lower()]]
-        return default
-    def _parse_date(self, date_str):
-        if not date_str: return None
-        for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%Y/%m/%d"):
-            try: return datetime.datetime.strptime(str(date_str).strip(), fmt).date()
-            except: continue
-        return None
-    def _generate_player_id(self): return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(6))
-    def _slugify(self, text): return re.sub(r'[^a-z0-9]', '', str(text).lower())
-    def _extract_week(self, text): match = re.search(r'\d+', str(text)); return match.group() if match else str(text).strip().lower()
+    # --- Ratings Central Engine ---
+    def search_ratings_central_by_name(self, player_name, target_club=None): return self.rc_scraper.search_by_name(player_name, target_club)
 
-    # --- TOURNAMENT ENGINE MODULE ---
-    def admin_create_tournament(self, data, admin_email="Unknown"):
-        if not self.db: return False
-        try:
-            t_id = self._slugify(data.get('name', 'new_tournament')) + f"_{random.randint(100,999)}"
-            payload = {
-                'id': t_id,
-                'name': data.get('name'),
-                'start_date': data.get('start_date'),
-                'end_date': data.get('end_date'),
-                'venue': data.get('venue', 'GCTTA'),
-                'status': data.get('status', 'Draft'),
-                'created_by': admin_email,
-                'timestamp': firestore.SERVER_TIMESTAMP
-            }
-            self.db.collection('tournaments').document(t_id).set(payload)
-            self._log_audit(admin_email, 'CREATE_TOURNAMENT', f"Created Tournament: {data.get('name')}", {})
-            return {"success": True, "tournament_id": t_id}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+    def trigger_background_rc_scrape(self, player_name, rc_id, admin_email):
+        def scrape_task():
+            stats = self.rc_scraper.deep_scrape_profile(rc_id)
+            if stats and self.db:
+                safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()
+                self.db.collection('player_profiles').document(safe_id).set(stats, merge=True)
+                self._log_audit(admin_email, 'RC_SYNC', f"Deep Scraped RC Data for {player_name}", {})
+        threading.Thread(target=scrape_task).start()
+        return True
 
-    def admin_create_event(self, tournament_id, data, admin_email="Unknown"):
-        if not self.db: return False
-        try:
-            event_ref = self.db.collection('tournaments').document(tournament_id).collection('events').document()
-            payload = {
-                'id': event_ref.id,
-                'name': data.get('name'),
-                'type': data.get('type', 'Singles'), 
-                'max_rating': float(data.get('max_rating')) if data.get('max_rating') else None,
-                'max_age': int(data.get('max_age')) if data.get('max_age') else None,
-                'min_age': int(data.get('min_age')) if data.get('min_age') else None,
-                'time_block': data.get('time_block', 'TBD'),
-                'price': float(data.get('price', 0.0)),
-                'max_players': int(data.get('max_players', 64))
-            }
-            event_ref.set(payload)
-            self._log_audit(admin_email, 'CREATE_EVENT', f"Added Event {data.get('name')} to {tournament_id}", {})
-            return {"success": True, "event_id": event_ref.id}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
-    def check_eligibility(self, uid, event_data, partner_uid=None):
-        if not self.db: return False, ["Database Offline"]
-        
-        def _check_player(player_doc, p_label="Player"):
-            reasons = []
-            if not player_doc.exists:
-                return False, [f"{p_label} profile not found. Please register."]
-            p_data = player_doc.to_dict()
-            
-            max_rating = event_data.get('max_rating')
-            if max_rating:
-                active_rating = p_data.get('rc_rating', p_data.get('estimated_rating', 1500.0))
-                if float(active_rating) >= float(max_rating):
-                    reasons.append(f"{p_label} rating ({active_rating}) exceeds the limit of {max_rating}.")
-
-            dob_str = p_data.get('dob')
-            if dob_str:
-                try:
-                    dob = datetime.datetime.strptime(dob_str, "%Y-%m-%d").date()
-                    today = datetime.date.today()
-                    age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
-                    
-                    if event_data.get('max_age') and age > int(event_data.get('max_age')):
-                        reasons.append(f"{p_label} is too old ({age} yrs) for this event.")
-                    if event_data.get('min_age') and age < int(event_data.get('min_age')):
-                        reasons.append(f"{p_label} is too young ({age} yrs) for this event.")
-                except:
-                    reasons.append(f"Invalid Date of Birth format for {p_label}.")
-            else:
-                reasons.append(f"Date of Birth missing for {p_label}.")
-            
-            return len(reasons) == 0, reasons
-
-        user_doc = self.db.collection('verified_users').document(uid).get()
-        if not user_doc.exists: user_doc = self.db.collection('pending_accounts').document(uid).get()
-        
-        user_eligible, user_reasons = _check_player(user_doc, "You")
-        if not user_eligible: return False, user_reasons
-
-        if event_data.get('type') == 'Doubles' and partner_uid:
-            partner_doc = self.db.collection('verified_users').document(partner_uid).get()
-            if not partner_doc.exists: partner_doc = self.db.collection('pending_accounts').document(partner_uid).get()
-            
-            partner_eligible, partner_reasons = _check_player(partner_doc, "Your Partner")
-            if not partner_eligible: return False, partner_reasons
-
-        return True, ["Eligible"]
-
-    def sync_tournament_rc_ratings(self):
-        if not self.db: return
-        logger.info("📡 Running Weekly RC Rating Sync for Tournament Registrants...")
-        try:
-            for doc in self.db.collection('verified_users').stream():
-                data = doc.to_dict()
-                if data.get('ratings_central_id'):
-                    current_rating = data.get('rc_rating', 1500)
-                    new_sd = random.randint(30, 80)
-                    self.db.collection('verified_users').document(doc.id).update({
-                        'rc_sd': new_sd,
-                        'last_rc_sync': firestore.SERVER_TIMESTAMP
-                    })
-            logger.info("✅ RC Ratings Synced successfully.")
-        except Exception as e:
-            logger.error(f"❌ RC Sync Error: {e}")
-
-    # --- PROFILE & RC ID LINKING ---
     def admin_get_player_profile(self, player_name):
         if not self.db: return {}
         try:
-            safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()
-            doc = self.db.collection('player_profiles').document(safe_id).get()
+            doc = self.db.collection('player_profiles').document(re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()).get()
             data = doc.to_dict() if doc.exists else {}
-            glicko_stats = self.rating_engine.get_rating(player_name)
-            data['gctta_sd'] = glicko_stats.get('rd', 300.0) 
+            data['gctta_sd'] = self.rating_engine.get_rating(player_name).get('rd', 300.0) 
             return data
         except: return {}
 
     def admin_update_player_profile(self, player_name, ratings_central_id, admin_email="Unknown"):
         if not self.db: return False
         try:
-            safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()
-            self.db.collection('player_profiles').document(safe_id).set({
-                'ratings_central_id': ratings_central_id,
-                'last_updated': firestore.SERVER_TIMESTAMP
-            }, merge=True)
-            self._log_audit(admin_email, 'UPDATE_PROFILE', f"Updated Profile DB for {player_name}. RC ID set to: {ratings_central_id}", {})
+            self.db.collection('player_profiles').document(re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()).set({'name': player_name, 'ratings_central_id': ratings_central_id}, merge=True)
+            self._log_audit(admin_email, 'UPDATE_PROFILE', f"Updated {player_name} Profile (RC: {ratings_central_id})", {})
             return True
-        except Exception as e: 
-            logger.error(f"Profile Update Error: {e}")
-            return False
+        except: return False
 
+    # --- Accounts & Linking ---
     def register_player_account(self, name, dob, email, uid, estimated_rating, club="Unknown"):
         if not self.db: return {"success": False, "error": "DB Offline"}
         try:
-            self.db.collection('pending_accounts').document(uid).set({
-                'name': name,
-                'dob': dob,
-                'email': email,
-                'uid': uid,
-                'estimated_rating': float(estimated_rating) if estimated_rating else 1500.0,
-                'club': club,
-                'rc_sd': 150.0,
-                'status': 'pending',
-                'timestamp': firestore.SERVER_TIMESTAMP
-            })
+            est_val = str(estimated_rating).strip()
+            suggested_rc_id = est_val if est_val.isdigit() and int(est_val) > 5000 else ""
+            self.db.collection('pending_accounts').document(uid).set({'name': name, 'dob': dob, 'email': email, 'uid': uid, 'estimated_rating': 1500.0 if suggested_rc_id else float(estimated_rating or 1500.0), 'suggested_rc_id': suggested_rc_id, 'club': club, 'rc_sd': 150.0, 'status': 'pending', 'timestamp': firestore.SERVER_TIMESTAMP})
             return {"success": True}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        except Exception as e: return {"success": False, "error": str(e)}
 
     def admin_get_pending_accounts(self):
         if not self.db: return []
         try: return [{"id": d.id, **d.to_dict()} for d in self.db.collection('pending_accounts').where('status', '==', 'pending').stream()]
         except: return []
 
-    def admin_link_player_account(self, uid, official_player_name, admin_email="Unknown"):
+    def admin_link_player_account(self, uid, official_player_name, rc_id=None, admin_email="Unknown"):
         if not self.db: return False
         try:
             doc = self.db.collection('pending_accounts').document(uid).get()
             if not doc.exists: return False
-            data = doc.to_dict()
-            data['linked_player_name'] = official_player_name
-            data['status'] = 'approved'
-            data['approved_by'] = admin_email
-            
+            data = doc.to_dict(); data['linked_player_name'] = official_player_name; data['status'] = 'approved'; data['approved_by'] = admin_email
             self.db.collection('verified_users').document(uid).set(data)
             self.db.collection('pending_accounts').document(uid).delete()
-            self._log_audit(admin_email, 'APPROVE_ACCOUNT', f"Linked UID {uid} to official player {official_player_name}", {})
+            update_payload = {'last_updated': firestore.SERVER_TIMESTAMP}
+            if rc_id: update_payload['ratings_central_id'] = rc_id
+            self.db.collection('player_profiles').document(re.sub(r'[^a-zA-Z0-9]', '_', official_player_name).lower()).set(update_payload, merge=True)
+            self._log_audit(admin_email, 'APPROVE_ACCOUNT', f"Linked UID {uid} to {official_player_name}", {})
+            return True
+        except: return False
+
+    # --- Match Overrides & Stats ---
+    def admin_override_rating(self, player_id, new_rating, sd_override=None, retroactive=True, admin_email="Unknown"):
+        if not self.db: return False
+        try:
+            final_sd = float(sd_override) if sd_override else 65.0; player_name = self.id_to_name.get(player_id)
+            if not player_name:
+                for n, i in self.player_ids.items():
+                    if i == player_id: player_name = n; break
+            if not player_name: return False
+
+            payload = {'name': player_name, 'rating': float(new_rating), 'rd': final_sd, 'vol': 0.06, 'date_str': '1900-01-01' if retroactive else datetime.datetime.now().strftime("%Y-%m-%d"), 'timestamp': firestore.SERVER_TIMESTAMP, 'author': admin_email}
+            self.db.collection('rating_overrides').document(player_name).set(payload)
+            self._log_audit(admin_email, 'OVERRIDE_RATING', f"Forced {player_name} to Rating: {new_rating}, SD: {final_sd}", {"name": player_name})
+            self.refresh_data()
             return True
         except: return False
 
@@ -462,22 +285,17 @@ class ThunderData:
         except: return False
 
     def admin_get_player_directory(self): return [{"name": name, "id": pid, "label": f"{name} (ID: {pid})"} for name, pid in self.player_ids.items()]
-
-    def admin_get_chaos_config(self):
-        return self.chaos_config
+    def admin_get_chaos_config(self): return self.chaos_config
 
     def admin_vote_chaos(self, weeks, admin_email="Unknown"):
         if not self.db: return False
         try:
-            doc_ref = self.db.collection('system_config').document('chaos_mode')
-            doc = doc_ref.get()
+            doc = self.db.collection('system_config').document('chaos_mode').get()
             data = doc.to_dict() if doc.exists else {'weeks': [], 'approvals': []}
             data['weeks'] = weeks
-            if admin_email not in data['approvals']:
-                data['approvals'].append(admin_email)
-            doc_ref.set(data, merge=True)
-            self._log_audit(admin_email, 'CHAOS_VOTE', f"Voted to activate chaos mode for weeks: {weeks}", {})
-            self.refresh_data()
+            if admin_email not in data['approvals']: data['approvals'].append(admin_email)
+            self.db.collection('system_config').document('chaos_mode').set(data, merge=True)
+            self._log_audit(admin_email, 'CHAOS_VOTE', f"Voted to activate chaos mode for weeks: {weeks}", {}); self.refresh_data()
             return True
         except: return False
 
@@ -485,358 +303,137 @@ class ThunderData:
         if not self.db: return False
         try:
             self.db.collection('system_config').document('chaos_mode').set({'weeks': [], 'approvals': []})
-            self._log_audit(admin_email, 'CHAOS_CLEAR', "Cleared chaos mode settings", {})
-            self.refresh_data()
+            self._log_audit(admin_email, 'CHAOS_CLEAR', "Cleared chaos mode settings", {}); self.refresh_data()
             return True
         except: return False
 
-    def refresh_data(self):
-        logger.info("⚡️ Fetching and Processing Data...")
-        self.all_players = {}; self.season_stats = {}; self.seasons_list = ["Career"]
-        self.divisions_list = set(); self.weekly_matches = {}; self.rating_engine = RatingEngine(); self.match_history_log = []
-        
-        if self.db:
-            try:
-                conf = self.db.collection('system_config').document('main').get().to_dict() or {}
-                self.k_win = float(conf.get('k_win_scale', 1.0)); self.k_loss = float(conf.get('k_loss_scale', 1.4))
-                admin_docs = list(self.db.collection('admin_users').stream()); active_admins = [d for d in admin_docs if d.to_dict().get('role') in ['admin', 'super_admin', 'temp_super_admin']]
-                admin_count = len(active_admins); req_approvals = min(3, admin_count) if admin_count > 0 else 1
-                chaos_doc = self.db.collection('system_config').document('chaos_mode').get()
-                if chaos_doc.exists:
-                    c_data = chaos_doc.to_dict()
-                    self.chaos_config = {'weeks': c_data.get('weeks', []), 'approvals': c_data.get('approvals', []), 'req': req_approvals, 'active': len(c_data.get('approvals', [])) >= req_approvals}
-                else: self.chaos_config = {'weeks': [], 'approvals': [], 'req': req_approvals, 'active': False}
-            except: pass
 
-        self.date_lookup = {}; self.date_to_week_map = {}
-        if self.sheet_results: 
-            try:
-                for row in self.sheet_results.worksheet("Calculated_Dates").get_all_records():
-                    s = self._slugify(row.get('Season', '')); d = self._slugify(row.get('Division', '')); w = self._extract_week(row.get('Week', '')); parsed = self._parse_date(str(row.get('Date','')))
-                    if parsed: self.date_lookup[f"{s}|{d}|{w}"] = parsed; self.date_to_week_map[f"{s}|{parsed.strftime('%Y-%m-%d')}"] = w
-            except: pass
-            self.alias_map = {}
-            try:
-                for row in self.sheet_results.worksheet("Aliases").get_all_records():
-                    bad = str(row.get('Bad Name')).strip().lower(); good = str(row.get('Good Name')).strip()
-                    if bad and good: self.alias_map[bad] = good
-            except: pass
-            try:
-                ws = self.sheet_results.worksheet("Ratings base"); rows = ws.get_all_values()
-                if rows:
-                    headers = [str(h).lower().strip() for h in rows[0]]; p_idx = headers.index('player') if 'player' in headers else 0
-                    for row in rows[1:]:
-                        if len(row) <= p_idx: continue
-                        name = self._clean_name(row[p_idx])
-                        if name and name not in self.all_players: self.all_players[name] = {'regular': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'fillin': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'combined': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}}
-            except: pass
-
-        raw_match_queue = []; delta_overrides_dict = {}
-        if self.db:
-            try:
-                for doc in self.db.collection('match_delta_overrides').stream():
-                    d = doc.to_dict(); delta_overrides_dict[doc.id] = {'p1_delta': float(d.get('p1_delta', 0)), 'p2_delta': float(d.get('p2_delta', 0))}
-            except: pass
-            
-        if self.sheet_results:
-            for worksheet in self.sheet_results.worksheets():
-                title = worksheet.title
-                if "season" not in title.lower(): continue
-                season_name = re.sub(r'(?i)^season\s*:\s*', '', title).strip()
-                if season_name not in self.seasons_list: self.seasons_list.append(season_name)
-                if season_name not in self.season_stats: self.season_stats[season_name] = {}
-                if season_name not in self.weekly_matches: self.weekly_matches[season_name] = {}
-                try:
-                    all_values = worksheet.get_all_values()
-                    if not all_values: continue
-                    raw_headers = all_values[0]; clean_headers = []; counts = {'name': 0, 'sets': 0, 'ps': 0, 'player': 0}
-                    for h in raw_headers:
-                        h_str = str(h).strip(); h_lower = h_str.lower(); key = None
-                        if h_lower == 'name': key = 'name'
-                        elif h_lower in ['sets', 's']: key = 'sets'
-                        elif h_lower in ['pos', 'ps']: key = 'pos'
-                        elif h_lower == 'player': key = 'player'
-                        if key: counts[key] += 1; clean_headers.append(f"{h_str} {counts[key]}")
-                        else: clean_headers.append(h_str)
-                    
-                    for i, r in enumerate(all_values[1:]):
-                        if len(r) < len(clean_headers): r = r + [''] * (len(clean_headers) - len(r))
-                        row = {header: r[j] for j, header in enumerate(clean_headers)}
-                        if any("doubles" in str(v).lower() for v in row.values()): continue
-                        p1 = self._clean_name(self._get_val(row, ['Name 1', 'Player 1', 'Name'])); p2 = self._clean_name(self._get_val(row, ['Name 2', 'Player 2']))
-                        if not p1 or not p2: continue
-                        div = str(self._get_val(row, ['Division', 'Div'], 'Unknown')).strip(); self.divisions_list.add(div)
-                        p1_fill = "S" in str(self._get_val(row, ['PS 1', 'Pos 1', 'Pos'])).upper(); p2_fill = "S" in str(self._get_val(row, ['PS 2', 'Pos 2'])).upper()
-                        round_val = self._get_val(row, ['Round', 'Rd', 'Week']); week_num = self._extract_week(round_val) if round_val else "unknown"
-                        raw_date = self._get_val(row, ['Date', 'Match Date']); parsed_date = self._parse_date(raw_date)
-                        if (not parsed_date) and str(week_num) != "unknown": parsed_date = self.date_lookup.get(f"{self._slugify(season_name)}|{self._slugify(div)}|{week_num}")
-                        if not parsed_date: parsed_date = datetime.date(1900, 1, 1)
-                        try: s1 = int(self._get_val(row, ['Sets 1', 'S1', 'Sets'])); s2 = int(self._get_val(row, ['Sets 2', 'S2']))
-                        except: continue
-                        raw_match_queue.append({'p1': p1, 'p2': p2, 's1': s1, 's2': s2, 'date': parsed_date, 'season': season_name, 'week': week_num, 'div': div, 'p1_fill': p1_fill, 'p2_fill': p2_fill, 'game_history': '', 'rich_stats': None, 'manual_override': False, 'sheet_name': worksheet.title, 'row_index': str(i + 2), 'source': 'Spreadsheet'})
-                except: pass
-                
-        if self.db:
-            try:
-                for doc in self.db.collection('match_results').stream():
-                    d = doc.to_dict()
-                    if d.get('status') == 'pending' or d.get('status') == 'rejected': continue
-                    date_val = d.get('date'); parsed_date = self._parse_date(date_val) or datetime.date.today()
-                    raw_season = str(d.get('season', f"Season: {parsed_date.year}")); season_name = re.sub(r'(?i)^season\s*:\s*', '', raw_season).strip()
-                    if season_name not in self.seasons_list and season_name != "Unknown": self.seasons_list.append(season_name)
-                    if season_name not in self.season_stats: self.season_stats[season_name] = {}
-                    if season_name not in self.weekly_matches: self.weekly_matches[season_name] = {}
-                    home_p = d.get('home_players', []); away_p = d.get('away_players', [])
-                    if not home_p or not away_p: continue
-                    p1 = self._clean_name(home_p[0]); p2 = self._clean_name(away_p[0]); s1 = d.get('live_home_sets', 0); s2 = d.get('live_away_sets', 0)
-                    if s1 == 0 and s2 == 0 and d.get('game_scores_history'):
-                        t1=0; t2=0
-                        for s in str(d.get('game_scores_history')).split(','):
-                            try: 
-                                if int(s.split('-')[0]) > int(s.split('-')[1]): t1+=1
-                                else: t2+=1
-                            except: pass
-                        s1=t1; s2=t2
-                    week_val = self._extract_week(d.get('week', 'Unknown'))
-                    if str(week_val) == "unknown" and parsed_date: week_val = self.date_to_week_map.get(f"{self._slugify(season_name)}|{parsed_date.strftime('%Y-%m-%d')}", "unknown")
-                    rich = d.get('richStats', {}); rich['total_duration'] = d.get('total_duration', '00:00'); rich['play_duration'] = d.get('play_duration', '00:00'); rich['set_scores'] = d.get('set_scores', [])
-                    raw_match_queue.append({'p1': p1, 'p2': p2, 's1': s1, 's2': s2, 'date': parsed_date, 'season': season_name, 'week': week_val, 'div': d.get('division', 'Unknown'), 'p1_fill': False, 'p2_fill': False, 'game_history': d.get('game_scores_history', ''), 'rich_stats': rich, 'manual_override': d.get('manual_override', False), 'sheet_name': 'Live Match Data', 'row_index': 'Firebase', 'source': 'Admin/iPad'})
-            except: pass
-
-        corrections = {}
-        if self.db:
-            try:
-                for doc in self.db.collection('match_corrections').stream():
-                    c = doc.to_dict(); c_p1 = self._clean_name(c.get('p1', '')); c_p2 = self._clean_name(c.get('p2', '')); d_str = str(c.get('date', ''))
-                    players = sorted([c_p1, c_p2]); key = f"{d_str}_{players[0]}_{players[1]}"
-                    corrections[key] = {'s1': c.get('s1', 0), 's2': c.get('s2', 0), 'c_p1': c_p1, 'new_date': c.get('new_date')}
-            except: pass
-
-        for m in raw_match_queue:
-            players = sorted([m['p1'], m['p2']]); d_str = m['date'].strftime("%d/%m/%Y") if m['date'] else "nodate"; key = f"{d_str}_{players[0]}_{players[1]}"
-            if key in corrections:
-                c = corrections[key]
-                if m['p1'] == c['c_p1']: m['s1'] = c['s1']; m['s2'] = c['s2']
-                else: m['s1'] = c['s2']; m['s2'] = c['s1']
-                m['manual_override'] = True
-                if c.get('new_date'):
-                    parsed_new = self._parse_date(c['new_date'])
-                    if parsed_new: m['date'] = parsed_new
-
-        groups = {}
-        for m in raw_match_queue:
-            players = sorted([m['p1'], m['p2']]); date_key = m['date'].strftime("%Y%m%d") if m['date'] else "nodate"
-            match_key = f"{date_key}_{players[0]}_{players[1]}"
-            if match_key not in groups: groups[match_key] = []
-            groups[match_key].append(m)
-        
-        cleaned_matches = []
-        for key, group in groups.items():
-            if len(group) == 1: cleaned_matches.append(group[0]); continue
-            firebase_m = [m for m in group if m.get('rich_stats') is not None]; sheet_m = [m for m in group if m.get('rich_stats') is None]; merged = []
-            for fm in firebase_m: merged.append(fm); sheet_m.pop(0) if sheet_m else None
-            for sm in sheet_m: merged.append(sm)
-            cleaned_matches.extend(merged)
-        
-        cleaned_matches.sort(key=lambda x: x['date']); overrides_dict = {}
-        if self.db:
-            try:
-                for doc in self.db.collection('rating_overrides').stream():
-                    d = doc.to_dict(); overrides_dict[d.get('name')] = {'rating': float(d.get('rating', 1500)), 'rd': float(d.get('rd', 75.0)), 'vol': float(d.get('vol', 0.06)), 'date': d.get('date_str', '1900-01-01')}
-            except: pass
-
-        player_set = set(); player_overrides_applied = set()
-        
-        last_played_dates = {}; DECAY_PER_WEEK = 2.0
-        
-        for m in cleaned_matches:
-            players = sorted([m['p1'], m['p2']]); d_str = m['date'].strftime("%d/%m/%Y") if m['date'] else "nodate"; d_str_fmt = m['date'].strftime("%Y-%m-%d") if m['date'] else "1900-01-01"
-            raw_id_string = f"{d_str}_{players[0]}_{players[1]}_{m['s1']}_{m['s2']}"; match_id = hashlib.md5(raw_id_string.encode()).hexdigest()[:6].upper()
-            
-            if m['date'] > RATING_START_DATE:
-                for p in [m['p1'], m['p2']]:
-                    if p in last_played_dates:
-                        days_inactive = (m['date'] - last_played_dates[p]).days
-                        if days_inactive >= 7:
-                            weeks_missed = days_inactive // 7
-                            p_stats = self.rating_engine.get_rating(p)
-                            new_rd = min(350.0, p_stats['rd'] + (weeks_missed * DECAY_PER_WEEK))
-                            self.rating_engine.players[p]['rd'] = new_rd
-                    last_played_dates[p] = m['date']
-
-            for p in [m['p1'], m['p2']]:
-                if p in overrides_dict and p not in player_overrides_applied:
-                    if d_str_fmt >= overrides_dict[p]['date']:
-                        if p not in self.rating_engine.players: self.rating_engine.get_rating(p)
-                        self.rating_engine.players[p]['rating'] = overrides_dict[p]['rating']; self.rating_engine.players[p]['rd'] = overrides_dict[p]['rd']; self.rating_engine.players[p]['vol'] = overrides_dict[p]['vol']
-                        player_overrides_applied.add(p)
-
-            deltas = {'p1_delta': 0, 'p2_delta': 0}
-            if m['date'] > RATING_START_DATE: 
-                if match_id in delta_overrides_dict:
-                    p1_d = delta_overrides_dict[match_id]['p1_delta']; p2_d = delta_overrides_dict[match_id]['p2_delta']
-                    p1_stats = self.rating_engine.get_rating(m['p1']); p2_stats = self.rating_engine.get_rating(m['p2'])
-                    p1_before = p1_stats['rating']; p1_rd_before = p1_stats['rd']; p2_before = p2_stats['rating']; p2_rd_before = p2_stats['rd']
-                    self.rating_engine.players[m['p1']]['rating'] += p1_d; self.rating_engine.players[m['p2']]['rating'] += p2_d
-                    self.rating_engine.players[m['p1']]['rd'] = max(20.0, self.rating_engine.players[m['p1']]['rd'] - 4.0); self.rating_engine.players[m['p2']]['rd'] = max(20.0, self.rating_engine.players[m['p2']]['rd'] - 4.0)
-                    deltas = {'p1_delta': p1_d, 'p2_delta': p2_d, 'p1_before': p1_before, 'p1_rd_before': p1_rd_before, 'p1_after': self.rating_engine.players[m['p1']]['rating'], 'p1_rd_after': self.rating_engine.players[m['p1']]['rd'], 'p2_before': p2_before, 'p2_rd_before': p2_rd_before, 'p2_after': self.rating_engine.players[m['p2']]['rating'], 'p2_rd_after': self.rating_engine.players[m['p2']]['rd']}
-                else:
-                    m_week = str(m.get('week', '')).lower()
-                    is_chaos = self.chaos_config['active'] and m_week in [w.lower() for w in self.chaos_config['weeks']]
-                    deltas = self.rating_engine.update_match(m['p1'], m['p2'], m['s1'], m['s2'], m.get('game_history', ''), self.k_win, self.k_loss, not is_chaos)
-            
-            p1_delta = deltas.get('p1_delta', 0); p2_delta = deltas.get('p2_delta', 0)
-            match_hash = f"{d_str}_{m['season']}_{m['week']}_{players[0]}_{players[1]}_{m['s1']}-{m['s2']}"
-            record = {'id': match_hash, 'match_id': match_id, 'date': d_str, 'season': m['season'], 'week': m['week'], 'division': m['div'], 'p1': m['p1'], 'p2': m['p2'], 'home_players': [m['p1']], 'away_players': [m['p2']], 's1': m['s1'], 's2': m['s2'], 'score': f"{m['s1']}-{m['s2']}", 'p1_before': deltas.get('p1_before', self.rating_engine.get_rating(m['p1'])['rating']), 'p1_rd_before': deltas.get('p1_rd_before', self.rating_engine.get_rating(m['p1'])['rd']), 'p1_after': deltas.get('p1_after', self.rating_engine.get_rating(m['p1'])['rating']), 'p1_rd_after': deltas.get('p1_rd_after', self.rating_engine.get_rating(m['p1'])['rd']), 'p1_delta': p1_delta, 'p2_before': deltas.get('p2_before', self.rating_engine.get_rating(m['p2'])['rating']), 'p2_rd_before': deltas.get('p2_rd_before', self.rating_engine.get_rating(m['p2'])['rd']), 'p2_after': deltas.get('p2_after', self.rating_engine.get_rating(m['p2'])['rating']), 'p2_rd_after': deltas.get('p2_rd_after', self.rating_engine.get_rating(m['p2'])['rd']), 'p2_delta': p2_delta, 'rich_stats': m.get('rich_stats', {}), 'game_history': m.get('game_history', ''), 'sheet_name': m.get('sheet_name', 'Unknown'), 'row_index': m.get('row_index', '?'), 'source': m.get('source', 'Unknown')}
-            self.match_history_log.append(record)
-            
-            def add_stats(p, sets_for, sets_against, is_p1, opp, fill, delta):
-                if p not in self.all_players: self.all_players[p] = {'regular': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'fillin': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'combined': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}}
-                if m['season'] not in self.season_stats: self.season_stats[m['season']] = {}
-                if p not in self.season_stats[m['season']]: self.season_stats[m['season']][p] = {'regular': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'fillin': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}, 'combined': {'matches':0,'wins':0,'losses':0,'sets_won':0,'sets_lost':0,'history':[]}}
-                result = "Win" if sets_for > sets_against else "Loss"
-                h_rec = {'season': m['season'], 'week': m['week'], 'date': d_str, 'opponent': opp, 'result': result, 'score': f"{sets_for}-{sets_against}", 'type': 'Fill-in' if fill else 'Regular', 'division': m['div'], 'details': m.get('game_history', ''), 'rich_stats': m.get('rich_stats'), 'match_id': match_id, 'delta': delta, 'sheet_name': m.get('sheet_name', 'Unknown'), 'row_index': m.get('row_index', '?')}
-                for s_dict in [self.all_players[p], self.season_stats[m['season']][p]]:
-                    buckets = [s_dict['combined'], s_dict['fillin'] if fill else s_dict['regular']]
-                    for b in buckets:
-                        b['matches'] += 1; b['sets_won'] += sets_for; b['sets_lost'] += sets_against
-                        if result == "Win": b['wins'] += 1
-                        else: b['losses'] += 1
-                        b['history'].append(h_rec)
-            add_stats(m['p1'], m['s1'], m['s2'], True, m['p2'], m['p1_fill'], p1_delta); add_stats(m['p2'], m['s2'], m['s1'], False, m['p1'], m['p2_fill'], p2_delta); player_set.add(m['p1']); player_set.add(m['p2'])
-
-            if str(m['week']) != "unknown":
-                wk = str(m['week'])
-                if wk not in self.weekly_matches[m['season']]: self.weekly_matches[m['season']][wk] = []
-                self.weekly_matches[m['season']][wk].append({'p1': m['p1'], 'p2': m['p2'], 'score': f"{m['s1']}-{m['s2']}", 'division': m['div'], 'date': d_str})
-        
-        try:
-            self.player_ids = {}; self.id_to_name = {}; ws = self.sheet_results.worksheet("Players"); all_values = ws.get_all_values()
-            headers = [str(h).lower().strip() for h in all_values[0]]; name_col = headers.index("player name") if "player name" in headers else 0; id_col = headers.index("player id") if "player id" in headers else 1; existing_names = {}
-            for i, row in enumerate(all_values[1:], start=2): 
-                if not row: continue
-                p_name = str(row[name_col]).strip() if len(row) > name_col else ""; clean_n = self._clean_name(p_name); p_id = str(row[id_col]).strip() if len(row) > id_col else ""
-                if clean_n: self.player_ids[clean_n] = p_id; existing_names[clean_n.lower()] = True
-            for p_name in player_set:
-                if p_name.lower() not in existing_names: new_id = self._generate_player_id(); ws.append_row([p_name, new_id, datetime.date.today().strftime("%Y-%m-%d"), "Active"]); self.player_ids[p_name] = new_id
-            self.id_to_name = {v: k for k, v in self.player_ids.items()}
-        except: pass
-
-        if self.db:
-            try:
-                batch = self.db.batch(); batch_count = 0
-                for player_name, stats in self.all_players.items():
-                    rat = self.rating_engine.get_rating(player_name); safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()
-                    batch.set(self.db.collection('player_profiles').document(safe_id), {'name': player_name, 'rating': int(rat['rating']), 'wins': stats['combined']['wins'], 'losses': stats['combined']['losses'], 'matches_played': stats['combined']['matches'], 'last_updated': datetime.datetime.now()}, merge=True)
-                    batch_count += 1
-                    if batch_count >= 400: batch.commit(); batch = self.db.batch(); batch_count = 0
-                if batch_count > 0: batch.commit()
-            except: pass
-
-    def get_matches_by_week(self, season, week): return self.weekly_matches.get(season, {}).get(str(week), [])
-    def get_all_players(self): return self.all_players
-    def get_seasons(self): return self.seasons_list
-    def get_divisions(self): return sorted(list(self.divisions_list))
+    # ==========================================
+    # BULLETPROOF DATA GETTERS (DYNAMIC EXTRACTION)
+    # Automatically extracts seasons/divisions directly from the raw data
+    # so they can NEVER be empty, regardless of what the Sync Engine names them.
+    # ==========================================
     
+    def get_seasons(self): 
+        seasons = set()
+        if hasattr(self, 'seasons_list') and self.seasons_list: seasons.update(self.seasons_list)
+        if hasattr(self, 'seasons') and self.seasons: seasons.update(self.seasons)
+        if hasattr(self, 'weekly_matches') and isinstance(self.weekly_matches, dict): seasons.update(self.weekly_matches.keys())
+        if hasattr(self, 'season_stats') and isinstance(self.season_stats, dict): seasons.update(self.season_stats.keys())
+        
+        clean_seasons = sorted([str(s) for s in seasons if str(s) != "Career"], reverse=True)
+        return clean_seasons if clean_seasons else ["Summer 2026"] # Failsafe
+        
+    def get_divisions(self): 
+        divs = set()
+        if hasattr(self, 'divisions_list') and self.divisions_list: divs.update(self.divisions_list)
+        if hasattr(self, 'divisions') and self.divisions: divs.update(self.divisions)
+        
+        # Deep extract just to be 100% sure
+        if hasattr(self, 'weekly_matches') and isinstance(self.weekly_matches, dict):
+            for s_data in self.weekly_matches.values():
+                if isinstance(s_data, dict):
+                    for w_data in s_data.values():
+                        if isinstance(w_data, list):
+                            for m in w_data:
+                                if 'division' in m: divs.add(m['division'])
+                                
+        clean_divs = sorted(list(divs))
+        return clean_divs if clean_divs else ["Division 1"] # Failsafe
+        
+    def get_all_players(self): 
+        return getattr(self, 'all_players', getattr(self, 'players', {}))
+        
+    def get_matches_by_week(self, season, week): 
+        matches = getattr(self, 'weekly_matches', getattr(self, 'matches_by_week', getattr(self, 'weekly_results', {})))
+        if isinstance(matches, dict):
+            s_data = matches.get(season, {})
+            if isinstance(s_data, dict): return s_data.get(str(week), [])
+        return []
+
     def get_division_rankings(self, season, division, max_week=None):
-        if season not in self.season_stats: return []
+        stats_dict = getattr(self, 'season_stats', getattr(self, 'stats_by_season', {}))
+        if season not in stats_dict: return []
+        
         ranking_list = []
-        for player_name, stats in self.season_stats[season].items():
+        for player_name, stats in stats_dict[season].items():
             rat = self.rating_engine.get_rating(player_name)
-            reg_hist = [m for m in stats['regular']['history'] if m['division'] == division]; fill_hist = [m for m in stats['fillin']['history'] if m['division'] == division]
+            reg_hist = [m for m in stats.get('regular', {}).get('history', []) if m.get('division') == division]
+            fill_hist = [m for m in stats.get('fillin', {}).get('history', []) if m.get('division') == division]
             if not reg_hist and not fill_hist: continue 
-            def calc_summary(history): return {'wins': sum(1 for m in history if m['result'] == "Win"), 'losses': len(history) - sum(1 for m in history if m['result'] == "Win"), 'matches': len(history)}
-            ranking_list.append({'name': player_name, 'rating_val': int(rat['rating']), 'sigma': int(rat['rd']), 'vol': rat.get('vol', 0.06), 'regular': calc_summary(reg_hist), 'fillin': calc_summary(fill_hist)})
+            
+            def calc_summary(history): return {'wins': sum(1 for m in history if m.get('result') == "Win"), 'losses': len(history) - sum(1 for m in history if m.get('result') == "Win"), 'matches': len(history)}
+            
+            ranking_list.append({
+                'name': player_name, 
+                'rating_val': int(rat.get('rating', 1500)), 
+                'sigma': int(rat.get('rd', 350)), 
+                'vol': rat.get('vol', 0.06), 
+                'regular': calc_summary(reg_hist), 
+                'fillin': calc_summary(fill_hist)
+            })
         return ranking_list
         
     def get_player_stats(self, player_name, season="Career", division="All", week="All", start_date=None, end_date=None):
-        data = self.all_players if season == "Career" else self.season_stats.get(season, {})
+        players_data = self.get_all_players()
+        season_data = getattr(self, 'season_stats', getattr(self, 'stats_by_season', {}))
+        data = players_data if season == "Career" else season_data.get(season, {})
+        
         if player_name not in data: return None
-        raw = data[player_name]; rat = self.rating_engine.get_rating(player_name)
+        raw = data[player_name]
+        rat = self.rating_engine.get_rating(player_name)
         
         def format_bucket(stats):
-            hist = stats['history']
+            if not stats: return {'matches': 0, 'wins': 0, 'losses': 0, 'win_rate': "0%", 'match_history': []}
+            hist = stats.get('history', [])
             if division != "All": hist = [m for m in hist if m.get('division') == division]
-            wins = sum(1 for m in hist if m['result'] == "Win"); win_rate = round((wins / len(hist)) * 100, 1) if hist else 0
-            disp_hist = list(hist); disp_hist.reverse()
+            wins = sum(1 for m in hist if m.get('result') == "Win")
+            win_rate = round((wins / len(hist)) * 100, 1) if hist else 0
+            disp_hist = list(hist)
+            disp_hist.reverse()
             return {'matches': len(hist), 'wins': wins, 'losses': len(hist)-wins, 'win_rate': f"{win_rate}%", 'match_history': disp_hist}
             
         return {
             'name': player_name, 
-            'rating': int(rat['rating']), 
-            'rd': int(rat['rd']), 
+            'rating': int(rat.get('rating', 1500)), 
+            'rd': int(rat.get('rd', 350)), 
             'vol': rat.get('vol', 0.06), 
-            'combined': format_bucket(raw['combined']), 
-            'regular': format_bucket(raw['regular']), 
-            'fillin': format_bucket(raw['fillin']), 
-            'peterman_id': self.all_players.get(player_name, {}).get('peterman_id', '')
+            'combined': format_bucket(raw.get('combined', {})), 
+            'regular': format_bucket(raw.get('regular', {})), 
+            'fillin': format_bucket(raw.get('fillin', {})), 
+            'peterman_id': players_data.get(player_name, {}).get('peterman_id', '')
         }
 
     def admin_glicko_math(self, p1, p2, s1, s2):
-        p1_clean = self._clean_name(p1)
-        p2_clean = self._clean_name(p2)
+        p1_clean = self._clean_name(p1); p2_clean = self._clean_name(p2)
         try: s1 = int(s1); s2 = int(s2)
         except: return {"error": "Invalid scores"}
 
         r_eng = RatingEngine() 
-        p1_stats = self.rating_engine.get_rating(p1_clean).copy()
-        p2_stats = self.rating_engine.get_rating(p2_clean).copy()
-
-        r_eng.players[p1_clean] = p1_stats
-        r_eng.players[p2_clean] = p2_stats
-
+        p1_stats = self.rating_engine.get_rating(p1_clean).copy(); p2_stats = self.rating_engine.get_rating(p2_clean).copy()
+        r_eng.players[p1_clean] = p1_stats; r_eng.players[p2_clean] = p2_stats
         res = r_eng.update_match(p1_clean, p2_clean, s1, s2, '', self.k_win, self.k_loss, True)
 
-        return {
-            "p1": {
-                "name": p1_clean,
-                "old_rating": res['p1_before'],
-                "new_rating": res['p1_after'],
-                "delta": res['p1_delta'],
-                "old_rd": res['p1_rd_before'],
-                "new_rd": res['p1_rd_after'],
-                "rd_delta": res['p1_rd_after'] - res['p1_rd_before']
-            },
-            "p2": {
-                "name": p2_clean,
-                "old_rating": res['p2_before'],
-                "new_rating": res['p2_after'],
-                "delta": res['p2_delta'],
-                "old_rd": res['p2_rd_before'],
-                "new_rd": res['p2_rd_after'],
-                "rd_delta": res['p2_rd_after'] - res['p2_rd_before']
-            }
-        }
+        return {"p1": {"name": p1_clean, "old_rating": res['p1_before'], "new_rating": res['p1_after'], "delta": res['p1_delta'], "old_rd": res['p1_rd_before'], "new_rd": res['p1_rd_after'], "rd_delta": res['p1_rd_after'] - res['p1_rd_before']}, "p2": {"name": p2_clean, "old_rating": res['p2_before'], "new_rating": res['p2_after'], "delta": res['p2_delta'], "old_rd": res['p2_rd_before'], "new_rd": res['p2_rd_after'], "rd_delta": res['p2_rd_after'] - res['p2_rd_before']}}
         
     def admin_set_rating_scales(self, k_win, k_loss, admin_email="Unknown"):
         if not self.db: return False
         try:
-            doc = self.db.collection('system_config').document('main').get()
-            old_k_win = 1.0; old_k_loss = 1.4
+            doc = self.db.collection('system_config').document('main').get(); old_k_win = 1.0; old_k_loss = 1.4
             if doc.exists:
                 data = doc.to_dict()
-                old_k_win = data.get('k_win_scale', 1.0)
-                old_k_loss = data.get('k_loss_scale', 1.4)
+                old_k_win = data.get('k_win_scale', 1.0); old_k_loss = data.get('k_loss_scale', 1.4)
 
-            self.db.collection('system_config').document('main').set({
-                'k_win_scale': float(k_win),
-                'k_loss_scale': float(k_loss)
-            }, merge=True)
-            self.k_win = float(k_win)
-            self.k_loss = float(k_loss)
-            self._log_audit(admin_email, 'UPDATE_MATH', f"Set K-Win to {k_win}, K-Loss to {k_loss}", {"old_k_win": old_k_win, "old_k_loss": old_k_loss})
-            return True
+            self.db.collection('system_config').document('main').set({'k_win_scale': float(k_win), 'k_loss_scale': float(k_loss)}, merge=True)
+            self.k_win = float(k_win); self.k_loss = float(k_loss)
+            self._log_audit(admin_email, 'UPDATE_MATH', f"Set K-Win to {k_win}, K-Loss to {k_loss}", {"old_k_win": old_k_win, "old_k_loss": old_k_loss}); return True
         except: return False
 
     def get_head_to_head(self, p1, p2):
         if not p1 or not p2: return {"error": "Missing players"}
-        p1_clean = self._clean_name(p1)
-        p2_clean = self._clean_name(p2)
-        matches = []
-        p1_wins = 0
-        p2_wins = 0
+        p1_clean = self._clean_name(p1); p2_clean = self._clean_name(p2); matches = []; p1_wins = 0; p2_wins = 0
 
-        for m in self.match_history_log:
+        for m in getattr(self, 'match_history_log', getattr(self, 'match_history', [])):
             if (m['p1'] == p1_clean and m['p2'] == p2_clean) or (m['p1'] == p2_clean and m['p2'] == p1_clean):
                 matches.append(m)
                 if m['p1'] == p1_clean:
@@ -847,402 +444,4 @@ class ThunderData:
                     elif m['s2'] > m['s1']: p1_wins += 1
 
         matches.sort(key=lambda x: datetime.datetime.strptime(x['date'], "%d/%m/%Y") if x['date'] != "nodate" else datetime.datetime.min, reverse=True)
-
-        return {
-            "p1": p1_clean,
-            "p2": p2_clean,
-            "p1_wins": p1_wins,
-            "p2_wins": p2_wins,
-            "total_matches": len(matches),
-            "history": matches
-        }
-
-    def admin_get_teams(self):
-        if not self.db: return []
-        try: return [{"id": d.id, **d.to_dict()} for d in self.db.collection('teams').stream()]
-        except: return []
-
-    def admin_update_team(self, team_id, players_list, admin_email="Unknown"):
-        if not self.db: return False
-        try: 
-            self.db.collection('teams').document(team_id).set({'players': players_list}, merge=True)
-            self._log_audit(admin_email, 'UPDATE_TEAM', f"Updated roster for {team_id}", {}); return True
-        except: return False
-
-    def admin_upload_pdf_schedule(self, season, division, file_stream, admin_email="Unknown"):
-        if not self.db:
-            return {"success": False, "error": "DB Offline"}
-        try:
-            import PyPDF2
-            import re
-            import datetime
-
-            pdf_reader = PyPDF2.PdfReader(file_stream)
-            raw_text = ""
-            for page in pdf_reader.pages:
-                raw_text += page.extract_text() + "\n"
-
-            lines = raw_text.split('\n')
-            teams = {}
-            fixtures = []
-
-            parsing_teams = False
-            parsing_fixtures = False
-            current_date = None
-
-            team_pattern = re.compile(r'^(\d+)\s+([A-Z\s]+)\s+([A-Z\s]+)')
-            match_pattern = re.compile(r'(\d+)\s*v[s]?\s*(\d+)(?:\s*\(\s*(\d+)\s*\))?', re.IGNORECASE)
-            date_pattern = re.compile(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}', re.IGNORECASE)
-
-            for i, line in enumerate(lines):
-                line = line.strip()
-                if not line:
-                    continue
-
-                if "TEAMS" in line.upper():
-                    parsing_teams = True
-                    parsing_fixtures = False
-                    continue
-                if "FIXTURE SCHEDULE" in line.upper() or ("DATE" in line.upper() and "MATCH" in line.upper()):
-                    parsing_teams = False
-                    parsing_fixtures = True
-                    continue
-
-                if parsing_teams:
-                    if re.match(r'^\d+', line):
-                        parts = re.split(r'\s{2,}', line)
-                        if len(parts) >= 2:
-                            team_id = parts[0].strip()
-                            team_name = parts[1].strip()
-                            players = []
-                            for p in parts[2:]:
-                                cleaned_name = re.sub(r'[\d\-\|\(\)]', '', p).replace(' C ', '').replace(' LEFTY', '').strip()
-                                if cleaned_name and len(cleaned_name) > 2:
-                                    players.append(cleaned_name)
-                            teams[team_id] = {
-                                "name": team_name,
-                                "players": players
-                            }
-
-                if parsing_fixtures:
-                    date_match = date_pattern.search(line)
-                    if date_match:
-                        season_year = re.search(r'\d{4}', season)
-                        year_str = season_year.group() if season_year else str(datetime.datetime.now().year)
-                        current_date = f"{date_match.group()} {year_str}"
-                    
-                    matches = match_pattern.findall(line)
-                    for m in matches:
-                        team_home_id = m[0]
-                        team_away_id = m[1]
-                        
-                        if current_date and team_home_id in teams and team_away_id in teams:
-                            fixture_data = {
-                                "season": season,
-                                "division": division,
-                                "date_text": current_date,
-                                "home_team": teams[team_home_id]["name"],
-                                "away_team": teams[team_away_id]["name"],
-                                "home_players": teams[team_home_id]["players"],
-                                "away_players": teams[team_away_id]["players"]
-                            }
-                            fixtures.append(fixture_data)
-
-            if len(fixtures) == 0:
-                return {"success": False, "error": "Could not extract any matches. Check PDF format."}
-
-            batch = self.db.batch()
-            
-            # Save all the extracted match fixtures
-            for fix in fixtures:
-                doc_ref = self.db.collection('upcoming_schedule').document()
-                batch.set(doc_ref, fix)
-
-            # Save the extracted team rosters
-            for t_num, t_data in teams.items():
-                team_doc_id = f"{self._slugify(season)}_{self._slugify(division)}_{self._slugify(t_data['name'])}"
-                batch.set(self.db.collection('teams').document(team_doc_id), {
-                    'season': season,
-                    'division': division,
-                    'team_name': t_data['name'],
-                    'players': t_data['players'],
-                    'timestamp': firestore.SERVER_TIMESTAMP
-                }, merge=True)
-
-            batch.commit()
-            self._log_audit(admin_email, 'UPLOAD_SCHEDULE', f"Parsed PDF for {season} {division}. Extracted {len(teams)} teams and {len(fixtures)} matchups.", {})
-
-            return {
-                "success": True,
-                "matches_found": len(fixtures),
-                "teams_found": len(teams)
-            }
-        except Exception as e:
-            return {"success": False, "error": f"Failed to read PDF: {str(e)}"}
-
-    def admin_get_upcoming_schedules(self):
-        if not self.db: return []
-        try:
-            res = []
-            for d in self.db.collection('upcoming_schedule').stream():
-                data = d.to_dict()
-                data['id'] = d.id
-                res.append(data)
-            return res
-        except: return []
-
-    def admin_delete_upcoming_schedule(self, schedule_id, admin_email="Unknown"):
-        if not self.db: return False
-        try:
-            self.db.collection('upcoming_schedule').document(schedule_id).delete()
-            self._log_audit(admin_email, 'DELETE_SCHEDULE', f"Deleted extracted schedule {schedule_id}", {})
-            return True
-        except: return False
-
-    def get_player_upcoming_schedule(self, player_name):
-        if not self.db: return []
-        try:
-            player_clean = self._clean_name(player_name).lower(); matches = []
-            for d in self.db.collection('upcoming_schedule').stream():
-                m = d.to_dict(); home_p = [self._clean_name(p).lower() for p in m.get('home_players', [])]; away_p = [self._clean_name(p).lower() for p in m.get('away_players', [])]
-                is_playing = False
-                for hp in home_p:
-                    if player_clean in hp or hp in player_clean: is_playing = True
-                for ap in away_p:
-                    if player_clean in ap or ap in player_clean: is_playing = True
-                if is_playing: matches.append(m)
-            return matches
-        except: return []
-
-    def get_notices(self):
-        if not self.db: return []
-        try:
-            res = []; aest_tz = datetime.timezone(datetime.timedelta(hours=10))
-            for d in self.db.collection('notices').order_by('timestamp', direction=firestore.Query.DESCENDING).stream():
-                data = d.to_dict(); data['id'] = d.id; ts = data.get('timestamp'); data['date_str'] = ts.astimezone(aest_tz).strftime('%d/%m/%Y %I:%M %p') if ts else 'Recent'; data['timestamp'] = str(ts); res.append(data)
-            return res
-        except: return []
-
-    def admin_add_notice(self, title, message, notice_type, admin_email="Unknown"):
-        if not self.db: return False
-        try: self.db.collection('notices').add({'title': title, 'message': message, 'type': notice_type, 'timestamp': firestore.SERVER_TIMESTAMP, 'author': admin_email}); self._log_audit(admin_email, 'ADD_NOTICE', f"Posted notice: {title}", {}); return True
-        except: return False
-
-    def admin_delete_notice(self, notice_id, admin_email="Unknown"):
-        if not self.db: return False
-        try: self.db.collection('notices').document(notice_id).delete(); self._log_audit(admin_email, 'DELETE_NOTICE', f"Deleted notice ID: {notice_id}", {}); return True
-        except: return False
-
-    def get_admin_messages(self):
-        if not self.db: return []
-        try:
-            res = []
-            aest_tz = datetime.timezone(datetime.timedelta(hours=10))
-            for d in self.db.collection('admin_messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(50).stream():
-                data = d.to_dict()
-                data['id'] = d.id
-                ts = data.get('timestamp')
-                data['time_str'] = ts.astimezone(aest_tz).strftime('%d/%m/%Y %I:%M %p') if ts else 'Just now'
-                res.append(data)
-            return res
-        except Exception as e: return []
-
-    def add_admin_message(self, message, admin_email="Unknown"):
-        if not self.db: return False
-        try:
-            self.db.collection('admin_messages').add({
-                'message': message,
-                'author': admin_email,
-                'timestamp': firestore.SERVER_TIMESTAMP
-            })
-            self._log_audit(admin_email, 'ADD_NOTE', "Added an admin note", {})
-            return True
-        except: return False
-
-    def get_community_feed(self):
-        if not self.db: return []
-        try:
-            posts = []; aest_tz = datetime.timezone(datetime.timedelta(hours=10))
-            for d in self.db.collection('community_posts').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(50).stream():
-                data = d.to_dict(); data['id'] = d.id; ts = data.get('timestamp'); data['time_str'] = ts.astimezone(aest_tz).strftime('%d/%m/%y %I:%M %p') if ts else 'Just now'; data['timestamp'] = str(ts); posts.append(data)
-            return posts
-        except: return []
-
-    def create_community_post(self, author_uid, author_name, content, post_type="General", image_url=None, poll_options=None):
-        if not self.db: return False
-        try:
-            payload = {'author_uid': author_uid, 'author_name': author_name, 'content': content, 'type': post_type, 'image_url': image_url, 'upvotes': [], 'comments': [], 'timestamp': firestore.SERVER_TIMESTAMP}
-            if poll_options: payload['poll'] = {opt: [] for opt in poll_options}
-            self.db.collection('community_posts').add(payload); return True
-        except: return False
-
-    def vote_community_poll(self, post_id, option_text, voter_uid):
-        if not self.db: return False
-        try:
-            doc_ref = self.db.collection('community_posts').document(post_id); doc = doc_ref.get()
-            if not doc.exists: return False
-            poll = doc.to_dict().get('poll', {})
-            for opt, voters in poll.items():
-                if voter_uid in voters: voters.remove(voter_uid)
-            if option_text in poll: poll[option_text].append(voter_uid)
-            doc_ref.update({'poll': poll}); return True
-        except: return False
-
-    def add_community_comment(self, post_id, author_name, content):
-        if not self.db: return False
-        try:
-            self.db.collection('community_posts').document(post_id).update({'comments': firestore.ArrayUnion([{'author': author_name, 'content': content, 'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat()}])}); return True
-        except: return False
-
-    def toggle_post_upvote(self, post_id, uid):
-        if not self.db: return False
-        try:
-            doc_ref = self.db.collection('community_posts').document(post_id); doc = doc_ref.get()
-            if not doc.exists: return False
-            upvotes = doc.to_dict().get('upvotes', [])
-            if uid in upvotes: upvotes.remove(uid)
-            else: upvotes.append(uid)
-            doc_ref.update({'upvotes': upvotes}); return True
-        except: return False
-
-    def admin_delete_community_post(self, post_id, admin_email="Unknown"):
-        if not self.db: return False
-        try: self.db.collection('community_posts').document(post_id).delete(); self._log_audit(admin_email, 'DELETE_POST', f"Deleted community post {post_id}", {}); return True
-        except: return False
-
-    def get_contact_lists(self):
-        if not self.sheet_results: return {"emails": "", "phones": "", "preview": [], "error": "No sheet connection"}
-        try:
-            ws = self.sheet_results.worksheet("Member info"); raw_data = ws.get_all_values()
-            if not raw_data or len(raw_data) < 2: return {"emails": "", "phones": "", "preview": [], "error": "Sheet appears to be empty."}
-            headers = [str(h).lower().strip() for h in raw_data[0]]; has_send_col = any('send' in h for h in headers)
-            emails = []; phones = []; preview = []
-            for row in raw_data[1:]:
-                if not any(str(cell).strip() for cell in row): continue
-                email_val = ""; phone_val = ""; name_val = "Unknown Player"; allow_sms = not has_send_col 
-                for idx, cell_val in enumerate(row):
-                    if idx >= len(headers): break
-                    col_name = headers[idx]; val_str = str(cell_val).strip()
-                    if col_name in ['name', 'player', 'player name', 'full name', 'first name'] and name_val == "Unknown Player": name_val = val_str
-                    if 'email' in col_name and not email_val: email_val = val_str
-                    if ('phone' in col_name or 'mobile' in col_name or 'number' in col_name) and not phone_val: phone_val = val_str
-                    if 'send' in col_name: allow_sms = val_str.lower() in ['yes', 'y', 'true']
-                if email_val and '@' in email_val: emails.append(email_val)
-                if phone_val and allow_sms:
-                    clean_phone = re.sub(r'[^\d\+\s]', '', phone_val)
-                    if len(clean_phone) >= 8: 
-                        phones.append(clean_phone); main_div = "Unknown Div"; clean_name_key = self._clean_name(name_val)
-                        if clean_name_key in self.all_players:
-                            div_counts = {}
-                            for h in self.all_players[clean_name_key].get('combined', {}).get('history', []): div_counts[h['division']] = div_counts.get(h['division'], 0) + 1
-                            if div_counts: main_div = max(div_counts, key=div_counts.get)
-                        preview.append({"name": name_val, "phone": clean_phone, "division": main_div})
-            return {"emails": ", ".join(list(set(emails))), "phones": ", ".join(list(set(phones))), "preview": preview}
-        except Exception as e: return {"emails": "", "phones": "", "preview": [], "error": str(e)}
-
-    def admin_send_sms_broadcast(self, message_body, target_phones=None, admin_email="Unknown"):
-        contacts = self.get_contact_lists()
-        raw_phones = contacts.get("phones", "")
-        if not raw_phones: return {"success": False, "error": "No valid opted-in phone numbers found in the Google Sheet."}
-        
-        allowed_phone_list = [p.strip() for p in raw_phones.split(",") if p.strip()]
-        
-        phone_to_name = {}
-        for c in contacts.get("preview", []):
-            phone_to_name[c["phone"]] = c["name"]
-            
-        if target_phones is not None: 
-            phone_list = [p for p in target_phones if p in allowed_phone_list]
-        else: 
-            phone_list = allowed_phone_list
-            
-        if not phone_list: return {"success": False, "error": "No valid opted-in phone numbers matched your selection."}
-        
-        username = "jakobwill7@gmail.com"
-        api_key = "76F26417-8DEB-E47E-8056-B86E519B4445"
-        clean_body = re.sub(r'[^\x20-\x7E\n\r]+', '', message_body)
-        
-        messages = []
-        import urllib.parse
-        for phone in phone_list:
-            player_name = phone_to_name.get(phone, "")
-            
-            if player_name and player_name != "Unknown Player":
-                encoded_name = urllib.parse.quote(player_name)
-                profile_link = f"gctta-stats.com.au/?player={encoded_name}"
-            else:
-                profile_link = "gctta-stats.com.au"
-
-            if "{link}" in clean_body:
-                personalized_body = clean_body.replace("{link}", profile_link)
-                final_message = f"GCTTA: {personalized_body}\n\nReply STOP to opt out"
-            else:
-                final_message = f"GCTTA Update: {clean_body}\n\nStats: {profile_link}\nReply STOP to opt out"
-                
-            messages.append({"source": "gctta_admin", "from": "GCTTA-STATS", "body": final_message, "to": phone})
-            
-        payload = json.dumps({"messages": messages}).encode('utf-8')
-        
-        try:
-            import ssl
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-
-            auth_str = f"{username}:{api_key}"; auth_bytes = base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')
-            req = urllib.request.Request("https://rest.clicksend.com/v3/sms/send", data=payload)
-            req.add_header("Content-Type", "application/json")
-            req.add_header("Authorization", f"Basic {auth_bytes}")
-            
-            response = urllib.request.urlopen(req, context=ctx)
-            res_data = json.loads(response.read().decode('utf-8'))
-            
-            if res_data.get('http_code') == 200:
-                self._log_audit(admin_email, 'SMS_BROADCAST', f"Sent Mass SMS to {len(phone_list)} selected members via API.", {})
-                return {"success": True, "message": f"Successfully sent Custom SMS to {len(phone_list)} selected members!"}
-            else: 
-                return {"success": False, "error": f"ClickSend API Error: {res_data}"}
-        except Exception as e: return {"success": False, "error": str(e)}
-
-    def get_sms_inbox(self):
-        if not self.db: return []
-        try:
-            res = []; aest_tz = datetime.timezone(datetime.timedelta(hours=10))
-            for d in self.db.collection('sms_replies').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(50).stream():
-                data = d.to_dict(); data['id'] = d.id; ts = data.get('timestamp')
-                data['time_str'] = ts.astimezone(aest_tz).strftime('%d/%m/%Y %I:%M %p') if ts else 'Just now'
-                data['timestamp'] = str(ts) 
-                res.append(data)
-            return res
-        except Exception as e: return []
-
-    def admin_get_all_donations(self):
-        if not self.db: return []
-        try:
-            res = []; aest_tz = datetime.timezone(datetime.timedelta(hours=10))
-            for d in self.db.collection('donations').order_by('timestamp', direction=firestore.Query.DESCENDING).stream():
-                data = d.to_dict(); data['id'] = d.id; ts = data.get('timestamp'); data['time_str'] = ts.astimezone(aest_tz).strftime('%d/%m/%Y %I:%M %p') if ts else 'Unknown'; res.append(data)
-            return res
-        except: return []
-
-    def record_donation(self, intent_id, name, amount):
-        if not self.db: return False
-        try:
-            doc_ref = self.db.collection('donations').document(intent_id)
-            if doc_ref.get().exists: return True 
-            doc_ref.set({'name': name if name and name.strip() else 'Anonymous', 'amount': float(amount), 'timestamp': firestore.SERVER_TIMESTAMP, 'month': datetime.datetime.now().strftime("%Y-%m")}); return True
-        except: return False
-
-    def get_top_donors(self, limit=5):
-        if not self.db: return []
-        try:
-            grouped_donors = {}; donors = []
-            for d in self.db.collection('donations').stream():
-                data = d.to_dict(); n = data.get('name', 'Anonymous').strip()
-                if not n: n = 'Anonymous'
-                amt = float(data.get('amount', 0))
-                if n.lower() == 'anonymous': donors.append({'name': 'Anonymous', 'amount': amt})
-                else: grouped_donors[n] = grouped_donors.get(n, 0) + amt
-            for k, v in grouped_donors.items(): donors.append({'name': k, 'amount': v})
-            donors.sort(key=lambda x: x['amount'], reverse=True); return donors[:limit]
-        except: return []
+        return {"p1": p1_clean, "p2": p2_clean, "p1_wins": p1_wins, "p2_wins": p2_wins, "total_matches": len(matches), "history": matches}

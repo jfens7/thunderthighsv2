@@ -1,61 +1,81 @@
 <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
     <h2 class="text-purple-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-users mr-2"></i> Player Directory & Editor</h2>
-    <button onclick="window.loadPlayers()" class="text-xs text-slate-400 hover:text-white transition"><i class="fa-solid fa-rotate mr-1"></i> Refresh</button>
+    <button onclick="window.loadPlayerDirectory && window.loadPlayerDirectory()" class="text-xs text-slate-400 hover:text-white transition"><i class="fa-solid fa-rotate mr-1"></i> Refresh List</button>
 </div>
 
 <div class="bg-slate-800 p-5 rounded-xl border border-red-500/20 mb-6 shadow-lg">
-    <h3 class="text-red-400 font-bold uppercase tracking-widest text-xs mb-3"><i class="fa-solid fa-code-merge mr-2"></i> Merge Duplicate Players</h3>
+    <h3 class="text-red-400 font-bold uppercase tracking-widest text-xs mb-3"><i class="fa-solid fa-code-merge mr-2"></i> Merge Duplicate Profiles (Match Stats)</h3>
     <p class="text-[10px] text-slate-400 mb-4">Warning: This will move all matches from the Duplicate Name to the Target Name and delete the Duplicate profile. This cannot be undone.</p>
-    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-        <div class="md:col-span-2">
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end relative">
+        <div class="md:col-span-2 relative">
             <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Duplicate Name (To Delete)</label>
-            <input type="text" id="merge-bad-name" placeholder="e.g. John Doee" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-red-500 text-sm">
+            <input type="text" id="merge-bad-search" placeholder="Search Player..." autocomplete="off" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-red-500 text-sm">
+            <div id="merge-bad-suggestions" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 border border-white/10 rounded shadow-xl max-h-48 overflow-y-auto hidden"></div>
         </div>
         <div class="text-center text-slate-600 hidden md:block mb-2"><i class="fa-solid fa-arrow-right"></i></div>
-        <div class="md:col-span-2">
+        <div class="md:col-span-2 relative">
             <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Target Name (To Keep)</label>
-            <input type="text" id="merge-good-name" placeholder="e.g. John Doe" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-red-500 text-sm">
+            <input type="text" id="merge-good-search" placeholder="Search Player..." autocomplete="off" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-red-500 text-sm">
+            <div id="merge-good-suggestions" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 border border-white/10 rounded shadow-xl max-h-48 overflow-y-auto hidden"></div>
         </div>
     </div>
-    <button onclick="window.adminMergePlayers()" id="btn-merge-exec" class="w-full mt-4 bg-red-900/50 hover:bg-red-600 text-white font-bold py-3 rounded-lg border border-red-500/30 transition text-sm">Execute Merge</button>
+    <button onclick="window.submitPlayerMerge && window.submitPlayerMerge()" id="btn-merge-exec" class="w-full mt-4 bg-red-900/50 hover:bg-red-600 text-white font-bold py-3 rounded-lg border border-red-500/30 transition text-sm shadow-lg">Execute Merge</button>
 </div>
 
-<input type="text" id="player-search" onkeyup="window.filterPlayers()" placeholder="Search players by name or ID..." class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white mb-4 focus:outline-none focus:border-purple-500">
-<div id="players-list" class="space-y-2 h-[500px] overflow-y-auto custom-scrollbar pr-2">
-    <div class="text-center py-6 text-slate-500 text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i> Loading players...</div>
+<div class="bg-slate-800 p-5 rounded-xl border border-indigo-500/20 mb-6 shadow-lg relative">
+    <h3 class="text-indigo-400 font-bold uppercase tracking-widest text-xs mb-3"><i class="fa-solid fa-calculator mr-2"></i> Ratings & Standard Deviation Editor</h3>
+    <p class="text-[10px] text-slate-400 mb-4">Force a specific rating for a player. SD defaults to ±65 if left blank.</p>
+    
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-start relative">
+        <div class="md:col-span-2 relative">
+            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Search Player</label>
+            <input type="hidden" id="override-id">
+            <input type="text" id="override-search" placeholder="Type player name..." autocomplete="off" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-indigo-500 text-sm font-mono">
+            <div id="override-suggestions" class="absolute z-50 left-0 right-0 top-[60px] bg-slate-700 border border-white/10 rounded shadow-xl max-h-48 overflow-y-auto hidden"></div>
+            <div id="override-context" class="mt-3 text-xs text-slate-400 font-mono"></div>
+        </div>
+        
+        <div class="md:col-span-1">
+            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Exact Rating</label>
+            <input type="number" id="override-score" placeholder="e.g. 1500" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-indigo-500 text-sm font-mono">
+            <div class="mt-2 flex items-center gap-2">
+                <input type="checkbox" id="override-retro" checked class="w-3 h-3 bg-slate-900 border-white/10 rounded text-indigo-500 focus:ring-indigo-500 cursor-pointer">
+                <label for="override-retro" class="text-[10px] text-slate-400 cursor-pointer uppercase tracking-widest font-bold">Retrospective</label>
+            </div>
+        </div>
+
+        <div class="md:col-span-1">
+            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Exact SD (RD)</label>
+            <input type="number" id="override-sd" placeholder="Default 65" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-indigo-500 text-sm font-mono">
+        </div>
+
+        <div class="md:col-span-1">
+            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">&nbsp;</label>
+            <button onclick="window.submitRatingOverride()" class="w-full bg-indigo-900/50 hover:bg-indigo-600 text-white font-bold py-2 rounded-lg border border-indigo-500/30 transition text-sm shadow-lg"><i class="fa-solid fa-wrench mr-1"></i> Override</button>
+            <button onclick="window.bulkSetRatings && window.bulkSetRatings()" class="w-full mt-2 text-[10px] uppercase font-bold tracking-widest text-slate-400 hover:text-indigo-400 transition underline">Bulk Import from Sheet</button>
+        </div>
+    </div>
 </div>
 
-<div id="player-editor-modal" class="fixed inset-0 bg-black/80 z-[100] hidden flex items-center justify-center backdrop-blur-sm p-4">
-    <div class="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in">
-        <div class="flex justify-between items-center bg-slate-800 px-6 py-4 border-b border-white/5">
-            <h3 class="text-white font-black text-lg" id="editor-title">Edit Player</h3>
-            <button onclick="window.closePlayerEditor()" class="text-slate-400 hover:text-white transition"><i class="fa-solid fa-xmark text-xl"></i></button>
+<div class="relative">
+    <input type="text" id="profile-edit-search" placeholder="Search players by name or ID to edit profile details..." class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white mb-4 focus:outline-none focus:border-purple-500" autocomplete="off">
+    <div id="profile-edit-sugg" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 border border-white/10 rounded shadow-xl max-h-48 overflow-y-auto hidden"></div>
+</div>
+
+<div class="bg-slate-800 p-6 rounded-xl border border-white/5 shadow-xl mb-10">
+    <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-2">
+        <h3 class="text-white font-bold uppercase tracking-widest text-xs">Edit Player Profile</h3>
+        <span id="rc-sync-status" class="text-[10px] font-mono text-slate-500"></span>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Ratings Central ID</label>
+            <input type="text" id="profile-rc-id" placeholder="e.g. 123456" disabled class="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500 font-mono disabled:opacity-50">
         </div>
-        <div class="p-6 space-y-4">
-            <input type="hidden" id="editor-uid">
-            <input type="hidden" id="editor-name">
-            
-            <div>
-                <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Email Address</label>
-                <input type="email" id="editor-email" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-indigo-500 text-sm">
-            </div>
-            <div>
-                <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Phone Number</label>
-                <input type="text" id="editor-phone" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-indigo-500 text-sm">
-            </div>
-            <div>
-                <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Ratings Central ID</label>
-                <input type="text" id="editor-rc" placeholder="Type 'delink' to remove" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-indigo-500 text-sm">
-                <p class="text-[9px] text-slate-500 mt-1">Type <strong>delink</strong> to completely remove their official RC connection.</p>
-            </div>
-            
-            <div class="pt-4 border-t border-white/10 mt-2">
-                <button onclick="window.adminForcePasswordReset()" class="w-full bg-slate-800 hover:bg-slate-700 text-red-400 font-bold py-3 rounded-lg border border-red-500/20 transition-colors text-sm flex items-center justify-center gap-2"><i class="fa-solid fa-key"></i> Force Password Reset</button>
-            </div>
-        </div>
-        <div class="bg-slate-800 px-6 py-4 border-t border-white/5 flex justify-end gap-3">
-            <button onclick="window.closePlayerEditor()" class="px-4 py-2 rounded text-slate-400 hover:text-white text-sm font-bold transition">Cancel</button>
-            <button onclick="window.savePlayerDetails()" id="btn-save-editor" class="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg shadow-[0_0_10px_rgba(79,70,229,0.3)] text-sm font-bold transition">Save Changes</button>
+        <div class="flex items-end gap-2">
+            <button onclick="window.forceRCSync()" id="profile-sync-btn" disabled class="bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-4 rounded-lg transition shadow-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed" title="Force Live Scrape"><i class="fa-solid fa-bolt"></i></button>
+            <button onclick="window.savePlayerProfile()" id="profile-save-btn" disabled class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 rounded-lg transition shadow-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed">Save Profile</button>
         </div>
     </div>
 </div>

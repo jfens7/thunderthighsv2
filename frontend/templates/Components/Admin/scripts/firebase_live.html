@@ -1,0 +1,70 @@
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, query, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getAuth, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+    const firebaseConfig = { apiKey: "AIzaSyDq05wFsKLHtt8G0Z5yLOG9pIk9UX24S4o", authDomain: "gctta-stats-live.firebaseapp.com", projectId: "gctta-stats-live", storageBucket: "gctta-stats-live.firebasestorage.app", messagingSenderId: "1070856258556", appId: "1:1070856258556:web:be438e04c1941abc3c6879" };
+    
+    // ==========================================
+    // CRITICAL FIX: INSTANT UI UNBLOCKING
+    // Since Flask (@login_required) already verified the session to render this page,
+    // we instantly kill the loading screen without waiting for Firebase Auth to boot up!
+    // ==========================================
+    document.addEventListener('DOMContentLoaded', () => {
+        const loaders = ['loading-screen', 'auth-loading', 'session-loader', 'loading'];
+        loaders.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('hidden');
+        });
+        
+        // Automatically trigger the data load for the active tab instantly
+        if (document.getElementById('admin-approvals') && !document.getElementById('admin-approvals').classList.contains('hidden')) {
+            if(typeof window.loadAccountManagementData === 'function') window.loadAccountManagementData();
+        }
+    });
+
+    try {
+        const app = initializeApp(firebaseConfig); 
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        window.sendAdminPasswordReset = function(email) {
+            if(!confirm(`Send a password reset email to ${email}?`)) return;
+            sendPasswordResetEmail(auth, email)
+                .then(() => alert(`✅ Password reset email sent securely to ${email} via Firebase.`))
+                .catch(error => alert(`❌ Error: ${error.message}`));
+        };
+
+        window.setFormatOverride = async function(fixtureId, formatType) {
+            try { await fetch('/api/admin/set_fixture_format', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fixture_id: fixtureId, format_type: formatType }) }); } catch(e) {}
+        };
+        
+        onSnapshot(query(collection(db, "fixture_schedule")), (snapshot) => {
+            const liveList = document.getElementById("live-list"); const scheduledList = document.getElementById("scheduled-list");
+            let liveHtml = ""; let schedHtml = "";
+            snapshot.forEach((doc) => {
+                const m = doc.data(); const id = doc.id;
+                const p1 = (m.home_players && m.home_players.length > 0) ? m.home_players[0] : m.home_team;
+                const p2 = (m.away_players && m.away_players.length > 0) ? m.away_players[0] : m.away_team;
+                if (m.match_status === "Live" || m.match_status === "Paused" || m.live_home_score > 0 || m.live_away_score > 0) {
+                    const s1 = m.live_home_sets || 0; const s2 = m.live_away_sets || 0;
+                    liveHtml += `<div class="bg-slate-800 p-5 rounded-xl border border-blue-500/30 shadow-lg relative overflow-hidden mb-4"><div class="absolute top-0 right-0 bg-blue-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-lg animate-pulse">ACTIVE NOW</div><div class="flex justify-between items-center mb-3 mt-1"><span class="text-xs text-slate-400 font-mono">Table ${m.table} • ${m.division}</span></div><div class="text-xl font-black text-white mb-4">${p1} <span class="text-slate-500 mx-2 text-sm">vs</span> ${p2}</div><div class="flex items-center gap-4 bg-black/40 p-4 rounded-xl border border-white/5 mb-4 shadow-inner"><div class="text-xs text-slate-400 font-bold uppercase tracking-widest">Adjust Final Score:</div><input type="number" id="live-s1-${id}" value="${s1}" class="w-14 bg-slate-900 border border-white/10 text-white font-bold font-mono text-center rounded py-2 focus:border-blue-500 outline-none text-lg"><span class="text-slate-500 font-black">-</span><input type="number" id="live-s2-${id}" value="${s2}" class="w-14 bg-slate-900 border border-white/10 text-white font-bold font-mono text-center rounded py-2 focus:border-blue-500 outline-none text-lg"></div><div class="flex gap-3"><button onclick="window.forceFinishLive('${id}', '${p1.replace(/'/g, "\\'")}', '${p2.replace(/'/g, "\\'")}')" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm transition-transform hover:scale-[1.02] shadow-[0_0_15px_rgba(37,99,235,0.4)] flex items-center justify-center gap-2"><i class="fa-solid fa-flag-checkered"></i> Force Finish</button><button onclick="window.wipeLiveMatch('${id}')" class="bg-red-900/50 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 font-bold py-2.5 px-4 rounded-lg text-sm transition-colors" title="Wipe Error"><i class="fa-solid fa-trash"></i></button></div></div>`;
+                } else if (m.match_status === "Scheduled" || !m.match_status) {
+                    const formatVal = m.format_override || "Auto";
+                    schedHtml += `<div class="bg-slate-800/80 p-4 rounded-xl border border-white/5 shadow relative"><div class="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1 border-b border-white/5 pb-1 flex justify-between"><span>Table ${m.table}</span><span class="text-blue-400">${m.division}</span></div><div class="font-bold text-white text-sm mt-2">${m.home_team} <br><span class="text-slate-500 text-xs font-normal">vs</span><br> ${m.away_team}</div><div class="mt-4 pt-3 border-t border-white/5"><label class="block text-[9px] text-slate-500 uppercase font-bold mb-1">Match Format</label><select onchange="window.setFormatOverride('${id}', this.value)" class="w-full bg-slate-900 border border-white/10 text-slate-300 font-bold text-xs rounded py-2 px-2 focus:border-blue-500 outline-none"><option value="Auto" ${formatVal === 'Auto' ? 'selected' : ''}>Auto-Detect</option><option value="2v2" ${formatVal === '2v2' ? 'selected' : ''}>Force 2v2 (5 Matches)</option><option value="3v3" ${formatVal === '3v3' ? 'selected' : ''}>Force 3v3 (11 Matches)</option></select></div></div>`;
+                }
+            });
+            if (liveList) liveList.innerHTML = liveHtml || '<div class="col-span-1 md:col-span-2 text-slate-500 text-center py-10 italic border border-white/5 rounded-xl bg-slate-800/30">No matches currently active.</div>';
+            if (scheduledList) scheduledList.innerHTML = schedHtml || '<div class="col-span-1 md:col-span-3 text-slate-500 text-center py-10 italic border border-white/5 rounded-xl bg-slate-800/30">No scheduled matches pending.</div>';
+        });
+
+        window.forceFinishLive = async function(id, p1, p2) {
+            const s1 = document.getElementById(`live-s1-${id}`).value; const s2 = document.getElementById(`live-s2-${id}`).value;
+            try { const res = await fetch('/api/admin/force_finish_live', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, s1: s1, s2: s2 }) }); if ((await res.json()).success) alert("✅ Forced finished!"); } catch(e) {}
+        };
+
+        window.wipeLiveMatch = async function(id) {
+            try { const res = await fetch('/api/admin/wipe_live', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id }) }); if ((await res.json()).success) alert("🗑️ Wiped!"); } catch(e) {}
+        };
+    } catch(err) { console.warn("Firebase Live Connection failed.", err); }
+</script>

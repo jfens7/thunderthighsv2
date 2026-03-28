@@ -1,0 +1,50 @@
+<div id="admin-approvals" class="hidden animate-fade-in w-full max-w-6xl mx-auto space-y-10">
+    <div>
+        <div class="flex justify-between items-center border-b border-emerald-500/20 pb-3 mb-4">
+            <h2 class="text-emerald-400 font-black uppercase tracking-widest text-sm"><i class="fa-solid fa-user-check mr-2"></i> Step 1: New Account Approvals</h2>
+            <span class="bg-emerald-900/30 text-emerald-400 text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest border border-emerald-500/20">App Fixtures</span>
+        </div>
+        <p class="text-xs text-slate-400 mb-4">Players waiting for app access. Map their app account to their local Fixture Profile to grant them entry.</p>
+        <div id="pendingAccountsList" class="space-y-4"></div>
+    </div>
+
+    <div>
+        <div class="flex justify-between items-center border-b border-sky-500/20 pb-3 mb-4">
+            <h2 class="text-sky-400 font-black uppercase tracking-widest text-sm"><i class="fa-solid fa-cloud-arrow-down mr-2"></i> Step 2: Ratings Central Linking</h2>
+            <span class="bg-sky-900/30 text-sky-400 text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest border border-sky-500/20">Global Sync</span>
+        </div>
+        <p class="text-xs text-slate-400 mb-4">Approved players who do not have a Ratings Central ID linked yet. Use the Live Search to find and map them.</p>
+        <div id="missingRCList" class="space-y-4"></div>
+    </div>
+</div>
+
+<div id="admin-directory" class="hidden animate-fade-in w-full max-w-6xl mx-auto">
+    <div class="flex justify-between items-center mb-4 border-b border-blue-500/20 pb-4">
+        <div>
+            <h2 class="text-blue-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-address-book mr-2"></i> Verified Account Directory</h2>
+            <p class="text-[10px] text-slate-400 mt-1">Manage passwords, moderator roles, membership tiers, and linked profiles for active players.</p>
+        </div>
+        <input type="text" id="account-search" onkeyup="window.renderVerifiedAccounts()" placeholder="Search accounts..." class="w-64 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-sm">
+    </div>
+    <div id="verified-accounts-list" class="space-y-4 h-[600px] overflow-y-auto custom-scrollbar pr-2"></div>
+</div>
+
+<div id="admin-merge-accounts" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
+    <h2 class="text-red-400 font-bold uppercase tracking-widest text-sm border-b border-red-500/20 pb-4 mb-4"><i class="fa-solid fa-code-merge mr-2"></i> Merge Duplicate User Accounts</h2>
+    <div class="bg-slate-800 p-6 rounded-xl border border-red-500/20 shadow-lg h-fit">
+        <p class="text-xs text-slate-400 mb-6">Did someone sign up twice? Select the account to keep, and the duplicate account to permanently delete.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Account to KEEP (Primary)</label>
+                <select id="primaryAccountSelect" class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-3 text-sm text-white focus:border-blue-500 focus:outline-none"></select>
+            </div>
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 text-red-400">Account to DELETE (Duplicate)</label>
+                <select id="duplicateAccountSelect" class="w-full bg-slate-900 border border-red-900/50 rounded px-3 py-3 text-sm text-white focus:border-red-500 focus:outline-none"></select>
+            </div>
+        </div>
+        <button onclick="window.submitAccountMerge()" class="w-full bg-red-900/50 hover:bg-red-600 text-white font-bold py-4 rounded-xl transition-colors shadow-lg border border-red-500/30">
+            MERGE & DELETE DUPLICATE
+        </button>
+    </div>
+</div>

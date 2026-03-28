@@ -37,6 +37,7 @@
     <div class="bg-slate-900 border-b border-white/5 px-4 flex gap-8 overflow-x-auto hide-scroll shrink-0">
         <button onclick="window.setAdminCategory('ops')" id="cat-ops" class="py-4 border-b-2 border-blue-500 text-blue-400 font-bold uppercase tracking-widest text-xs flex items-center gap-2"><i class="fa-solid fa-table-tennis-paddle-ball"></i> Match Ops</button>
         <button onclick="window.setAdminCategory('players')" id="cat-players" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-users-gear"></i> Players & Math</button>
+        <button onclick="window.setAdminCategory('accounts')" id="cat-accounts" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-users-rectangle"></i> Accounts</button>
         <button onclick="window.setAdminCategory('comms')" id="cat-comms" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-bullhorn"></i> Comms & Money</button>
         <button onclick="window.setAdminCategory('system')" id="cat-system" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-server"></i> System Logs</button>
     </div>
@@ -53,7 +54,12 @@
         <button onclick="window.switchAdminTab('players')" id="tab-btn-players" class="px-4 py-2 text-xs font-bold text-purple-400 bg-purple-900/30 rounded-lg">Player Editor</button>
         <button onclick="window.switchAdminTab('diagnostics')" id="tab-btn-diagnostics" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Glicko Simulator</button>
         <button onclick="window.switchAdminTab('schedules')" id="tab-btn-schedules" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"><i class="fa-solid fa-calendar-days mr-1"></i> Schedule Manager</button>
-        <button onclick="window.switchAdminTab('pending-accounts')" id="tab-btn-pending-accounts" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"><i class="fa-solid fa-link mr-1"></i> Account Approvals</button>
+    </div>
+
+    <div id="sub-accounts" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
+        <button onclick="window.switchAdminTab('approvals')" id="tab-btn-approvals" class="px-4 py-2 text-xs font-bold text-green-400 bg-green-900/30 rounded-lg">New Approvals</button>
+        <button onclick="window.switchAdminTab('directory')" id="tab-btn-directory" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Account Directory</button>
+        <button onclick="window.switchAdminTab('merge-accounts')" id="tab-btn-merge-accounts" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Merge Tools</button>
     </div>
 
     <div id="sub-comms" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
@@ -232,10 +238,8 @@
             {% include 'Components/Admin/view_players.html' %}
         </div>
 
-        <div id="admin-pending-accounts" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
-            <h2 class="text-white font-bold uppercase tracking-widest text-sm border-b border-white/10 pb-4 mb-4"><i class="fa-solid fa-link mr-2"></i> Account Linking Approvals</h2>
-            <p class="text-xs text-slate-400 mb-6">Players who registered in the Public Hub. You must map their app account to their official Glicko Match ID for them to see their history.</p>
-            <div id="pendingAccountsList" class="space-y-3"></div>
+        <div id="admin-accounts-wrapper">
+            {% include 'Components/Admin/view_accounts.html' %}
         </div>
 
         <div id="admin-diagnostics" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
@@ -291,35 +295,70 @@
         <div id="admin-schedules" class="hidden animate-fade-in w-full max-w-6xl mx-auto">
             <div class="flex justify-between items-center mb-6 border-b border-red-500/30 pb-4">
                 <h2 class="text-red-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-calendar-days mr-2"></i> Schedule & Fixture Manager</h2>
+                <div class="flex gap-2">
+                    <span class="bg-red-900/50 text-red-400 border border-red-500/50 text-[10px] font-bold px-2 py-1 rounded shadow-inner animate-pulse">PDF ENGINE ACTIVE</span>
+                </div>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="lg:col-span-1 bg-slate-800 p-6 rounded-xl border border-white/5 h-fit shadow-xl">
                     <div class="w-12 h-12 bg-red-600/20 text-red-500 rounded-full flex items-center justify-center mb-4 text-xl"><i class="fa-solid fa-file-pdf"></i></div>
                     <h3 class="text-white font-black mb-2 text-lg">PDF Scraper</h3>
-                    <p class="text-[10px] text-slate-400 mb-6">Upload the weekly fixture PDFs sent out by the club. The AI will extract the matchups.</p>
+                    <p class="text-[10px] text-slate-400 mb-6">Upload the weekly fixture PDFs sent out by the club. The AI will extract the matchups and save them as a Draft.</p>
                     
-                    <input type="text" id="pdf-season" placeholder="Season (e.g. Summer 2026)" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none text-sm mb-3">
-                    <input type="text" id="pdf-division" placeholder="Division Name (e.g. Division 1)" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none text-sm mb-3">
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Year</label>
+                            <input type="number" id="pdf-year" placeholder="e.g. 2026" value="2026" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none text-sm">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Season</label>
+                            <select id="pdf-season" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none text-sm">
+                                <option value="Summer">Summer</option>
+                                <option value="Winter">Winter</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Division</label>
+                        <input type="text" id="pdf-division" placeholder="e.g. Division 1" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none text-sm">
+                    </div>
                     
                     <input type="file" id="pdf-file-upload" accept=".pdf" class="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-bold file:bg-red-900/30 file:text-red-400 hover:file:bg-red-900/50 mb-4 bg-black/20 p-3 border border-white/5 rounded-lg cursor-pointer">
                     <button onclick="window.uploadPdfSchedule(event)" id="pdf-upload-btn" class="w-full bg-red-600 hover:bg-red-500 text-white font-black py-3 rounded-lg shadow-[0_0_15px_rgba(220,38,38,0.3)] transition text-xs">EXTRACT MATCHUPS</button>
                 </div>
 
-                <div class="lg:col-span-2 bg-slate-800 p-6 rounded-xl border border-white/5 shadow-xl relative">
-                    <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-2">
+                <div class="lg:col-span-2 bg-slate-800 p-6 rounded-xl border border-white/5 shadow-xl relative flex flex-col h-[600px]">
+                    <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-2 shrink-0">
                         <h3 class="text-white font-bold text-sm">Extracted Matches Dashboard</h3>
-                        <button onclick="window.loadSchedules()" class="text-[10px] text-slate-400 hover:text-white uppercase font-bold tracking-widest bg-slate-900 px-3 py-1.5 rounded transition"><i class="fa-solid fa-rotate mr-1"></i> Refresh</button>
+                        <button onclick="window.loadSchedules()" class="text-[10px] text-slate-400 hover:text-white uppercase font-bold tracking-widest bg-slate-900 px-3 py-1.5 rounded transition border border-white/10"><i class="fa-solid fa-rotate mr-1"></i> Refresh</button>
                     </div>
                     
-                    <div class="mb-4">
-                        <select id="schedule-div-filter" onchange="window.renderSchedules()" class="w-full md:w-64 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-xs focus:outline-none">
-                            <option value="All">All Divisions</option>
-                        </select>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 shrink-0 bg-black/20 p-3 rounded-lg border border-white/5">
+                        <div>
+                            <label class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Filter Year</label>
+                            <select id="schedule-year-filter" onchange="window.renderSchedules()" class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none">
+                                <option value="All">All Years</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Filter Season</label>
+                            <select id="schedule-season-filter" onchange="window.renderSchedules()" class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none">
+                                <option value="All">All Seasons</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Filter Division</label>
+                            <select id="schedule-div-filter" onchange="window.renderSchedules()" class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none">
+                                <option value="All">All Divisions</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <div id="schedules-list" class="space-y-2 h-[400px] overflow-y-auto custom-scrollbar pr-2">
-                        </div>
+                    <div id="schedules-list" class="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2">
+                        <div class="text-center py-10 text-slate-500 text-sm italic">Loading schedules...</div>
+                    </div>
                 </div>
             </div>
         </div>

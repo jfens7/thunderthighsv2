@@ -1,0 +1,65 @@
+<script>
+    console.log("✅ Admin UI Core Loaded");
+
+    const inactivityTime = function () {
+        let time; window.onload = resetTimer; document.onmousemove = resetTimer; document.onkeypress = resetTimer; document.ontouchstart = resetTimer; document.onclick = resetTimer;
+        function logout() { alert("Logged out due to inactivity."); window.location.href = '/logout'; }
+        function resetTimer() { clearTimeout(time); time = setTimeout(logout, 120000); }
+    };
+    inactivityTime();
+
+    window.setAdminCategory = function(catId) {
+        ['ops', 'players', 'accounts', 'comms', 'system'].forEach(c => {
+            const btn = document.getElementById(`cat-${c}`);
+            if (btn) { btn.classList.remove('border-blue-500', 'text-blue-400'); btn.classList.add('border-transparent', 'text-slate-500'); }
+            const sub = document.getElementById(`sub-${c}`);
+            if (sub) sub.classList.add('hidden');
+        });
+
+        const targetBtn = document.getElementById(`cat-${catId}`);
+        if (targetBtn) { targetBtn.classList.remove('border-transparent', 'text-slate-500'); targetBtn.classList.add('border-blue-500', 'text-blue-400'); }
+        const targetSub = document.getElementById(`sub-${catId}`);
+        if (targetSub) targetSub.classList.remove('hidden');
+
+        if (catId === 'ops') window.switchAdminTab('live');
+        if (catId === 'players') window.switchAdminTab('players');
+        if (catId === 'accounts') window.switchAdminTab('approvals');
+        if (catId === 'comms') window.switchAdminTab('notices');
+        if (catId === 'system') window.switchAdminTab('audit');
+    };
+
+    window.switchAdminTab = function(tabId) {
+        const allTabs = ['live', 'manual', 'history', 'date-errors', 'tournaments', 'players', 'diagnostics', 'schedules', 'broadcast', 'sms-inbox', 'notices', 'community-mod', 'inbox-feedback', 'donations', 'audit', 'chat', 'approvals', 'directory', 'merge-accounts'];
+        allTabs.forEach(t => {
+            const section = document.getElementById(`admin-${t}`);
+            if (section) section.classList.add('hidden');
+            const btn = document.getElementById(`tab-btn-${t}`);
+            if (btn) btn.className = "px-4 py-2 text-xs font-bold text-slate-400 hover:text-white cursor-pointer whitespace-nowrap transition-colors";
+        });
+        const targetSection = document.getElementById(`admin-${tabId}`);
+        if (targetSection) targetSection.classList.remove('hidden');
+        const targetBtn = document.getElementById(`tab-btn-${tabId}`);
+        if (targetBtn) targetBtn.className = "px-4 py-2 text-xs font-bold text-white bg-white/10 rounded-lg cursor-pointer whitespace-nowrap transition-colors";
+
+        if (tabId === 'inbox-feedback') window.loadPendingReports();
+        if (tabId === 'date-errors') window.loadDateErrors();
+        if (tabId === 'notices') window.loadAdminNotices();
+        if (tabId === 'chat') window.loadAdminChat();
+        if (tabId === 'donations') window.loadDonations();
+        if (tabId === 'sms-inbox') window.loadSmsInbox();
+        if (tabId === 'schedules') window.loadSchedules();
+        if (['approvals', 'directory', 'merge-accounts'].includes(tabId)) window.loadAccountManagementData();
+        if (tabId === 'history') { const f = document.getElementById('hist-div-filter'); if (f && f.options.length <= 1) fetch('/api/divisions').then(r=>r.json()).then(d=>{d.forEach(div=>{f.innerHTML+=`<option value="${div}">${div}</option>`})}); }
+        if (['players', 'diagnostics', 'manual'].includes(tabId) && playerDirectoryData.length === 0) window.loadPlayerDirectory();
+        if (tabId === 'diagnostics') fetch('/api/admin/get_rating_scales').then(r=>r.json()).then(d=>{document.getElementById('math-k-win').value=d.k_win;document.getElementById('math-k-loss').value=d.k_loss;});
+        if (tabId === 'audit') { window.loadAuditLogs(); window.loadAdminUsers(); window.loadTrafficStats(); }
+    };
+
+    window.forceRefresh = async function() {
+        if (!confirm("Force the server to pull the latest data from the Master Google Sheet?")) return;
+        const btn = document.querySelector('button[onclick="window.forceRefresh()"]'); const orig = btn ? btn.innerHTML : "FORCE REFRESH";
+        if (btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> SYNCING...'; btn.disabled = true; }
+        try { const res = await fetch('/api/refresh', { method: 'POST' }); const data = await res.json(); if (data.success) alert("✅ Sync triggered!"); else alert("❌ Sync failed."); } 
+        catch(e) { alert("❌ Network Error."); } finally { if (btn) { btn.innerHTML = orig; btn.disabled = false; } }
+    };
+</script>

@@ -1,0 +1,390 @@
+<script>
+    console.log("✅ Admin Accounts Module Loaded");
+
+    let playerDirectoryData = [];
+    window.loadPlayerDirectory = async function() { try { const res = await fetch('/api/admin/player_directory'); playerDirectoryData = await res.json(); } catch(e) {} };
+
+    function attachPlayerSearch(inputId, suggId, hiddenId = null) {
+        const input = document.getElementById(inputId); const sugg = document.getElementById(suggId);
+        if (!input || !sugg) return;
+        input.addEventListener('input', (e) => {
+            const q = e.target.value.toLowerCase();
+            if (q.length < 1) { sugg.classList.add('hidden'); return; }
+            if (playerDirectoryData.length === 0) return;
+            const matches = playerDirectoryData.filter(p => (p.name || '').toLowerCase().includes(q));
+            if (matches.length === 0) { sugg.innerHTML = '<div class="px-3 py-2 text-slate-400 text-xs italic">No players found</div>'; sugg.classList.remove('hidden'); return; }
+            sugg.innerHTML = matches.slice(0, 8).map(p => `<div class="px-4 py-2 hover:bg-blue-600/30 cursor-pointer text-sm text-white font-bold border-b border-white/5" onclick="document.getElementById('${inputId}').value = '${p.name.replace(/'/g, "\\'")}'; ${hiddenId ? `document.getElementById('${hiddenId}').value = '${p.id}';` : ''} document.getElementById('${suggId}').classList.add('hidden');">${p.name} <span class="text-[10px] text-slate-500 font-mono ml-2">${p.id}</span></div>`).join('');
+            sugg.classList.remove('hidden');
+        });
+        document.addEventListener('click', (e) => { if (e.target !== input && e.target !== sugg) sugg.classList.add('hidden'); });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        window.setAdminCategory('ops'); 
+        attachPlayerSearch('override-search', 'override-suggestions', 'override-id');
+        attachPlayerSearch('merge-bad-search', 'merge-bad-suggestions');
+        attachPlayerSearch('merge-good-search', 'merge-good-suggestions');
+        attachPlayerSearch('diag-p1-search', 'diag-p1-suggestions');
+        attachPlayerSearch('diag-p2-search', 'diag-p2-suggestions');
+        attachPlayerSearch('manual-p1', 'sugg-p1');
+        attachPlayerSearch('manual-p2', 'sugg-p2');
+        attachPlayerSearch('profile-edit-search', 'profile-edit-sugg');
+
+        const searchInput = document.getElementById('profile-edit-search');
+        if(searchInput) {
+            searchInput.addEventListener('blur', () => { setTimeout(() => { const playerName = searchInput.value.trim(); if(playerName) window.loadProfileForEditing(playerName); }, 200); });
+        }
+    });
+
+    window.loadProfileForEditing = async function(playerName) {
+        const rcInput = document.getElementById('profile-rc-id'); const saveBtn = document.getElementById('profile-save-btn'); const syncBtn = document.getElementById('profile-sync-btn');
+        if(!rcInput) return; rcInput.disabled = true; saveBtn.disabled = true; syncBtn.disabled = true; rcInput.value = "Loading...";
+        try {
+            const res = await fetch(`/api/admin/player_profile/${encodeURIComponent(playerName)}`); const data = await res.json();
+            rcInput.value = data.ratings_central_id || ''; rcInput.disabled = false; saveBtn.disabled = false; syncBtn.disabled = false;
+            document.getElementById('rc-sync-status').innerText = data.last_synced ? `Last RC Sync: ${data.last_synced}` : '';
+        } catch(e) { rcInput.value = ""; }
+    };
+
+    window.savePlayerProfile = async function() {
+        const playerName = document.getElementById('profile-edit-search').value.trim(); const rcId = document.getElementById('profile-rc-id').value.trim();
+        if(!playerName) return alert("Please select a player first.");
+        const btn = document.getElementById('profile-save-btn'); const origText = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> SAVING...'; btn.disabled = true;
+        try {
+            const res = await fetch('/api/admin/update_player_profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ player_name: playerName, ratings_central_id: rcId }) });
+            const data = await res.json();
+            if(data.success) { alert(`✅ Profile updated! RC data has been fetched.`); window.loadProfileForEditing(playerName); } else alert("❌ Failed to update profile.");
+        } catch(e) { alert("Network Error"); } finally { btn.innerHTML = origText; btn.disabled = false; }
+    };
+
+    window.forceRCSync = async function() {
+        const playerName = document.getElementById('profile-edit-search').value.trim(); const rcId = document.getElementById('profile-rc-id').value.trim();
+        if(!playerName || !rcId) return alert("Must select a player and have an RC ID set.");
+        const btn = document.getElementById('profile-sync-btn'); const origText = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; btn.disabled = true;
+        try {
+            const res = await fetch(`/api/admin/sync_rc/${encodeURIComponent(playerName)}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({rc_id: rcId}) });
+            const data = await res.json();
+            if(data.success) { alert(`✅ Background scraper started! The full stats for ${playerName} will be synced to Firebase shortly.`); window.loadProfileForEditing(playerName); }
+            else alert("❌ " + data.error);
+        } catch(e) { alert("Network Error"); } finally { btn.innerHTML = origText; btn.disabled = false; }
+    };
+
+    let globalVerifiedAccounts = [];
+
+    function findBestMatchIndex(searchName, options) {
+        if (!searchName) return 0;
+        searchName = searchName.toLowerCase().trim();
+        let bestIdx = 0; let bestScore = 0;
+        for (let i = 1; i < options.length; i++) { 
+            const optName = options[i].text.toLowerCase();
+            if (optName === searchName) return i; 
+            let score = 0; const searchParts = searchName.split(/\s+/); const optParts = optName.split(/\s+/);
+            searchParts.forEach(sp => { if (sp.length > 2 && optName.includes(sp)) score += 1; if (optParts.includes(sp)) score += 1.5; });
+            if (searchParts.length === 1 && score >= 1 && score > bestScore) { bestScore = score; bestIdx = i; } 
+            else if (searchParts.length > 1 && score >= 2 && score > bestScore) { bestScore = score; bestIdx = i; }
+        }
+        return bestIdx;
+    }
+
+    window.searchRCForPlayer = async function(uid, name, inputId, userClub = '') {
+        const resultsBox = document.getElementById(`rc-results-${uid}`);
+        if(!resultsBox) return;
+        resultsBox.classList.remove('hidden');
+        resultsBox.innerHTML = '<div class="text-[9px] text-sky-400 text-center py-4"><i class="fa-solid fa-spinner fa-spin text-xl mb-2"></i><br>Live Querying Ratings Central...</div>';
+        
+        try {
+            const res = await fetch('/api/admin/search_rc', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: name, club: userClub}) });
+            const data = await res.json();
+            
+            if(!data.success || data.results.length === 0) {
+                resultsBox.innerHTML = '<div class="text-[9px] text-slate-500 text-center py-3">No players found on RC.</div>';
+                setTimeout(() => resultsBox.classList.add('hidden'), 4000);
+                return;
+            }
+            
+            let html = '';
+            data.results.forEach(r => {
+                let clubHtml = ''; let clubHighlight = '';
+                if (r.club && r.club !== 'Unknown Club') {
+                    const isMatch = userClub && r.club.toLowerCase().includes(userClub.toLowerCase());
+                    const clubColor = isMatch ? 'text-emerald-400' : 'text-slate-400';
+                    const clubIcon = isMatch ? '<i class="fa-solid fa-circle-check"></i>' : '<i class="fa-solid fa-house-flag"></i>';
+                    clubHtml = `<div class="text-[9px] ${clubColor} font-bold mt-1 uppercase tracking-widest">${clubIcon} Club: ${r.club}</div>`;
+                    if (isMatch) clubHighlight = 'border-emerald-500/50 bg-emerald-900/20';
+                }
+                html += `
+                <div onclick="document.getElementById('${inputId}').value = '${r.id}'; document.getElementById('rc-results-${uid}').classList.add('hidden');" class="cursor-pointer bg-slate-800 hover:bg-sky-600/30 border border-white/10 hover:border-sky-500/50 ${clubHighlight} rounded-lg p-3 transition text-left group">
+                    <div class="flex justify-between items-start mb-1">
+                        <div class="text-sm text-white font-bold group-hover:text-sky-400 transition">${r.name}</div>
+                        <div class="text-xs text-emerald-400 font-black tracking-widest font-mono bg-emerald-900/30 px-2 py-0.5 rounded shadow-inner border border-emerald-500/20">${r.rating}</div>
+                    </div>
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-[9px] text-amber-400 font-mono font-bold bg-black/40 px-1.5 py-0.5 rounded border border-white/5">ID: ${r.id}</span>
+                        <span class="text-[9px] text-slate-400 uppercase tracking-widest"><i class="fa-solid fa-location-dot mr-1"></i> ${r.location}</span>
+                    </div>
+                    ${clubHtml}
+                    <div class="text-[9px] text-slate-500 leading-tight mt-1.5"><span class="text-slate-600 font-bold uppercase mr-1">Played:</span> ${r.recent_opponents}</div>
+                </div>`;
+            });
+            resultsBox.innerHTML = html;
+        } catch(e) {
+            resultsBox.innerHTML = '<div class="text-[9px] text-red-500 text-center py-2">Error connecting to RC.</div>';
+            setTimeout(() => resultsBox.classList.add('hidden'), 3000);
+        }
+    };
+
+    window.loadAccountManagementData = async function() {
+        if (playerDirectoryData.length === 0) await window.loadPlayerDirectory();
+        const pendingList = document.getElementById('pendingAccountsList'); 
+        if (pendingList) {
+            pendingList.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-emerald-500"></i></div>';
+            try {
+                const pendingRes = await fetch('/api/admin/pending_accounts'); const rawData = await pendingRes.json();
+                const data = Array.isArray(rawData) ? rawData : (rawData.pending_users || []);
+                if (data.length === 0) { pendingList.innerHTML = '<div class="text-slate-500 text-center py-10 italic border border-white/5 bg-slate-800/30 rounded-xl">Awesome! No pending accounts to approve.</div>'; } 
+                else { window.renderPendingAccounts(data, pendingList); }
+            } catch(e) {}
+        }
+        try {
+            const allUsersRes = await fetch('/api/admin/all_users'); const allUsersData = await allUsersRes.json();
+            if (allUsersData.success) {
+                globalVerifiedAccounts = allUsersData.users;
+                window.renderVerifiedAccounts();
+                window.renderMergeDropdowns(globalVerifiedAccounts);
+                const missingList = document.getElementById('missingRCList');
+                if (missingList) window.renderMissingRC(globalVerifiedAccounts, missingList);
+            }
+        } catch(e) {}
+    };
+
+    window.renderPendingAccounts = function(users, container) {
+        container.innerHTML = '';
+        let playerOptions = '<option value="">-- Select Official Player --</option>';
+        playerDirectoryData.sort((a,b) => (a.name||'').localeCompare(b.name||'')).forEach(p => { playerOptions += `<option value="${p.name.replace(/'/g, "&#39;")}">${p.name}</option>`; });
+        users.forEach(a => {
+            const hasSuggestion = a.suggested_rc_id && a.suggested_rc_id !== "";
+            const defaultRcVal = hasSuggestion ? a.suggested_rc_id : '';
+            const suggestionBadge = hasSuggestion ? `<div id="badge-${a.uid}" class="text-[9px] text-amber-400 font-bold mt-1 bg-amber-900/30 border border-amber-500/30 px-2 py-0.5 rounded inline-block animate-pulse"><i class="fa-solid fa-lightbulb mr-1"></i> User Typed: ${a.suggested_rc_id}</div>` : `<div id="badge-${a.uid}" class="text-[9px] text-slate-500 mt-1">Optional: Link RC Profile</div>`;
+
+            container.innerHTML += `
+            <div class="bg-slate-800 p-5 rounded-xl border border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 shadow-lg mb-4 hover:border-emerald-500/30 transition-colors">
+                <div class="w-full md:w-1/2">
+                    <div class="font-black text-white text-xl">${a.name}</div>
+                    <div class="text-xs text-slate-400 font-mono mt-1">${a.email}</div>
+                    <div class="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mt-2"><i class="fa-solid fa-table-tennis-paddle-ball mr-1"></i> ${a.club || 'No Club'}</div>
+                    <div class="text-[10px] text-slate-500 mt-1">DOB: ${a.dob}</div>
+                </div>
+                <div class="flex flex-col bg-black/30 p-4 rounded-xl border border-white/5 w-full md:w-1/2">
+                    <label class="text-[9px] text-slate-400 uppercase font-bold tracking-widest block">Link to App Fixtures</label>
+                    <div id="fixture-sugg-badge-${a.uid}" class="mt-1 mb-1.5 min-h-[20px]"></div>
+                    <select id="link-player-${a.uid}" class="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none shadow-inner mb-4">${playerOptions}</select>
+                    <div class="flex gap-2 pt-3 border-t border-white/5">
+                        <button onclick="window.rejectPendingAccount('${a.uid}')" class="w-1/3 bg-red-900/30 hover:bg-red-600 text-red-500 hover:text-white border border-red-500/30 font-bold py-3 rounded-lg text-xs transition shadow flex justify-center items-center gap-2"><i class="fa-solid fa-trash"></i> Reject</button>
+                        <button onclick="window.linkAccount('${a.uid}')" class="w-2/3 bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 rounded-lg text-sm transition shadow flex justify-center items-center gap-2"><i class="fa-solid fa-check"></i> Approve & Link</button>
+                    </div>
+                </div>
+            </div>`;
+        });
+        
+        setTimeout(() => {
+            users.forEach(a => {
+                const select = document.getElementById(`link-player-${a.uid}`);
+                if(select) {
+                    const bestIndex = findBestMatchIndex(a.name, select.options);
+                    if (bestIndex > 0) {
+                        select.selectedIndex = bestIndex;
+                        document.getElementById(`fixture-sugg-badge-${a.uid}`).innerHTML = `<div class="text-[10px] text-emerald-400 font-bold inline-block bg-emerald-900/30 border border-emerald-500/30 px-2 py-0.5 rounded shadow-inner"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i> AI Suggests: ${select.options[bestIndex].value}</div>`;
+                    } else {
+                        document.getElementById(`fixture-sugg-badge-${a.uid}`).innerHTML = `<div class="text-[10px] text-slate-500"><i class="fa-solid fa-circle-info mr-1"></i> No Match Found</div>`;
+                    }
+                }
+            });
+        }, 150);
+    }
+
+    window.renderMissingRC = function(users, container) {
+        container.innerHTML = '';
+        const missingUsers = users.filter(u => !u.ratings_central_id || u.ratings_central_id.trim() === '');
+        if (missingUsers.length === 0) { container.innerHTML = '<div class="text-slate-500 text-center py-10 italic border border-white/5 bg-slate-800/30 rounded-xl">Awesome! All approved users have a Ratings Central ID.</div>'; return; }
+
+        missingUsers.forEach(u => {
+            const rcSearchLink = `
+                <button onclick="window.searchRCForPlayer('${u.id}', '${u.name.replace(/'/g, "\\'")}', 'link-rc-${u.id}', '${(u.club || '').replace(/'/g, "\\'")}')" class="text-[10px] bg-sky-900/30 hover:bg-sky-600 border border-sky-500/30 text-sky-400 hover:text-white font-bold uppercase tracking-widest px-3 py-2.5 rounded-lg transition flex items-center gap-1.5 w-full justify-center shadow">
+                    <i class="fa-solid fa-magnifying-glass"></i> Live Search RC Database
+                </button>
+                <div id="rc-results-${u.id}" class="hidden mt-2 bg-slate-950 border border-white/10 rounded-xl p-2 max-h-64 overflow-y-auto space-y-2 shadow-inner custom-scrollbar"></div>
+            `;
+            container.innerHTML += `
+            <div class="bg-slate-800 p-5 rounded-xl border border-white/5 flex flex-col md:flex-row justify-between items-start gap-6 shadow-lg mb-4 hover:border-sky-500/30 transition-colors">
+                <div class="w-full md:w-1/3">
+                    <div class="font-black text-white text-lg">${u.name}</div>
+                    <div class="text-[10px] text-slate-500 mt-1 uppercase tracking-widest"><i class="fa-solid fa-link mr-1"></i> Linked: <span class="text-emerald-400 font-bold">${u.linked_player_name || 'N/A'}</span></div>
+                    <div class="text-[9px] text-sky-400 font-bold uppercase tracking-widest mt-2"><i class="fa-solid fa-table-tennis-paddle-ball mr-1"></i> ${u.club || 'No Club'}</div>
+                </div>
+                <div class="flex flex-col bg-black/30 p-4 rounded-xl border border-white/5 w-full md:w-2/3">
+                    <label class="text-[9px] text-slate-400 uppercase font-bold tracking-widest block mb-2">Ratings Central ID</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="link-rc-${u.id}" placeholder="e.g. 123456" class="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500 font-mono shadow-inner">
+                        <button onclick="window.linkRCProfile('${u.id}', '${(u.linked_player_name || '').replace(/'/g, "\\'")}')" class="bg-sky-600 hover:bg-sky-500 text-white font-black px-4 rounded-lg text-sm transition shadow whitespace-nowrap">Save RC Link</button>
+                    </div>
+                    <div class="mt-3 border-t border-white/5 pt-3">${rcSearchLink}</div>
+                </div>
+            </div>`;
+        });
+    }
+
+    window.linkAccount = async function(uid) {
+        const playerName = document.getElementById(`link-player-${uid}`).value;
+        if (!playerName) return alert("Please select an official player name to link.");
+        if (!confirm(`Approve account and link to ${playerName}?`)) return;
+        try {
+            const res = await fetch('/api/admin/approve_account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid, player_name: playerName, ratings_central_id: '' }) });
+            const data = await res.json();
+            if (data.success) { alert("✅ Account approved! Check Section 2 to link their RC Profile."); window.loadAccountManagementData(); } 
+            else { alert("❌ Failed to link account: " + data.error); }
+        } catch(e) {}
+    };
+
+    window.linkRCProfile = async function(uid, playerName) {
+        const rcId = document.getElementById(`link-rc-${uid}`).value.trim();
+        if (!rcId) return alert("Please enter an RC ID or select one from the search.");
+        try {
+            const res = await fetch('/api/admin/update_verified_link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uid: uid, type: 'rc', value: rcId }) });
+            const data = await res.json();
+            if (data.success) { 
+                alert("✅ RC Profile linked! Pulling stats in the background...");
+                fetch(`/api/admin/sync_rc/${encodeURIComponent(playerName)}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({rc_id: rcId}) });
+                window.loadAccountManagementData(); 
+            } else alert("❌ Error updating link.");
+        } catch(e) {}
+    };
+
+    window.rejectPendingAccount = async function(uid) {
+        if (!confirm(`Are you sure you want to REJECT and DELETE this pending registration?\n\nThe user will have to sign up again.`)) return;
+        try {
+            const res = await fetch('/api/admin/reject_pending', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uid: uid }) });
+            const data = await res.json();
+            if (data.success) { alert("🗑️ Registration rejected and deleted."); window.loadAccountManagementData(); } else alert("❌ Failed to reject account.");
+        } catch(e) {}
+    };
+
+    window.renderVerifiedAccounts = function() {
+        const list = document.getElementById('verified-accounts-list'); if (!list) return;
+        const searchQ = (document.getElementById('account-search')?.value || '').toLowerCase();
+        const filtered = globalVerifiedAccounts.filter(u => (u.name || '').toLowerCase().includes(searchQ) || (u.email || '').toLowerCase().includes(searchQ) || (u.linked_player_name || '').toLowerCase().includes(searchQ));
+        if (filtered.length === 0) { list.innerHTML = '<div class="text-center py-6 text-slate-500 italic text-sm">No accounts found.</div>'; return; }
+
+        let playerOptions = '<option value="">-- No Linked Profile --</option>';
+        playerDirectoryData.sort((a,b) => (a.name||'').localeCompare(b.name||'')).forEach(p => { playerOptions += `<option value="${p.name.replace(/'/g, "&#39;")}">${p.name}</option>`; });
+
+        let html = '';
+        filtered.sort((a,b) => (a.name || '').localeCompare(b.name || '')).forEach(u => {
+            let userSpecificOptions = playerOptions;
+            if(u.linked_player_name) userSpecificOptions = userSpecificOptions.replace(`value="${u.linked_player_name}"`, `value="${u.linked_player_name}" selected`);
+            const tierBadge = u.tier === 'gold' ? '<span class="bg-yellow-500/20 text-yellow-500 border border-yellow-500/50 px-2 py-0.5 rounded text-[9px] font-black tracking-widest uppercase ml-2 shadow-[0_0_5px_rgba(234,179,8,0.3)]">GOLD</span>' : u.tier === 'silver' ? '<span class="bg-slate-300/20 text-slate-300 border border-slate-400/50 px-2 py-0.5 rounded text-[9px] font-black tracking-widest uppercase ml-2 shadow-[0_0_5px_rgba(203,213,225,0.3)]">SILVER</span>' : '';
+            
+            html += `
+            <div class="bg-slate-800 p-5 rounded-xl border border-white/5 shadow-lg mb-4 hover:border-blue-500/30 transition-colors">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-4 mb-4">
+                    <div>
+                        <div class="font-black text-white text-lg flex items-center flex-wrap gap-2">${u.name} ${tierBadge} <span class="hidden bg-sky-900/30 text-sky-400 border border-sky-500/30 text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest" id="mod-badge-${u.uid || u.id}">MODERATOR</span></div>
+                        <div class="text-xs text-slate-400 font-mono mt-1">${u.email}</div>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="window.sendAdminPasswordReset('${u.email}')" class="bg-slate-900 hover:bg-slate-700 border border-white/10 text-white px-3 py-2 rounded-lg text-[10px] uppercase font-bold transition shadow"><i class="fa-solid fa-envelope mr-1"></i> Send Password Reset</button>
+                        <button onclick="window.toggleModerator('${u.email}', this)" class="bg-sky-900/30 hover:bg-sky-600 text-sky-400 hover:text-white border border-sky-500/30 px-3 py-2 rounded-lg text-[10px] uppercase font-bold transition shadow"><i class="fa-solid fa-shield mr-1"></i> Toggle Mod</button>
+                        <button onclick="window.deleteUserAccount('${u.id}')" class="bg-red-900/30 hover:bg-red-600 text-red-500 hover:text-white border border-red-500/30 px-3 py-2 rounded-lg text-[10px] uppercase font-bold transition shadow"><i class="fa-solid fa-trash"></i> Delete Account</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 bg-black/20 p-4 rounded-xl border border-white/5">
+                    <div>
+                        <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest mb-2 block"><i class="fa-solid fa-table-tennis-paddle-ball mr-1"></i> Linked Fixture Profile</label>
+                        <div class="flex gap-2">
+                            <select id="edit-link-${u.id}" class="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">${userSpecificOptions}</select>
+                            <button onclick="window.updateVerifiedLink('${u.id}', 'player')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-xs shadow transition"><i class="fa-solid fa-floppy-disk"></i></button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest mb-1 block"><i class="fa-solid fa-globe mr-1"></i> Ratings Central ID</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="edit-rc-${u.id}" value="${u.ratings_central_id || ''}" class="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-xs text-white font-mono">
+                            <button onclick="window.updateVerifiedLink('${u.id}', 'rc')" class="bg-amber-600 hover:bg-amber-500 text-black font-black px-4 py-2 rounded-lg text-xs shadow transition"><i class="fa-solid fa-floppy-disk"></i></button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest mb-1 block"><i class="fa-solid fa-medal mr-1"></i> Membership Tier</label>
+                        <div class="flex gap-2">
+                            <select id="edit-tier-${u.id}" class="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-yellow-500">
+                                <option value="standard" ${!u.tier || u.tier==='standard'?'selected':''}>Standard</option>
+                                <option value="silver" ${u.tier==='silver'?'selected':''}>Silver</option>
+                                <option value="gold" ${u.tier==='gold'?'selected':''}>Gold</option>
+                            </select>
+                            <button onclick="window.updateUserTier('${u.id}', document.getElementById('edit-tier-${u.id}').value)" class="bg-yellow-600 hover:bg-yellow-500 text-black font-black px-4 py-2 rounded-lg text-xs shadow transition"><i class="fa-solid fa-floppy-disk"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        });
+        list.innerHTML = html;
+        
+        fetch(`/api/admin/users`).then(r=>r.json()).then(users => {
+            filtered.forEach(u => {
+                if(users.find(x => x.email.toLowerCase() === (u.email || '').toLowerCase())) {
+                    const badge = document.getElementById(`mod-badge-${u.uid || u.id}`);
+                    if(badge) badge.classList.remove('hidden');
+                }
+            });
+        }).catch(e => {});
+    };
+
+    window.updateVerifiedLink = async function(uid, type, forceVal = null) {
+        let val = forceVal === null ? document.getElementById(`edit-${type === 'player' ? 'link' : 'rc'}-${uid}`).value : forceVal;
+        if (val === 'DELINK') { if (!confirm(`Delink this user's profile?`)) return; val = ''; }
+        try {
+            const res = await fetch('/api/admin/update_verified_link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uid: uid, type: type, value: val }) });
+            const data = await res.json();
+            if (data.success) { alert("✅ Link updated!"); if (val !== '') window.loadAccountManagementData(); } else alert("❌ Error updating link.");
+        } catch(e) {}
+    };
+
+    window.updateUserTier = async function(uid, tier) {
+        try {
+            const res = await fetch('/api/admin/update_user_tier', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({uid: uid, tier: tier}) });
+            if((await res.json()).success) { alert(`✅ Tier updated!`); window.loadAccountManagementData(); }
+        } catch(e) {}
+    };
+
+    window.toggleModerator = async function(email, btn) {
+        if(!confirm(`Toggle moderator powers for ${email}?`)) return;
+        try {
+            const res = await fetch('/api/admin/toggle_moderator', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email }) });
+            if ((await res.json()).success) { alert(`✅ User role updated!`); window.loadAccountManagementData(); }
+        } catch(e) {}
+    };
+
+    window.deleteUserAccount = async function(uid) {
+        if (!confirm("Are you sure you want to completely delete this account?")) return;
+        try {
+            const res = await fetch('/api/admin/delete_user', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid }) });
+            if ((await res.json()).success) window.loadAccountManagementData();
+        } catch (err) {}
+    };
+
+    window.renderMergeDropdowns = function(users) {
+        const primary = document.getElementById('primaryAccountSelect'); const duplicate = document.getElementById('duplicateAccountSelect');
+        if (!primary || !duplicate) return;
+        let options = '<option value="">-- Select Account --</option>';
+        users.sort((a,b) => (a.name || '').localeCompare(b.name || '')).forEach(u => { options += `<option value="${u.id}">${u.name} (${u.email})</option>`; });
+        primary.innerHTML = options; duplicate.innerHTML = options;
+    };
+
+    window.submitAccountMerge = async function() {
+        const pId = document.getElementById('primaryAccountSelect').value; const dId = document.getElementById('duplicateAccountSelect').value;
+        if (!pId || !dId || pId === dId) return alert("Select two different accounts.");
+        if (!confirm("Are you ABSOLUTELY SURE? The duplicate account will be permanently deleted.")) return;
+        try {
+            const res = await fetch('/api/admin/merge_accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ primary_user_id: pId, duplicate_user_id: dId }) });
+            if ((await res.json()).success) { alert("✅ Accounts merged!"); window.loadAccountManagementData(); }
+        } catch (err) {}
+    };
+</script>

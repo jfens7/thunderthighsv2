@@ -27,6 +27,11 @@
             <p class="text-xs text-slate-400 mt-2" id="auth-subtitle">Sign in to access your stats and the community hub.</p>
         </div>
 
+        <div id="auth-error-box" class="hidden mb-4 bg-red-900/30 border border-red-500/30 text-red-400 text-xs p-3 rounded-lg flex flex-col items-center gap-2 text-center font-bold">
+            <span id="auth-error-msg"></span>
+            <button id="forgot-password-btn" onclick="sendResetEmail()" class="hidden bg-red-600/20 hover:bg-red-600 text-white px-3 py-1 rounded transition-colors mt-1 w-full border border-red-500/50">Send Reset Email</button>
+        </div>
+
         <div id="form-login" class="space-y-4 animate-fade-in">
             <div>
                 <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Email Address</label>
@@ -66,176 +71,15 @@
                 <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block mt-2">Select Your Club</label>
                 <input list="club-list" id="reg-club" placeholder="Start typing..." class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 text-sm mb-3">
                 <datalist id="club-list">
-                    <option value="ACDMA Canley Vale"></option>
-                    <option value="Albert Park Table Tennis Association"></option>
-                    <option value="Albury Wodonga Table Tennis Association"></option>
-                    <option value="Annangrove Table Tennis Academy"></option>
-                    <option value="Apex Table Tennis"></option>
-                    <option value="Ararat TTA"></option>
-                    <option value="Armidale Table Tennis Club"></option>
-                    <option value="Ashfield TT Club"></option>
-                    <option value="Austral Korean Table Tennis Association"></option>
-                    <option value="Bairnsdale & District Table Tennis Association"></option>
-                    <option value="Ballarat Table Tennis Association"></option>
-                    <option value="Balwyn United Table Tennis Club"></option>
-                    <option value="Bankstown PCYC"></option>
-                    <option value="Bathurst District Table Tennis Association"></option>
-                    <option value="Bavpast Social TT Club"></option>
-                    <option value="Bega Table Tennis Club"></option>
-                    <option value="Bellarine Keenagers Table Tennis Club"></option>
-                    <option value="Bellarine Table Tennis Club"></option>
-                    <option value="Bendigo & District Table Tennis Association"></option>
-                    <option value="Black Swan Table Tennis Club"></option>
-                    <option value="Blacktown PCYC - Vistta"></option>
-                    <option value="Blayney Table Tennis Club"></option>
-                    <option value="Bligh Park - Xpong Table Tennis Club"></option>
-                    <option value="Bowral Table Tennis Association"></option>
-                    <option value="Brisbane Table Tennis Association"></option>
-                    <option value="Bundaberg & District Table Tennis Association"></option>
-                    <option value="Byron Bay Table Tennis Club"></option>
-                    <option value="Cabarita Beach Table Tennis Club"></option>
-                    <option value="Centenary Table Tennis Club"></option>
-                    <option value="Central Coast Table Tennis Association"></option>
-                    <option value="Central Highlands Table Tennis"></option>
-                    <option value="Chatswood Table Tennis Club"></option>
-                    <option value="Cherrybrook Table Tennis Club"></option>
-                    <option value="Coburg Table Tennis Club"></option>
-                    <option value="Coffs Harbour Over 50s TT Club Inc"></option>
-                    <option value="Coffs Table Tennis Club Inc"></option>
-                    <option value="Con's Table Tennis Academy"></option>
-                    <option value="Cronulla RSL"></option>
-                    <option value="Crows Nest and District Table Tennis Association"></option>
-                    <option value="Croydon & Districts Table Tennis Association"></option>
-                    <option value="Dalby TTA"></option>
-                    <option value="Daylesford Table Tennis Association"></option>
-                    <option value="Deniliquin Table Tennis Club"></option>
-                    <option value="Denmark Table Tennis Club"></option>
-                    <option value="Diamond Valley Table Tennis Association"></option>
-                    <option value="Dooley's Table Tennis Club"></option>
-                    <option value="E.L.I.T.E Table Tennis Club"></option>
-                    <option value="EH Table Tennis Club"></option>
-                    <option value="Eastern Suburbs & Churches Table Tennis Association"></option>
-                    <option value="Epping Table Tennis Club"></option>
-                    <option value="Esperance Table Tennis Club"></option>
-                    <option value="Far North Coast (NSW) Table Tennis"></option>
-                    <option value="Forestville Table Tennis"></option>
-                    <option value="Fremantle Table Tennis Club"></option>
-                    <option value="Gatton Table Tennis Association"></option>
-                    <option value="Geelong Table Tennis Association"></option>
-                    <option value="Geographe Bay Table Tennis Club"></option>
-                    <option value="Geraldton Table Tennis Club"></option>
-                    <option value="Gisborne District Table Tennis Association"></option>
                     <option value="Gold Coast Table Tennis Association"></option>
-                    <option value="Gosford 50+ Leisure & Learning"></option>
-                    <option value="Great Wall Table Tennis Club"></option>
-                    <option value="Greater Dandenong Table Tennis Association"></option>
-                    <option value="Hamilton Table Tennis Association"></option>
-                    <option value="Hammond Table Tennis Club"></option>
-                    <option value="Hawkesbury PCYC"></option>
-                    <option value="Hornsby RSL Table Tennis Club"></option>
-                    <option value="Horsham Table Tennis Association"></option>
-                    <option value="Hot Shot Table Tennis Club"></option>
-                    <option value="Howlong Table Tennis Club"></option>
-                    <option value="ICC Academy"></option>
-                    <option value="Illawarra District Table Tennis Association"></option>
-                    <option value="Inh Le (Fairfield) TT Academy"></option>
-                    <option value="Inter-University TTA (ITTA)"></option>
-                    <option value="Ipswich Table Tennis Association"></option>
-                    <option value="JJW Table Tennis Club"></option>
-                    <option value="Katoomba Table Tennis Club"></option>
-                    <option value="Kempsey Macleay Table Tennis Club"></option>
-                    <option value="Kiama Table Tennis Club"></option>
-                    <option value="Kyabram Youth Club"></option>
-                    <option value="Lakes Entrance Keenagers"></option>
-                    <option value="Leongatha Table Tennis Association"></option>
-                    <option value="LOOPS powered by HWATT"></option>
-                    <option value="Lithgow Table Tennis Association"></option>
-                    <option value="Maccabi Table Tennis Club (VIC)"></option>
-                    <option value="Mackay Table Tennis Association"></option>
-                    <option value="Macquarie University Table Tennis Club"></option>
-                    <option value="Maitland Social Table Tennis Club"></option>
-                    <option value="Mandurah Table Tennis Club"></option>
-                    <option value="Manning Table Tennis Club Inc"></option>
-                    <option value="Manningham Table Tennis Club"></option>
-                    <option value="Maryborough Table Tennis & Pickleball"></option>
-                    <option value="Melbourne Veterans Table Tennis Association"></option>
-                    <option value="Melton Table Tennis Association"></option>
-                    <option value="Melville Seniors Table Tennis Group"></option>
-                    <option value="Miao's Table Tennis Academy"></option>
-                    <option value="Moe/Newborough Keen-agers"></option>
-                    <option value="Monbulk Table Tennis Association"></option>
-                    <option value="Moreton Bay Table Tennis Association"></option>
-                    <option value="Morley Table Tennis Club"></option>
-                    <option value="Mornington Peninsula & Frankston City Table Tennis Association"></option>
-                    <option value="Nam Ho Table Tennis Academy"></option>
-                    <option value="Nambucca Heads TT Club"></option>
-                    <option value="Newcastle PCYC Table Tennis Club"></option>
-                    <option value="Noosa Table Tennis Club"></option>
-                    <option value="North Lakes Table Tennis Association"></option>
-                    <option value="North Shore Table Tennis Academy"></option>
-                    <option value="North Sydney Leagues Table Tennis Club"></option>
-                    <option value="Norths Table Tennis Club"></option>
-                    <option value="Norwest Table Tennis Club"></option>
-                    <option value="Orange Table Tennis Association"></option>
-                    <option value="Paul Zhao Table Tennis Academy"></option>
-                    <option value="Peter Masen Table Tennis Academy"></option>
-                    <option value="Peter's Table Tennis Academy"></option>
-                    <option value="Portland Table Tennis Association"></option>
-                    <option value="Pymble Table Tennis Club"></option>
-                    <option value="RTTC Table Tennis Academy"></option>
-                    <option value="Robertson Table Tennis Association"></option>
-                    <option value="Rockhampton Table Tennis Association"></option>
-                    <option value="Sale Keenagers Table Tennis Club"></option>
-                    <option value="Scarborough Table Tennis Club"></option>
-                    <option value="Scorpio Table Tennis Academy"></option>
-                    <option value="Shepparton Table Tennis Association"></option>
-                    <option value="South Eastern Table Tennis Association"></option>
-                    <option value="South Tweed Sports Table Tennis Club"></option>
-                    <option value="St Kilda Cricket Table Tennis Club"></option>
-                    <option value="Star Table Tennis Club"></option>
-                    <option value="Sun Table Tennis Club"></option>
-                    <option value="Sunbury & District Table Tennis Association"></option>
-                    <option value="Sunraysia Table Tennis Association"></option>
-                    <option value="Sunshine & District Table Tennis Association"></option>
-                    <option value="Sunshine Coast Table Tennis Club"></option>
-                    <option value="Swan Hill Table Tennis Association"></option>
-                    <option value="Swans Table Tennis Club"></option>
-                    <option value="Sydney Table Tennis Club"></option>
-                    <option value="Sydney Upper North Shore Table Tennis Association"></option>
-                    <option value="Table Tennis ACT"></option>
-                    <option value="Table Tennis Cairns"></option>
-                    <option value="Table Tennis Canberra North Club"></option>
-                    <option value="Table Tennis Goulburn Inc"></option>
-                    <option value="Table Tennis Society"></option>
-                    <option value="Table Tennis Western Sydney"></option>
-                    <option value="Terang Table Tennis Association"></option>
-                    <option value="Terrey Hills Table Tennis Club"></option>
-                    <option value="The Country Club Table Tennis Club"></option>
-                    <option value="The Disruptor Club"></option>
-                    <option value="Toowoomba Table Tennis Association"></option>
-                    <option value="Top Spins Table Tennis Club"></option>
-                    <option value="Townsville Table Tennis Association"></option>
-                    <option value="Traralgon Table Tennis Association"></option>
-                    <option value="Triangle Table Tennis"></option>
-                    <option value="University of Queensland Table Tennis Club"></option>
-                    <option value="Vietnamese Table Tennis Association"></option>
-                    <option value="Wangaratta Table Tennis Association"></option>
-                    <option value="Warracknabeal Table Tennis Association"></option>
-                    <option value="Warrnambool Table Tennis Association"></option>
-                    <option value="Werribee Table Tennis Association"></option>
-                    <option value="Western Table Tennis Club"></option>
-                    <option value="Wonthaggi Table Tennis Association"></option>
-                    <option value="Wynnum Table Tennis Association"></option>
-                    <option value="Yarra Table Tennis Club"></option>
-                    <option value="Yarrawonga/Mulwala Table Tennis Association"></option>
-                    <option value="Yvonne Table Tennis Academy"></option>
+                    <option value="Brisbane Table Tennis Association"></option>
                     <option value="Independent / No Club"></option>
                 </datalist>
 
                 <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Email Address</label>
                 <input type="email" id="reg-email" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 text-sm mb-3">
                 
-                <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Password</label>
+                <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Create Password</label>
                 <input type="password" id="reg-password" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 text-sm">
             </div>
 
@@ -247,8 +91,23 @@
         </div>
     </div>
 
-    <script>
-        function toggleAuth(mode) {
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        const firebaseConfig = { 
+            apiKey: "AIzaSyDq05wFsKLHtt8G0Z5yLOG9pIk9UX24S4o", 
+            authDomain: "gctta-stats-live.firebaseapp.com", 
+            projectId: "gctta-stats-live", 
+            storageBucket: "gctta-stats-live.firebasestorage.app", 
+            messagingSenderId: "1070856258556", 
+            appId: "1:1070856258556:web:be438e04c1941abc3c6879" 
+        };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        // Make functions globally available to the HTML buttons
+        window.toggleAuth = function(mode) {
             const isLog = mode === 'login';
             document.getElementById('form-login').classList.toggle('hidden', !isLog);
             document.getElementById('form-register').classList.toggle('hidden', isLog);
@@ -257,25 +116,86 @@
             document.getElementById('btn-register-tab').className = !isLog ? "px-6 py-2 rounded-lg text-sm font-bold bg-indigo-600 text-white shadow transition-all" : "px-6 py-2 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition-all";
             document.getElementById('auth-title').innerText = isLog ? "Welcome Back" : "Join the Club";
             document.getElementById('auth-subtitle').innerText = isLog ? "Sign in to access your stats and the community hub." : "Create your official player profile.";
-        }
+            
+            hideError();
+        };
 
         window.formatDOB = function(input) {
-            // Strip out everything that isn't a number
             let v = input.value.replace(/\D/g, '');
-            // Automatically add the slashes
             if (v.length > 2) v = v.substring(0, 2) + '/' + v.substring(2);
             if (v.length > 5) v = v.substring(0, 5) + '/' + v.substring(5, 9);
             input.value = v;
         };
 
-        window.loginPlayer = function() {
-            const email = document.getElementById('log-email').value;
-            if(!email) return alert("Enter email.");
+        function showError(msg, showReset = false) {
+            const box = document.getElementById('auth-error-box');
+            const msgEl = document.getElementById('auth-error-msg');
+            const resetBtn = document.getElementById('forgot-password-btn');
             
-            const mockName = email.split('@')[0].replace('.', ' ');
-            localStorage.setItem('player_uid', 'usr_' + Date.now());
-            localStorage.setItem('player_name', mockName.charAt(0).toUpperCase() + mockName.slice(1));
-            window.location.href = '/dashboard';
+            msgEl.innerText = msg;
+            box.classList.remove('hidden');
+            
+            if(showReset) resetBtn.classList.remove('hidden');
+            else resetBtn.classList.add('hidden');
+        }
+
+        function hideError() {
+            document.getElementById('auth-error-box').classList.add('hidden');
+        }
+
+        window.sendResetEmail = function() {
+            const email = document.getElementById('log-email').value.trim();
+            const btn = document.getElementById('forgot-password-btn');
+            
+            if(!email) return alert("Please enter your email address first.");
+            
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending...';
+            btn.disabled = true;
+
+            sendPasswordResetEmail(auth, email)
+                .then(() => {
+                    showError("Reset link sent! Check your inbox.", false);
+                })
+                .catch((error) => {
+                    showError("Error: " + error.message, false);
+                    btn.innerHTML = 'Send Reset Email';
+                    btn.disabled = false;
+                });
+        };
+
+        window.loginPlayer = function() {
+            const email = document.getElementById('log-email').value.trim();
+            const pass = document.getElementById('log-password').value;
+            if(!email || !pass) return showError("Please enter both email and password.");
+            
+            const btn = document.getElementById('log-submit-btn');
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Authenticating...';
+            btn.disabled = true;
+            hideError();
+
+            signInWithEmailAndPassword(auth, email, pass)
+                .then((userCredential) => {
+                    const user = userCredential.user;
+                    localStorage.setItem('player_uid', user.uid);
+                    localStorage.setItem('player_email', user.email);
+                    window.location.href = '/dashboard';
+                })
+                .catch((error) => {
+                    const errorCode = error.code;
+                    btn.innerHTML = 'Sign In <i class="fa-solid fa-arrow-right ml-2"></i>';
+                    btn.disabled = false;
+                    
+                    if (errorCode === 'auth/user-not-found') {
+                        // Account doesn't exist -> Flip to register tab and pre-fill email
+                        document.getElementById('reg-email').value = email;
+                        toggleAuth('register');
+                        showError("Account not found. Please register below.");
+                    } else if (errorCode === 'auth/wrong-password' || errorCode === 'auth/invalid-credential') {
+                        showError("Incorrect password.", true); // Show "Forgot Password" button
+                    } else {
+                        showError("Login failed: " + error.message);
+                    }
+                });
         };
 
         window.registerPlayer = async function() {
@@ -287,27 +207,30 @@
             const pass = document.getElementById('reg-password').value;
             const club = document.getElementById('reg-club').value.trim();
 
-            if(!first || !last || !email || !pass || !club || !dob) return alert("Please fill all required fields.");
+            if(!first || !last || !email || !pass || !club || !dob) return showError("Please fill all required fields.");
 
-            // Strict DD/MM/YYYY validation check
             const dobRegex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[012])\/(19|20)\d\d$/;
-            if (!dobRegex.test(dob)) {
-                return alert("Please enter a valid Date of Birth in DD/MM/YYYY format.");
-            }
+            if (!dobRegex.test(dob)) return showError("Invalid DOB format (DD/MM/YYYY).");
+
+            if(pass.length < 6) return showError("Password must be at least 6 characters.");
 
             const btn = document.getElementById('reg-submit-btn');
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating Account...';
             btn.disabled = true;
-
-            const fullName = `${first} ${last}`;
-            const mockUid = 'usr_' + Date.now();
+            hideError();
 
             try {
+                // 1. Create user in Firebase Auth
+                const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+                const user = userCredential.user;
+                const fullName = `${first} ${last}`;
+
+                // 2. Send details to your Python backend to save in the Pending Accounts DB
                 await fetch('/api/hub/register', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ 
-                        uid: mockUid, 
+                        uid: user.uid, 
                         name: fullName, 
                         dob: dob, 
                         email: email, 
@@ -316,13 +239,24 @@
                     })
                 });
                 
-                localStorage.setItem('player_uid', mockUid);
+                localStorage.setItem('player_uid', user.uid);
                 localStorage.setItem('player_name', fullName);
+                localStorage.setItem('player_email', user.email);
+                
+                // Registration successful!
                 window.location.href = '/dashboard';
-            } catch(e) {
-                alert("Network Error");
+                
+            } catch(error) {
                 btn.innerHTML = 'Create Account';
                 btn.disabled = false;
+                
+                if(error.code === 'auth/email-already-in-use') {
+                    document.getElementById('log-email').value = email;
+                    toggleAuth('login');
+                    showError("Email already exists. Please log in.", true);
+                } else {
+                    showError("Registration failed: " + error.message);
+                }
             }
         }
     </script>
