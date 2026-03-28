@@ -120,7 +120,13 @@ class SheetsSyncEngine:
                         p1 = app._clean_name(app._get_val(row, ['Name 1', 'Player 1', 'Name'])); p2 = app._clean_name(app._get_val(row, ['Name 2', 'Player 2']))
                         if not p1 or not p2: continue
                         div = str(app._get_val(row, ['Division', 'Div'], 'Unknown')).strip(); app.divisions_list.add(div)
-                        p1_fill = "S" in str(app._get_val(row, ['PS 1', 'Pos 1', 'Pos'])).upper(); p2_fill = "S" in str(app._get_val(row, ['PS 2', 'Pos 2'])).upper()
+                        
+                        # SMART FILL-IN DETECTION
+                        v1 = str(app._get_val(row, ['PS 1', 'Pos 1', 'Pos'])).strip().upper()
+                        v2 = str(app._get_val(row, ['PS 2', 'Pos 2'])).strip().upper()
+                        p1_fill = v1 in ['S', 'SUB'] or 'FILL' in v1
+                        p2_fill = v2 in ['S', 'SUB'] or 'FILL' in v2
+
                         round_val = app._get_val(row, ['Round', 'Rd', 'Week']); week_num = app._extract_week(round_val) if round_val else "unknown"
                         raw_date = app._get_val(row, ['Date', 'Match Date']); parsed_date = app._parse_date(raw_date)
                         if (not parsed_date) and str(week_num) != "unknown": parsed_date = app.date_lookup.get(f"{app._slugify(season_name)}|{app._slugify(div)}|{week_num}")
@@ -154,7 +160,12 @@ class SheetsSyncEngine:
                     week_val = app._extract_week(d.get('week', 'Unknown'))
                     if str(week_val) == "unknown" and parsed_date: week_val = app.date_to_week_map.get(f"{app._slugify(season_name)}|{parsed_date.strftime('%Y-%m-%d')}", "unknown")
                     rich = d.get('richStats', {}); rich['total_duration'] = d.get('total_duration', '00:00'); rich['play_duration'] = d.get('play_duration', '00:00'); rich['set_scores'] = d.get('set_scores', [])
-                    raw_match_queue.append({'p1': p1, 'p2': p2, 's1': s1, 's2': s2, 'date': parsed_date, 'season': season_name, 'week': week_val, 'div': d.get('division', 'Unknown'), 'p1_fill': False, 'p2_fill': False, 'game_history': d.get('game_scores_history', ''), 'rich_stats': rich, 'manual_override': d.get('manual_override', False), 'sheet_name': 'Live Match Data', 'row_index': 'Firebase', 'source': 'Admin/iPad'})
+                    
+                    # Ensure Firebase fill-ins are captured
+                    p1_fill = d.get('p1_fill', False)
+                    p2_fill = d.get('p2_fill', False)
+                    
+                    raw_match_queue.append({'p1': p1, 'p2': p2, 's1': s1, 's2': s2, 'date': parsed_date, 'season': season_name, 'week': week_val, 'div': d.get('division', 'Unknown'), 'p1_fill': p1_fill, 'p2_fill': p2_fill, 'game_history': d.get('game_scores_history', ''), 'rich_stats': rich, 'manual_override': d.get('manual_override', False), 'sheet_name': 'Live Match Data', 'row_index': 'Firebase', 'source': 'Admin/iPad'})
             except: pass
 
         corrections = {}
@@ -261,7 +272,17 @@ class SheetsSyncEngine:
             if str(m['week']) != "unknown":
                 wk = str(m['week'])
                 if wk not in app.weekly_matches[m['season']]: app.weekly_matches[m['season']][wk] = []
-                app.weekly_matches[m['season']][wk].append({'p1': m['p1'], 'p2': m['p2'], 'score': f"{m['s1']}-{m['s2']}", 'division': m['div'], 'date': d_str})
+                
+                # CRITICAL UPDATE: Attach the fill-in status directly to the match centre data!
+                app.weekly_matches[m['season']][wk].append({
+                    'p1': m['p1'], 
+                    'p2': m['p2'], 
+                    'score': f"{m['s1']}-{m['s2']}", 
+                    'division': m['div'], 
+                    'date': d_str,
+                    'p1_fill': m['p1_fill'],
+                    'p2_fill': m['p2_fill']
+                })
         
         try:
             app.player_ids = {}; app.id_to_name = {}; ws = self.sheet_results.worksheet("Players"); all_values = ws.get_all_values()

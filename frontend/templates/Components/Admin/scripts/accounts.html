@@ -387,4 +387,20 @@
             if ((await res.json()).success) { alert("✅ Accounts merged!"); window.loadAccountManagementData(); }
         } catch (err) {}
     };
+    
+    window.triggerMasterRCSync = async function() {
+        if (!confirm("⚠️ WARNING: This will download thousands of Australian table tennis players from Ratings Central to your Firebase database and Google Sheets.\n\nThis process takes 2-3 minutes to run in the background.\n\nAre you sure you want to proceed?")) return;
+        
+        try {
+            const res = await fetch('/api/admin/trigger_master_rc_sync', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                alert("🚀 " + data.message + "\n\nYou can continue using the portal while it runs.");
+            } else {
+                alert("❌ Failed to start sync.");
+            }
+        } catch (e) {
+            alert("Network Error while starting sync.");
+        }
+    };
 </script>
