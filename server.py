@@ -11,7 +11,6 @@ import atexit
 from firebase_admin import auth as fb_auth
 
 from backend.backend import ThunderData
-from backend.rc_daily_updater import run_daily_rc_sync
 
 app = Flask(__name__, static_folder="frontend/static", template_folder="frontend/templates")
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'gctta-super-secret-session-key')
@@ -87,7 +86,6 @@ def pre_request_setup():
 scheduler = BackgroundScheduler()
 try:
     scheduler.add_job(func=scheduled_refresh, trigger="interval", hours=12, id="scheduled_refresh")
-    scheduler.add_job(func=run_daily_rc_sync, trigger="cron", hour=3, minute=0, id="daily_rc_sync")
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
 except Exception as e: pass
@@ -273,13 +271,10 @@ def search_rc_live():
     player_name = request.json.get('name', '').lower()
     
     try:
-        # Instead of scraping, instantly fetch from our own Firebase Mirror!
         docs = db.db.collection('rc_directory').stream()
         results = []
-        
         for d in docs:
             data = d.to_dict()
-            # If the admin types "jakob" or "fensom", it instantly matches
             if player_name in data.get('search_name', ''):
                 results.append({
                     "id": data['rc_id'],
@@ -289,29 +284,10 @@ def search_rc_live():
                     "club": data['club'],
                     "recent_opponents": f"Updated: {data['last_updated']}"
                 })
-                # Cap at 10 results to keep the UI clean
                 if len(results) >= 10: break
-
         return jsonify({'success': True, 'results': results})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/api/admin/trigger_master_rc_sync', methods=['POST'])
-@login_required
-def trigger_master_rc_sync():
-    if not db: return jsonify({'success': False, 'error': 'Database offline'}), 503
-    
-    def background_sync():
-        try:
-            run_daily_rc_sync()
-            if db: db._log_audit(session.get('admin_email', 'Unknown'), 'MASTER_RC_SYNC', "Manually triggered full Australian RC Database Download", {})
-        except Exception as e:
-            logger.error(f"Master Sync Failed: {e}")
-
-    # Start it on a background thread so the button doesn't freeze the frontend for 5 minutes
-    threading.Thread(target=background_sync).start()
-    return jsonify({"success": True, "message": "Master sync started! Check server terminal for progress."})
-
 
 @app.route('/api/admin/approve_account', methods=['POST'])
 @login_required
