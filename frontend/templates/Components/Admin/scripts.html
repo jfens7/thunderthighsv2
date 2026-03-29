@@ -39,7 +39,8 @@
         const allTabs = [
             'live', 'manual', 'history', 'date-errors', 'tournaments', 
             'players', 'diagnostics', 'schedules', 'team-editor', 'broadcast', 
-            'sms-inbox', 'notices', 'community-mod', 'inbox-feedback', 'donations', 'audit', 'chat'
+            'sms-inbox', 'notices', 'community-mod', 'inbox-feedback', 'donations', 'audit', 'chat',
+            'pending-accounts' // NEW TAB ADDED HERE
         ];
 
         allTabs.forEach(t => {
@@ -65,6 +66,7 @@
         if (tabId === 'sms-inbox') window.loadSmsInbox();
         if (tabId === 'community-mod') window.loadCommunityMod();
         if (tabId === 'team-editor') window.loadTeams();
+        if (tabId === 'pending-accounts') window.loadPendingAccounts();
         
         if (tabId === 'history') {
             const histDivFilter = document.getElementById('hist-div-filter');
@@ -191,6 +193,75 @@
         attachPlayerSearch('manual-p1', 'sugg-p1');
         attachPlayerSearch('manual-p2', 'sugg-p2');
     });
+
+    // ==========================================
+    // ACCOUNT LINKING APPROVALS
+    // ==========================================
+    window.loadPendingAccounts = async function() {
+        const list = document.getElementById('pendingAccountsList');
+        if (!list) return;
+        list.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-indigo-500"></i></div>';
+
+        // Make sure we have the player directory loaded for the suggestion box
+        if (playerDirectoryData.length === 0) await window.loadPlayerDirectory();
+
+        try {
+            const res = await fetch('/api/admin/pending_accounts');
+            const data = await res.json();
+
+            if (data.length === 0) {
+                list.innerHTML = '<div class="text-slate-500 text-center py-10 italic border border-white/5 bg-slate-800/30 rounded-xl">Awesome! No pending accounts to approve.</div>';
+                return;
+            }
+
+            let html = '';
+            data.forEach(a => {
+                html += `
+                <div class="bg-slate-800 p-4 rounded-xl border border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 shadow-lg mb-3">
+                    <div>
+                        <div class="font-bold text-white text-lg">${a.name}</div>
+                        <div class="text-xs text-slate-400 font-mono">${a.email} • DOB: ${a.dob}</div>
+                        <div class="text-[10px] text-slate-500 font-mono mt-1">UID: ${a.uid}</div>
+                    </div>
+                    <div class="flex items-center gap-2 bg-black/30 p-3 rounded-xl border border-white/5 w-full md:w-auto">
+                        <div class="relative w-full md:w-64">
+                            <input type="text" id="link-search-${a.uid}" placeholder="Link to official player..." class="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-indigo-500" autocomplete="off" value="${a.name}">
+                            <div id="link-sugg-${a.uid}" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 rounded shadow-xl hidden border border-white/10 max-h-32 overflow-y-auto custom-scrollbar"></div>
+                        </div>
+                        <button onclick="window.linkAccount('${a.uid}')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-4 rounded-lg text-xs transition shadow-lg whitespace-nowrap"><i class="fa-solid fa-link mr-1"></i> Approve</button>
+                    </div>
+                </div>`;
+            });
+            list.innerHTML = html;
+
+            data.forEach(a => { attachPlayerSearch(`link-search-${a.uid}`, `link-sugg-${a.uid}`); });
+        } catch(e) {
+            list.innerHTML = '<div class="text-red-400 text-center py-10">Error loading pending accounts.</div>';
+        }
+    };
+
+    window.linkAccount = async function(uid) {
+        const playerName = document.getElementById(`link-search-${uid}`).value;
+        if (!playerName) return alert("Please select an official player name to link.");
+        if (!confirm(`Are you sure you want to officially link UID ${uid} to the Glicko profile for ${playerName}?`)) return;
+
+        try {
+            const res = await fetch('/api/admin/link_account', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uid: uid, player_name: playerName })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert("✅ Account linked and approved! The player can now access their stats in the App.");
+                window.loadPendingAccounts();
+            } else {
+                alert("❌ Failed to link account.");
+            }
+        } catch(e) {
+            alert("Network Error");
+        }
+    };
 
     // ==========================================
     // MANUAL MATCH & HISTORY
@@ -396,7 +467,7 @@
             }
             
             if (errors.length === 0) { 
-                dList.innerHTML = '<div class="text-slate-600 text-center py-10 italic">Awesome! No missing dates found.</div>'; 
+                dList.innerHTML = '<div class="text-slate-600 text-center py-10 italic border border-white/5 bg-slate-800/30 rounded-xl">Awesome! No missing dates found.</div>'; 
                 return; 
             }
             
@@ -1045,7 +1116,7 @@
             const messages = await res.json();
             
             if (messages.length === 0) { 
-                list.innerHTML = '<div class="text-slate-500 text-center py-8 italic">No replies received yet.</div>'; 
+                list.innerHTML = '<div class="text-slate-500 text-center py-8 italic border border-white/5 bg-slate-800/30 rounded-xl">No replies received yet.</div>'; 
                 return; 
             }
             
@@ -1186,7 +1257,7 @@
 
                 const isUndone = l.status === 'undone'; 
                 const bgClass = isUndone ? 'bg-slate-800/30 border-dashed opacity-50' : 'bg-slate-800';
-                const noUndoActions = ['MERGE_PLAYER', 'ADD_NOTICE', 'DELETE_NOTICE', 'SET_FORMAT', 'FORCE_REFRESH', 'RESOLVE_INBOX', 'SMS_BROADCAST', 'SESSION_START', 'SESSION_END'];
+                const noUndoActions = ['MERGE_PLAYER', 'ADD_NOTICE', 'DELETE_NOTICE', 'SET_FORMAT', 'FORCE_REFRESH', 'RESOLVE_INBOX', 'SMS_BROADCAST', 'SESSION_START', 'SESSION_END', 'APPROVE_ACCOUNT'];
                 const undoBtn = (!isUndone && !noUndoActions.includes(l.action)) 
                     ? `<button onclick="window.undoAction('${l.id}')" class="text-[10px] bg-red-600 hover:bg-red-500 text-white font-bold px-2 py-1 rounded transition ml-auto shadow">UNDO</button>` 
                     : '';

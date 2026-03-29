@@ -27,6 +27,11 @@
             <p class="text-xs text-slate-400 mt-2" id="auth-subtitle">Sign in to access your stats and the community hub.</p>
         </div>
 
+        <div id="auth-error-box" class="hidden mb-4 bg-red-900/30 border border-red-500/30 text-red-400 text-xs p-3 rounded-lg flex flex-col items-center gap-2 text-center font-bold">
+            <span id="auth-error-msg"></span>
+            <button id="forgot-password-btn" onclick="sendResetEmail()" class="hidden bg-red-600/20 hover:bg-red-600 text-white px-3 py-1 rounded transition-colors mt-1 w-full border border-red-500/50">Send Reset Email</button>
+        </div>
+
         <div id="form-login" class="space-y-4 animate-fade-in">
             <div>
                 <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Email Address</label>
@@ -54,7 +59,7 @@
             <div class="grid grid-cols-2 gap-3">
                 <div>
                     <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Date of Birth</label>
-                    <input type="date" id="reg-dob" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 text-sm cursor-pointer">
+                    <input type="text" id="reg-dob" placeholder="DD/MM/YYYY" maxlength="10" oninput="formatDOB(this)" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 text-sm">
                 </div>
                 <div>
                     <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Est. Rating (or RC ID)</label>
@@ -63,10 +68,18 @@
             </div>
 
             <div class="pt-2 border-t border-white/5">
+                <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block mt-2">Select Your Club</label>
+                <input list="club-list" id="reg-club" placeholder="Start typing..." class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 text-sm mb-3">
+                <datalist id="club-list">
+                    <option value="Gold Coast Table Tennis Association"></option>
+                    <option value="Brisbane Table Tennis Association"></option>
+                    <option value="Independent / No Club"></option>
+                </datalist>
+
                 <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Email Address</label>
                 <input type="email" id="reg-email" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 text-sm mb-3">
                 
-                <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Password</label>
+                <label class="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Create Password</label>
                 <input type="password" id="reg-password" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 text-sm">
             </div>
 
@@ -78,27 +91,111 @@
         </div>
     </div>
 
-    <script>
-        function toggleAuth(mode) {
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        const firebaseConfig = { 
+            apiKey: "AIzaSyDq05wFsKLHtt8G0Z5yLOG9pIk9UX24S4o", 
+            authDomain: "gctta-stats-live.firebaseapp.com", 
+            projectId: "gctta-stats-live", 
+            storageBucket: "gctta-stats-live.firebasestorage.app", 
+            messagingSenderId: "1070856258556", 
+            appId: "1:1070856258556:web:be438e04c1941abc3c6879" 
+        };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        // Make functions globally available to the HTML buttons
+        window.toggleAuth = function(mode) {
             const isLog = mode === 'login';
             document.getElementById('form-login').classList.toggle('hidden', !isLog);
             document.getElementById('form-register').classList.toggle('hidden', isLog);
             
             document.getElementById('btn-login-tab').className = isLog ? "px-6 py-2 rounded-lg text-sm font-bold bg-indigo-600 text-white shadow transition-all" : "px-6 py-2 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition-all";
             document.getElementById('btn-register-tab').className = !isLog ? "px-6 py-2 rounded-lg text-sm font-bold bg-indigo-600 text-white shadow transition-all" : "px-6 py-2 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition-all";
-            
             document.getElementById('auth-title').innerText = isLog ? "Welcome Back" : "Join the Club";
             document.getElementById('auth-subtitle').innerText = isLog ? "Sign in to access your stats and the community hub." : "Create your official player profile.";
+            
+            hideError();
+        };
+
+        window.formatDOB = function(input) {
+            let v = input.value.replace(/\D/g, '');
+            if (v.length > 2) v = v.substring(0, 2) + '/' + v.substring(2);
+            if (v.length > 5) v = v.substring(0, 5) + '/' + v.substring(5, 9);
+            input.value = v;
+        };
+
+        function showError(msg, showReset = false) {
+            const box = document.getElementById('auth-error-box');
+            const msgEl = document.getElementById('auth-error-msg');
+            const resetBtn = document.getElementById('forgot-password-btn');
+            
+            msgEl.innerText = msg;
+            box.classList.remove('hidden');
+            
+            if(showReset) resetBtn.classList.remove('hidden');
+            else resetBtn.classList.add('hidden');
         }
 
-        window.loginPlayer = function() {
-            const email = document.getElementById('log-email').value;
-            if(!email) return alert("Enter email.");
+        function hideError() {
+            document.getElementById('auth-error-box').classList.add('hidden');
+        }
+
+        window.sendResetEmail = function() {
+            const email = document.getElementById('log-email').value.trim();
+            const btn = document.getElementById('forgot-password-btn');
             
-            const mockName = email.split('@')[0].replace('.', ' ');
-            localStorage.setItem('player_uid', 'usr_' + Date.now());
-            localStorage.setItem('player_name', mockName.charAt(0).toUpperCase() + mockName.slice(1));
-            window.location.href = '/dashboard';
+            if(!email) return alert("Please enter your email address first.");
+            
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending...';
+            btn.disabled = true;
+
+            sendPasswordResetEmail(auth, email)
+                .then(() => {
+                    showError("Reset link sent! Check your inbox.", false);
+                })
+                .catch((error) => {
+                    showError("Error: " + error.message, false);
+                    btn.innerHTML = 'Send Reset Email';
+                    btn.disabled = false;
+                });
+        };
+
+        window.loginPlayer = function() {
+            const email = document.getElementById('log-email').value.trim();
+            const pass = document.getElementById('log-password').value;
+            if(!email || !pass) return showError("Please enter both email and password.");
+            
+            const btn = document.getElementById('log-submit-btn');
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Authenticating...';
+            btn.disabled = true;
+            hideError();
+
+            signInWithEmailAndPassword(auth, email, pass)
+                .then((userCredential) => {
+                    const user = userCredential.user;
+                    localStorage.setItem('player_uid', user.uid);
+                    localStorage.setItem('player_email', user.email);
+                    window.location.href = '/dashboard';
+                })
+                .catch((error) => {
+                    const errorCode = error.code;
+                    btn.innerHTML = 'Sign In <i class="fa-solid fa-arrow-right ml-2"></i>';
+                    btn.disabled = false;
+                    
+                    if (errorCode === 'auth/user-not-found') {
+                        // Account doesn't exist -> Flip to register tab and pre-fill email
+                        document.getElementById('reg-email').value = email;
+                        toggleAuth('register');
+                        showError("Account not found. Please register below.");
+                    } else if (errorCode === 'auth/wrong-password' || errorCode === 'auth/invalid-credential') {
+                        showError("Incorrect password.", true); // Show "Forgot Password" button
+                    } else {
+                        showError("Login failed: " + error.message);
+                    }
+                });
         };
 
         window.registerPlayer = async function() {
@@ -108,30 +205,58 @@
             const rating = document.getElementById('reg-rating').value;
             const email = document.getElementById('reg-email').value.trim();
             const pass = document.getElementById('reg-password').value;
+            const club = document.getElementById('reg-club').value.trim();
 
-            if(!first || !last || !email || !pass) return alert("Please fill required fields.");
+            if(!first || !last || !email || !pass || !club || !dob) return showError("Please fill all required fields.");
+
+            const dobRegex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[012])\/(19|20)\d\d$/;
+            if (!dobRegex.test(dob)) return showError("Invalid DOB format (DD/MM/YYYY).");
+
+            if(pass.length < 6) return showError("Password must be at least 6 characters.");
 
             const btn = document.getElementById('reg-submit-btn');
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating Account...';
             btn.disabled = true;
-
-            const fullName = `${first} ${last}`;
-            const mockUid = 'usr_' + Date.now();
+            hideError();
 
             try {
+                // 1. Create user in Firebase Auth
+                const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+                const user = userCredential.user;
+                const fullName = `${first} ${last}`;
+
+                // 2. Send details to your Python backend to save in the Pending Accounts DB
                 await fetch('/api/hub/register', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ uid: mockUid, name: fullName, dob: dob, email: email, estimated_rating: rating })
+                    body: JSON.stringify({ 
+                        uid: user.uid, 
+                        name: fullName, 
+                        dob: dob, 
+                        email: email, 
+                        estimated_rating: rating,
+                        club: club
+                    })
                 });
                 
-                localStorage.setItem('player_uid', mockUid);
+                localStorage.setItem('player_uid', user.uid);
                 localStorage.setItem('player_name', fullName);
+                localStorage.setItem('player_email', user.email);
+                
+                // Registration successful!
                 window.location.href = '/dashboard';
-            } catch(e) {
-                alert("Network Error");
+                
+            } catch(error) {
                 btn.innerHTML = 'Create Account';
                 btn.disabled = false;
+                
+                if(error.code === 'auth/email-already-in-use') {
+                    document.getElementById('log-email').value = email;
+                    toggleAuth('login');
+                    showError("Email already exists. Please log in.", true);
+                } else {
+                    showError("Registration failed: " + error.message);
+                }
             }
         }
     </script>

@@ -3,12 +3,15 @@ import logging
 import datetime
 import threading
 import stripe
+import re
 from functools import wraps
 from flask import Flask, render_template, jsonify, request, session, redirect, url_for, make_response
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
+from firebase_admin import auth as fb_auth
 
 from backend.backend import ThunderData
+from backend.rc_daily_updater import run_daily_rc_sync
 
 app = Flask(__name__, static_folder="frontend/static", template_folder="frontend/templates")
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'gctta-super-secret-session-key')
@@ -18,7 +21,6 @@ app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=30)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Globals for Memory-Safe Lazy Loading
 db = None
 db_lock = threading.Lock()
 sync_lock = threading.Lock()
@@ -61,7 +63,6 @@ def watch_firebase_for_live_matches():
     except Exception as e:
         logger.error(f"Failed to attach listener: {e}")
 
-# LAZY LOAD ENGINE (Fixes the Render Gunicorn Crash & OOM Error)
 @app.before_request
 def pre_request_setup():
     global db
@@ -76,7 +77,6 @@ def pre_request_setup():
                 except Exception as e:
                     logger.error(f"❌ FATAL: Failed to start Backend: {str(e)}")
 
-    # Traffic Tracking
     if request.path == '/' or request.path == '/index':
         if not request.cookies.get('ghostmode') and not session.get('admin_logged_in'):
             if db:
@@ -84,20 +84,18 @@ def pre_request_setup():
                 if ip: 
                     db.record_page_view(ip.split(',')[0].strip())
 
-# CRON SCHEDULER
 scheduler = BackgroundScheduler()
 try:
     scheduler.add_job(func=scheduled_refresh, trigger="interval", hours=12, id="scheduled_refresh")
+    scheduler.add_job(func=run_daily_rc_sync, trigger="cron", hour=3, minute=0, id="daily_rc_sync")
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
-except Exception as e: 
-    pass
+except Exception as e: pass
 
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not session.get('admin_logged_in'): 
-            return jsonify({'error': 'Unauthorized'}), 401
+        if not session.get('admin_logged_in'): return jsonify({'error': 'Unauthorized'}), 401
         return f(*args, **kwargs)
     return decorated_function
 
@@ -110,6 +108,18 @@ def super_admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def wait_for_sync(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if sync_lock.locked():
+            logger.warning(f"⏳ Request to {request.path} is pausing to let the database sync finish...")
+        with sync_lock:
+            pass 
+        return f(*args, **kwargs)
+    return decorated_function
+
+# --- PAGES & AUTH ---
+
 @app.route('/ghostmode')
 def activate_ghost_mode():
     resp = make_response(jsonify({"success": True, "message": "👻 GHOST MODE ACTIVATED"}))
@@ -117,22 +127,13 @@ def activate_ghost_mode():
     return resp
 
 @app.route('/')
-def index(): 
-    return render_template('index.html')
-
+def index(): return render_template('index.html')
 @app.route('/login')
-def login(): 
-    if session.get('admin_logged_in'): 
-        return redirect(url_for('admin'))
-    return render_template('login.html')
-
+def login(): return redirect(url_for('admin')) if session.get('admin_logged_in') else render_template('login.html')
 @app.route('/player_auth')
-def player_auth_page(): 
-    return render_template('player_auth.html')
-
+def player_auth_page(): return render_template('player_auth.html')
 @app.route('/dashboard')
-def player_dashboard(): 
-    return render_template('dashboard.html')
+def player_dashboard(): return render_template('dashboard.html')
 
 @app.route('/api/auth/google', methods=['POST'])
 def auth_google():
@@ -145,28 +146,14 @@ def auth_google():
         session['admin_logged_in'] = True
         session['admin_email'] = user_data['email']
         session['admin_role'] = user_data['role']
-        db._log_audit(user_data['email'], 'SESSION_START', "Admin authenticated successfully.", {})
+        db._log_audit(user_data['email'], 'SESSION_START', "Admin authenticated and logged in.", {})
         return jsonify({"success": True})
     else: 
         return jsonify({"success": False, "error": "Your account is pending approval."})
 
-@app.route('/api/webhook/sms', methods=['POST', 'GET'])
-def sms_webhook():
-    if not db: return jsonify({"status": "error"}), 500
-    try:
-        data = request.json if request.is_json else request.form
-        sender = data.get('from', 'Unknown')
-        body = data.get('body', '')
-        if sender and body: 
-            db.db.collection('sms_replies').add({'from': sender, 'body': body, 'timestamp': firestore.SERVER_TIMESTAMP, 'status': 'unread'})
-        return jsonify({"status": "received"}), 200
-    except Exception as e: 
-        return jsonify({"error": str(e)}), 500
-
 @app.route('/logout')
 def logout(): 
-    if db and session.get('admin_email'): 
-        db._log_audit(session.get('admin_email'), 'SESSION_END', "Admin signed out.", {})
+    if db and session.get('admin_email'): db._log_audit(session.get('admin_email'), 'SESSION_END', "Admin signed out.", {})
     session.clear()
     return redirect(url_for('index'))
 
@@ -175,23 +162,23 @@ def admin():
     if not session.get('admin_logged_in'): return redirect(url_for('login'))
     return render_template('admin.html', email=session.get('admin_email'), role=session.get('admin_role'))
 
-# --- PUBLIC DATA APIS ---
+
+# --- PUBLIC DATA APIS (PROTECTED BY SYNC LOCK) ---
+
 @app.route('/api/players')
-def get_players(): 
-    if db: return jsonify(list(db.get_all_players().keys())) 
-    return jsonify([])
+@wait_for_sync
+def get_players(): return jsonify(list(db.get_all_players().keys())) if db else jsonify([])
 
 @app.route('/api/seasons')
-def get_seasons(): 
-    if db: return jsonify(db.get_seasons())
-    return jsonify([])
+@wait_for_sync
+def get_seasons(): return jsonify(db.get_seasons()) if db else jsonify([])
 
 @app.route('/api/divisions')
-def get_divisions(): 
-    if db: return jsonify(db.get_divisions())
-    return jsonify([])
+@wait_for_sync
+def get_divisions(): return jsonify(db.get_divisions()) if db else jsonify([])
 
 @app.route('/api/stats/<player_name>')
+@wait_for_sync
 def get_player_stats(player_name):
     if not db: return jsonify({"error": "Offline"}), 500
     if player_name not in db.all_players:
@@ -204,19 +191,19 @@ def get_player_stats(player_name):
     return jsonify({"error": "Not found"}), 404
 
 @app.route('/api/rankings/<season>/<division>')
-def get_rankings(season, division): 
-    if db: return jsonify(db.get_division_rankings(season, division, request.args.get('week', 'Latest')))
-    return jsonify([])
+@wait_for_sync
+def get_rankings(season, division): return jsonify(db.get_division_rankings(season, division, request.args.get('week', 'Latest'))) if db else jsonify([])
 
 @app.route('/api/week/<season>/<week>')
-def get_week_results(season, week): 
-    if db: return jsonify(db.get_matches_by_week(season, week))
-    return jsonify([])
+@wait_for_sync
+def get_week_results(season, week): return jsonify(db.get_matches_by_week(season, week)) if db else jsonify([])
 
 @app.route('/api/h2h')
-def get_h2h(): 
-    if db: return jsonify(db.get_head_to_head(request.args.get('p1', ''), request.args.get('p2', '')))
-    return jsonify({"error": "Offline"}), 500
+@wait_for_sync
+def get_h2h(): return jsonify(db.get_head_to_head(request.args.get('p1', ''), request.args.get('p2', ''))) if db else jsonify({"error": "Offline"}), 500
+
+
+# --- ADMIN & HUB APIS ---
 
 @app.route('/api/create-payment-intent', methods=['POST'])
 def create_payment():
@@ -226,106 +213,295 @@ def create_payment():
     except Exception as e: return jsonify(error=str(e)), 403
 
 @app.route('/api/record_donation', methods=['POST'])
-def record_donation():
-    if not db: return jsonify({"success": False})
-    return jsonify({"success": db.record_donation(request.json.get('intent_id'), request.json.get('name'), request.json.get('amount'))})
-
+def record_donation(): return jsonify({"success": db.record_donation(request.json.get('intent_id'), request.json.get('name'), request.json.get('amount'))}) if db else jsonify({"success": False})
 @app.route('/api/top_donors')
-def top_donors(): 
-    if db: return jsonify(db.get_top_donors())
-    return jsonify([])
-
+def top_donors(): return jsonify(db.get_top_donors()) if db else jsonify([])
 @app.route('/api/notices')
-def get_notices(): 
-    if db: return jsonify(db.get_notices())
-    return jsonify([])
+def get_notices(): return jsonify(db.get_notices()) if db else jsonify([])
 
-# --- ADMIN REST APIS ---
+@app.route('/api/webhook/sms', methods=['POST', 'GET'])
+def sms_webhook():
+    if not db: return jsonify({"status": "error"}), 500
+    try:
+        data = request.json if request.is_json else request.form
+        sender = data.get('from', 'Unknown')
+        body = data.get('body', '')
+        if sender and body: 
+            import google.cloud.firestore as firestore
+            db.db.collection('sms_replies').add({'from': sender, 'body': body, 'timestamp': firestore.SERVER_TIMESTAMP, 'status': 'unread'})
+        return jsonify({"status": "received"}), 200
+    except Exception as e: return jsonify({"error": str(e)}), 500
+
+
+# --- ADMIN: ACCOUNT MANAGEMENT ---
+
+@app.route('/api/admin/pending_accounts')
+@login_required
+def get_pending_accounts():
+    if not db: return jsonify({'success': False, 'error': 'Database offline'}), 503
+    try:
+        pending_users = db.admin_get_pending_accounts()
+        players = [{'id': name, 'name': name} for name in db.all_players.keys()]
+        return jsonify({'success': True, 'pending_users': pending_users, 'players': players})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/all_users')
+@login_required
+def get_all_users():
+    if not db: return jsonify({'success': False, 'error': 'Database offline'}), 503
+    try:
+        profiles_ref = db.db.collection('player_profiles').stream()
+        profile_map = {doc.id: doc.to_dict().get('ratings_central_id', '') for doc in profiles_ref}
+        users_ref = db.db.collection('verified_users').stream()
+        all_users = []
+        for doc in users_ref:
+            u_data = doc.to_dict()
+            u_data['id'] = doc.id
+            if u_data.get('linked_player_name'):
+                safe_id = re.sub(r'[^a-zA-Z0-9]', '_', u_data.get('linked_player_name')).lower()
+                u_data['ratings_central_id'] = profile_map.get(safe_id, '')
+            all_users.append(u_data)
+        return jsonify({'success': True, 'users': all_users})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/search_rc', methods=['POST'])
+@login_required
+def search_rc_live():
+    if not db: return jsonify({'success': False, 'error': 'Database offline'})
+    player_name = request.json.get('name', '').lower()
+    
+    try:
+        # Instead of scraping, instantly fetch from our own Firebase Mirror!
+        docs = db.db.collection('rc_directory').stream()
+        results = []
+        
+        for d in docs:
+            data = d.to_dict()
+            # If the admin types "jakob" or "fensom", it instantly matches
+            if player_name in data.get('search_name', ''):
+                results.append({
+                    "id": data['rc_id'],
+                    "name": data['name'],
+                    "rating": f"{data['rating']}±{data['sd']}",
+                    "location": f"{data.get('state', 'QLD')}, Australia",
+                    "club": data['club'],
+                    "recent_opponents": f"Updated: {data['last_updated']}"
+                })
+                # Cap at 10 results to keep the UI clean
+                if len(results) >= 10: break
+
+        return jsonify({'success': True, 'results': results})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/trigger_master_rc_sync', methods=['POST'])
+@login_required
+def trigger_master_rc_sync():
+    if not db: return jsonify({'success': False, 'error': 'Database offline'}), 503
+    
+    def background_sync():
+        try:
+            run_daily_rc_sync()
+            if db: db._log_audit(session.get('admin_email', 'Unknown'), 'MASTER_RC_SYNC', "Manually triggered full Australian RC Database Download", {})
+        except Exception as e:
+            logger.error(f"Master Sync Failed: {e}")
+
+    # Start it on a background thread so the button doesn't freeze the frontend for 5 minutes
+    threading.Thread(target=background_sync).start()
+    return jsonify({"success": True, "message": "Master sync started! Check server terminal for progress."})
+
+
+@app.route('/api/admin/approve_account', methods=['POST'])
+@login_required
+def approve_account():
+    if not db: return jsonify({'success': False, 'error': 'DB Offline'}), 503
+    data = request.json
+    user_id = data.get('user_id')
+    player_name = data.get('player_name')
+    rc_id = data.get('ratings_central_id')
+    if not user_id or not player_name: return jsonify({'success': False, 'error': 'Missing user or player name'}), 400
+    if db.admin_link_player_account(user_id, player_name, rc_id, session.get('admin_email')):
+        return jsonify({'success': True, 'message': 'Account approved and linked!'})
+    return jsonify({'success': False, 'error': 'Failed to link account.'}), 500
+
+@app.route('/api/admin/reject_pending', methods=['POST'])
+@login_required
+def reject_pending():
+    if not db: return jsonify({'success': False, 'error': 'DB Offline'}), 503
+    try:
+        uid = request.json.get('uid')
+        db.db.collection('pending_accounts').document(uid).delete()
+        try: fb_auth.delete_user(uid)
+        except: pass
+        db._log_audit(session.get('admin_email'), 'REJECT_ACCOUNT', f"Rejected & deleted pending registration {uid}", {})
+        return jsonify({'success': True})
+    except Exception as e: return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/delete_user', methods=['POST'])
+@login_required
+def delete_user_account():
+    if not db: return jsonify({'success': False, 'error': 'DB Offline'}), 503
+    try:
+        user_id = request.json.get('user_id')
+        db.db.collection('verified_users').document(user_id).delete()
+        try: fb_auth.delete_user(user_id)
+        except: pass
+        db._log_audit(session.get('admin_email'), 'DELETE_USER', f"Deleted player app account {user_id}", {})
+        return jsonify({'success': True})
+    except Exception as e: return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/merge_accounts', methods=['POST'])
+@login_required
+def merge_accounts():
+    if not db: return jsonify({'success': False, 'error': 'DB Offline'}), 503
+    data = request.json
+    primary_id = data.get('primary_user_id')
+    duplicate_id = data.get('duplicate_user_id')
+    if not primary_id or not duplicate_id or primary_id == duplicate_id: return jsonify({'success': False, 'error': 'Invalid account selections.'}), 400
+    try:
+        db.db.collection('verified_users').document(duplicate_id).delete()
+        try: fb_auth.delete_user(duplicate_id)
+        except Exception as auth_e: logger.warning(f"Failed to delete user from Auth: {auth_e}")
+        db._log_audit(session.get('admin_email'), 'MERGE_ACCOUNTS', f"Merged duplicate user {duplicate_id} into {primary_id}", {})
+        return jsonify({'success': True, 'message': 'Accounts merged. Duplicate deleted.'})
+    except Exception as e: return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/toggle_moderator', methods=['POST'])
+@login_required
+def toggle_moderator():
+    if not db: return jsonify({'success': False})
+    email = request.json.get('email')
+    try:
+        doc_ref = db.db.collection('admin_users').document(email.lower())
+        doc = doc_ref.get()
+        if doc.exists and doc.to_dict().get('role') in ['moderator', 'admin', 'super_admin']:
+            doc_ref.delete()
+            action = "demoted"
+        else:
+            doc_ref.set({'email': email.lower(), 'role': 'moderator'}, merge=True)
+            action = "promoted"
+        db._log_audit(session.get('admin_email'), 'MODERATOR_TOGGLE', f"{action.title()} {email} to/from Moderator", {})
+        return jsonify({'success': True, 'action': action})
+    except Exception as e: return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/update_verified_link', methods=['POST'])
+@login_required
+def update_verified_link():
+    if not db: return jsonify({'success': False})
+    uid = request.json.get('uid')
+    update_type = request.json.get('type') 
+    val = request.json.get('value')
+    try:
+        if update_type == 'player': db.db.collection('verified_users').document(uid).update({'linked_player_name': val})
+        elif update_type == 'rc':
+            user = db.db.collection('verified_users').document(uid).get().to_dict()
+            if user and user.get('linked_player_name'): db.admin_update_player_profile(user.get('linked_player_name'), val, session.get('admin_email'))
+        db._log_audit(session.get('admin_email'), 'UPDATE_ACCOUNT', f"Updated app account {uid} {update_type} to {val}", {})
+        return jsonify({'success': True})
+    except Exception as e: return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/update_user_tier', methods=['POST'])
+@login_required
+def update_user_tier():
+    if not db: return jsonify({'success': False})
+    uid = request.json.get('uid')
+    tier = request.json.get('tier', 'standard') 
+    try:
+        db.db.collection('verified_users').document(uid).update({'tier': tier})
+        user = db.db.collection('verified_users').document(uid).get().to_dict()
+        if user and user.get('linked_player_name'):
+            safe_id = re.sub(r'[^a-zA-Z0-9]', '_', user.get('linked_player_name')).lower()
+            db.db.collection('player_profiles').document(safe_id).set({'tier': tier}, merge=True)
+        db._log_audit(session.get('admin_email'), 'UPDATE_TIER', f"Updated account {uid} to {tier.upper()} tier", {})
+        return jsonify({'success': True})
+    except Exception as e: return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/sync_rc/<player_name>', methods=['POST'])
+@login_required
+def force_rc_sync(player_name):
+    if not db: return jsonify({"success": False})
+    rc_id = request.json.get('rc_id')
+    if not rc_id: return jsonify({"success": False, "error": "No RC ID provided"})
+    db.trigger_background_rc_scrape(player_name, rc_id, session.get('admin_email'))
+    return jsonify({"success": True, "message": "Background scraper started! The full stats will be synced to Firebase shortly."})
+
+# --- ADMIN: MATCHES & LOGIC ---
+
 @app.route('/api/admin/reports')
 @login_required
 def get_reports(): 
-    if db: return jsonify(db.admin_get_reports())
+    if db: 
+        db._log_audit(session.get('admin_email'), 'VIEW_FEEDBACK', "Viewed App Feedback Logs", {})
+        return jsonify(db.admin_get_reports())
     return jsonify([])
 
 @app.route('/api/admin/date_errors')
 @login_required
 def get_date_errors(): 
-    if db: return jsonify(db.admin_get_date_errors())
+    if db: 
+        db._log_audit(session.get('admin_email'), 'VIEW_ERRORS', "Scanned for missing date errors", {})
+        return jsonify(db.admin_get_date_errors())
     return jsonify([])
 
 @app.route('/api/admin/history')
 @login_required
 def search_history(): 
-    if db: return jsonify(db.admin_search_history(request.args.get('q', ''), source_filter=request.args.get('source', 'All')))
+    q = request.args.get('q', '')
+    if db:
+        if q: db._log_audit(session.get('admin_email'), 'SEARCH_HISTORY', f"Searched match history for: {q}", {})
+        return jsonify(db.admin_search_history(q, source_filter=request.args.get('source', 'All')))
     return jsonify([])
 
+@app.route('/api/admin/player_profile/<player_name>', methods=['GET'])
+@login_required
+def get_player_profile(player_name):
+    if db: 
+        db._log_audit(session.get('admin_email'), 'VIEW_PROFILE', f"Opened profile editor for {player_name}", {})
+        return jsonify(db.admin_get_player_profile(player_name))
+    return jsonify({})
+
+@app.route('/api/admin/update_player_profile', methods=['POST'])
+@login_required
+def update_player_profile(): return jsonify({"success": db.admin_update_player_profile(request.json.get('player_name'), request.json.get('ratings_central_id'), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/manual_match', methods=['POST'])
 @login_required
-def manual_match(): 
-    if db: return jsonify({"success": db.admin_add_manual_match(request.json.get('p1'), request.json.get('p2'), request.json.get('date'), request.json.get('scores'), session.get('admin_email'))})
-    return jsonify({"success": False})
-
+def manual_match(): return jsonify({"success": db.admin_add_manual_match(request.json.get('p1'), request.json.get('p2'), request.json.get('date'), request.json.get('scores'), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/update_match', methods=['POST'])
 @login_required
-def update_match(): 
-    if db: return jsonify({"success": db.admin_update_historical_match(request.json.get('p1'), request.json.get('p2'), request.json.get('date'), request.json.get('s1'), request.json.get('s2'), request.json.get('new_date'), session.get('admin_email'))})
-    return jsonify({"success": False})
-
+def update_match(): return jsonify({"success": db.admin_update_historical_match(request.json.get('p1'), request.json.get('p2'), request.json.get('date'), request.json.get('s1'), request.json.get('s2'), request.json.get('new_date'), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/bulk_fix_date', methods=['POST'])
 @login_required
-def bulk_fix_date(): 
-    if db: return jsonify({"success": db.admin_bulk_fix_date(request.json.get('season'), request.json.get('division'), request.json.get('week'), request.json.get('date'), session.get('admin_email'))})
-    return jsonify({"success": False})
-
+def bulk_fix_date(): return jsonify({"success": db.admin_bulk_fix_date(request.json.get('season'), request.json.get('division'), request.json.get('week'), request.json.get('date'), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/override_deltas', methods=['POST'])
 @login_required
-def override_deltas(): 
-    if db: return jsonify({"success": db.admin_override_match_deltas(request.json.get('match_id'), request.json.get('p1_delta'), request.json.get('p2_delta'), session.get('admin_email'))})
-    return jsonify({"success": False})
-
+def override_deltas(): return jsonify({"success": db.admin_override_match_deltas(request.json.get('match_id'), request.json.get('p1_delta'), request.json.get('p2_delta'), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/set_rating_scales', methods=['POST'])
 @super_admin_required
-def set_rating_scales(): 
-    if db: return jsonify({"success": db.admin_set_rating_scales(request.json.get('k_win'), request.json.get('k_loss'), session.get('admin_email'))})
-    return jsonify({"success": False})
-
+def set_rating_scales(): return jsonify({"success": db.admin_set_rating_scales(request.json.get('k_win'), request.json.get('k_loss'), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/get_rating_scales', methods=['GET'])
 @login_required
-def get_rating_scales(): 
-    if db: return jsonify({"k_win": db.k_win, "k_loss": db.k_loss})
-    return jsonify({"k_win": 1.0, "k_loss": 1.4})
-
+def get_rating_scales(): return jsonify({"k_win": db.k_win, "k_loss": db.k_loss}) if db else jsonify({"k_win": 1.0, "k_loss": 1.4})
 @app.route('/api/admin/chaos_config', methods=['GET'])
 @login_required
-def get_chaos_config(): 
-    if db: return jsonify(db.admin_get_chaos_config())
-    return jsonify({"success": False})
-
+def get_chaos_config(): return jsonify(db.admin_get_chaos_config()) if db else jsonify({"success": False})
 @app.route('/api/admin/chaos_vote', methods=['POST'])
 @login_required
-def chaos_vote(): 
-    if db: return jsonify({"success": db.admin_vote_chaos(request.json.get('weeks', []), session.get('admin_email'))})
-    return jsonify({"success": False})
-
+def chaos_vote(): return jsonify({"success": db.admin_vote_chaos(request.json.get('weeks', []), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/chaos_clear', methods=['POST'])
 @super_admin_required
-def chaos_clear(): 
-    if db: return jsonify({"success": db.admin_clear_chaos(session.get('admin_email'))})
-    return jsonify({"success": False})
-
-# ---> TEAM & SEASON SETUP ROUTES <---
+def chaos_clear(): return jsonify({"success": db.admin_clear_chaos(session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/teams', methods=['GET'])
 @login_required
 def admin_teams(): 
-    if db: return jsonify(db.admin_get_teams())
+    if db: 
+        db._log_audit(session.get('admin_email'), 'VIEW_TEAMS', "Viewed Team Roster Editor", {})
+        return jsonify(db.admin_get_teams())
     return jsonify([])
-
 @app.route('/api/admin/update_team', methods=['POST'])
 @login_required
-def admin_update_team(): 
-    if db: return jsonify({"success": db.admin_update_team(request.json.get('team_id'), request.json.get('players'), session.get('admin_email'))})
-    return jsonify({"success": False})
-
+def admin_update_team(): return jsonify({"success": db.admin_update_team(request.json.get('team_id'), request.json.get('players'), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/upload_schedule', methods=['POST'])
 @login_required
 def upload_schedule():
@@ -334,203 +510,170 @@ def upload_schedule():
     season = request.form.get('season', 'Unknown')
     division = request.form.get('division', 'Unknown')
     return jsonify(db.admin_upload_pdf_schedule(season, division, request.files['pdf'], session.get('admin_email')))
-
+@app.route('/api/admin/upcoming_schedules', methods=['GET'])
+@login_required
+def get_upcoming_schedules(): return jsonify(db.admin_get_upcoming_schedules()) if db else jsonify([])
+@app.route('/api/admin/delete_schedule', methods=['POST'])
+@login_required
+def delete_schedule(): return jsonify({"success": db.admin_delete_upcoming_schedule(request.json.get('schedule_id'), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/export_zermelo/<tournament_id>', methods=['GET'])
 @login_required
 def export_zermelo(tournament_id):
     if not db: return "Offline", 500
+    db._log_audit(session.get('admin_email'), 'EXPORT_ZERMELO', f"Downloaded Zermelo CSV for {tournament_id}", {})
     csv_data = db.generate_zermelo_csv(tournament_id)
     if not csv_data: return "Tournament not found", 404
     res = make_response(csv_data)
     res.headers["Content-Disposition"] = f"attachment; filename=zermelo_{tournament_id}.csv"
     res.headers["Content-type"] = "text/csv"
     return res
-
 @app.route('/api/admin/merge', methods=['POST'])
 @login_required
-def merge_players(): 
-    if db: return jsonify({"success": db.admin_merge_players(request.json.get('bad_name'), request.json.get('good_name'), session.get('admin_email'))})
-    return jsonify({"success": False})
-
+def merge_players(): return jsonify({"success": db.admin_merge_players(request.json.get('bad_name'), request.json.get('good_name'), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/override_rating', methods=['POST'])
 @login_required
 def override_rating(): 
-    if db: return jsonify({"success": db.admin_override_rating(request.json.get('player_id'), request.json.get('rating'), request.json.get('retroactive', True), session.get('admin_email'))})
-    return jsonify({"success": False})
-
+    if not db: return jsonify({"success": False})
+    return jsonify({"success": db.admin_override_rating(request.json.get('player_id'), request.json.get('rating'), request.json.get('sd'), request.json.get('retroactive', True), session.get('admin_email'))})
 @app.route('/api/admin/rating_context/<player_id>', methods=['GET'])
 @login_required
-def rating_context(player_id): 
-    if db: return jsonify(db.get_recent_rating_context(player_id))
-    return jsonify([])
-
+def rating_context(player_id): return jsonify(db.get_recent_rating_context(player_id)) if db else jsonify([])
 @app.route('/api/admin/bulk_pull_ratings', methods=['POST'])
 @login_required
-def bulk_pull_ratings(): 
-    if db: return jsonify(db.admin_bulk_pull_ratings(session.get('admin_email', 'Unknown')))
-    return jsonify({"success": False})
-
+def bulk_pull_ratings(): return jsonify(db.admin_bulk_pull_ratings(session.get('admin_email', 'Unknown'))) if db else jsonify({"success": False})
 @app.route('/api/admin/force_finish_live', methods=['POST'])
 @login_required
-def force_finish_live(): 
-    if db: return jsonify({"success": db.admin_force_finish_live(request.json.get('id'), request.json.get('s1'), request.json.get('s2'), session.get('admin_email'))})
-    return jsonify({"success": False})
-
+def force_finish_live(): return jsonify({"success": db.admin_force_finish_live(request.json.get('id'), request.json.get('s1'), request.json.get('s2'), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/wipe_live', methods=['POST'])
 @login_required
-def wipe_live(): 
-    if db: return jsonify({"success": db.admin_wipe_live(request.json.get('id'), session.get('admin_email'))})
-    return jsonify({"success": False})
-
+def wipe_live(): return jsonify({"success": db.admin_wipe_live(request.json.get('id'), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/set_fixture_format', methods=['POST'])
 @login_required
-def set_fixture_format(): 
-    if db: return jsonify({"success": db.admin_set_fixture_format(request.json.get('fixture_id'), request.json.get('format_type'), session.get('admin_email'))})
-    return jsonify({"success": False})
-
+def set_fixture_format(): return jsonify({"success": db.admin_set_fixture_format(request.json.get('fixture_id'), request.json.get('format_type'), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/player_directory')
 @login_required
-def get_player_directory(): 
-    if db: return jsonify(db.admin_get_player_directory())
-    return jsonify([])
-
+def get_player_directory(): return jsonify(db.admin_get_player_directory()) if db else jsonify([])
 @app.route('/api/admin/glicko_calc', methods=['POST'])
 @login_required
 def glicko_calc(): 
-    if db: return jsonify({"success": True, "data": db.admin_glicko_math(request.json.get('p1'), request.json.get('p2'), request.json.get('s1'), request.json.get('s2'))})
+    if db:
+        p1 = request.json.get('p1')
+        p2 = request.json.get('p2')
+        db._log_audit(session.get('admin_email'), 'SIMULATOR', f"Ran Glicko match diagnostic on {p1} vs {p2}", {})
+        return jsonify({"success": True, "data": db.admin_glicko_math(p1, p2, request.json.get('s1'), request.json.get('s2'))})
     return jsonify({"success": False})
+
+# --- ADMIN: SYSTEM & COMMS ---
 
 @app.route('/api/admin/add_notice', methods=['POST'])
 @login_required
-def add_notice(): 
-    if db: return jsonify({"success": db.admin_add_notice(request.json.get('title'), request.json.get('message'), request.json.get('type'), session.get('admin_email'))})
-    return jsonify({"success": False})
-
+def add_notice(): return jsonify({"success": db.admin_add_notice(request.json.get('title'), request.json.get('message'), request.json.get('type'), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/delete_notice', methods=['POST'])
 @login_required
-def delete_notice(): 
-    if db: return jsonify({"success": db.admin_delete_notice(request.json.get('notice_id'), session.get('admin_email'))})
-    return jsonify({"success": False})
-
+def delete_notice(): return jsonify({"success": db.admin_delete_notice(request.json.get('notice_id'), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/delete_post', methods=['POST'])
 @login_required
-def delete_community_post():
-    if db: return jsonify({"success": db.admin_delete_community_post(request.json.get('post_id'), session.get('admin_email'))})
-    return jsonify({"success": False})
-
+def delete_community_post(): return jsonify({"success": db.admin_delete_community_post(request.json.get('post_id'), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/messages')
 @login_required
 def get_admin_messages(): 
-    if db: return jsonify(db.get_admin_messages())
+    if db: 
+        db._log_audit(session.get('admin_email'), 'VIEW_NOTES', "Viewed internal Admin Chat Notes", {})
+        return jsonify(db.get_admin_messages())
     return jsonify([])
-
 @app.route('/api/admin/add_message', methods=['POST'])
 @login_required
-def add_admin_message(): 
-    if db: return jsonify({"success": db.add_admin_message(request.json.get('message'), session.get('admin_email'))})
-    return jsonify({"success": False})
-
+def add_admin_message(): return jsonify({"success": db.add_admin_message(request.json.get('message'), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/contacts')
 @login_required
-def get_contacts(): 
-    if db: return jsonify(db.get_contact_lists())
-    return jsonify({"emails": "", "phones": ""})
-
+def get_contacts():
+    if not db: return jsonify({"emails": "", "phones": "", "preview": [], "error": "DB Offline"})
+    try:
+        db._log_audit(session.get('admin_email'), 'VIEW_CONTACTS', "Exported/Viewed Member Contact Lists", {})
+        return jsonify(db.get_contact_lists())
+    except Exception as e: return jsonify({"emails": "", "phones": "", "preview": [], "error": str(e)})
 @app.route('/api/admin/send_sms', methods=['POST'])
 @login_required
 def send_sms():
-    if not db: return jsonify({"success": False, "error": "Database offline"})
-    if not request.json.get('message'): return jsonify({"success": False, "error": "Message cannot be empty."})
-    return jsonify(db.admin_send_sms_broadcast(request.json.get('message'), request.json.get('phones'), session.get('admin_email')))
-
+    if not db: return jsonify({"success": False, "error": "Database offline"}), 503
+    req_data = request.get_json(silent=True)
+    if not req_data or not req_data.get('message'): return jsonify({"success": False, "error": "Message cannot be empty."}), 400
+    try: return jsonify(db.admin_send_sms_broadcast(req_data.get('message'), req_data.get('phones'), session.get('admin_email'))), 200
+    except Exception as e: return jsonify({"success": False, "error": f"Internal Server Error: {str(e)}"}), 500
 @app.route('/api/admin/sms_inbox')
 @login_required
 def get_sms_inbox(): 
-    if db: return jsonify(db.get_sms_inbox())
-    return jsonify([])
-
+    if not db: return jsonify([])
+    try:
+        db._log_audit(session.get('admin_email'), 'VIEW_SMS', "Viewed player SMS replies inbox", {})
+        return jsonify(db.get_sms_inbox())
+    except Exception as e: return jsonify([])
 @app.route('/api/admin/donations')
 @login_required
 def admin_donations(): 
-    if db: return jsonify(db.admin_get_all_donations())
+    if db: 
+        db._log_audit(session.get('admin_email'), 'VIEW_DONATIONS', "Viewed Financial Ledger", {})
+        return jsonify(db.admin_get_all_donations())
     return jsonify([])
-
 @app.route('/api/admin/traffic')
 @login_required
-def admin_traffic(): 
-    if db: return jsonify(db.get_traffic_stats())
-    return jsonify({'views': 0, 'uniques': 0})
-
+def admin_traffic(): return jsonify(db.get_traffic_stats()) if db else jsonify({'views': 0, 'uniques': 0})
 @app.route('/api/admin/audit_logs')
 @login_required
-def audit_logs(): 
-    if db: return jsonify(db.get_audit_logs())
-    return jsonify([])
-
+def audit_logs(): return jsonify(db.get_audit_logs()) if db else jsonify([])
 @app.route('/api/admin/undo_action', methods=['POST'])
 @super_admin_required
-def undo_action(): 
-    if db: return jsonify({"success": db.undo_audit_action(request.json.get('log_id'), session.get('admin_email'))})
-    return jsonify({"success": False})
-
+def undo_action(): return jsonify({"success": db.undo_audit_action(request.json.get('log_id'), session.get('admin_email'))}) if db else jsonify({"success": False})
 @app.route('/api/admin/users')
 @super_admin_required
-def admin_users(): 
-    if db: return jsonify(db.get_admin_users())
-    return jsonify([])
-
+def admin_users(): return jsonify(db.get_admin_users()) if db else jsonify([])
 @app.route('/api/admin/approve_user', methods=['POST'])
 @super_admin_required
-def approve_user(): 
-    if db: return jsonify({"success": db.approve_admin(request.json.get('email'), request.json.get('action'))})
-    return jsonify({"success": False})
-
+def approve_user(): return jsonify({"success": db.approve_admin(request.json.get('email'), request.json.get('action'))}) if db else jsonify({"success": False})
 @app.route('/api/refresh', methods=['POST'])
 @login_required
 def force_refresh():
+    if db: db._log_audit(session.get('admin_email'), 'FORCE_REFRESH', "Manually pulled from Google Sheets", {})
     threading.Thread(target=scheduled_refresh).start()
     return jsonify({"success": True, "status": "Refreshed"})
 
-# --- PLAYER HUB PUBLIC APIS ---
+# --- TOURNAMENTS & HUB ---
+
+@app.route('/api/admin/tournaments/create', methods=['POST'])
+@login_required
+def create_tournament():
+    if not db: return jsonify({"success": False, "error": "DB Offline"}), 503
+    req = request.get_json(silent=True)
+    return jsonify(db.admin_create_tournament(req, session.get('admin_email')))
+@app.route('/api/admin/tournaments/events/create', methods=['POST'])
+@login_required
+def create_event():
+    if not db: return jsonify({"success": False, "error": "DB Offline"}), 503
+    req = request.get_json(silent=True)
+    return jsonify(db.admin_create_event(req.get('tournament_id'), req.get('event_data', {}), session.get('admin_email')))
 @app.route('/api/hub/register', methods=['POST'])
 def hub_register(): 
-    if db: return jsonify(db.register_player_account(request.json.get('name'), request.json.get('dob'), request.json.get('email'), request.json.get('uid'), request.json.get('estimated_rating')))
-    return jsonify({"success": False})
-
+    return jsonify(db.register_player_account(request.json.get('name'), request.json.get('dob'), request.json.get('email'), request.json.get('uid'), request.json.get('estimated_rating'), request.json.get('club'))) if db else jsonify({"success": False})
+@app.route('/api/hub/tournaments/check_eligibility', methods=['POST'])
+def hub_check_eligibility():
+    if not db: return jsonify({"eligible": False, "reasons": ["Database offline"]})
+    req = request.get_json(silent=True)
+    eligible, reasons = db.check_eligibility(req.get('uid'), req.get('event_data', {}), req.get('partner_uid'))
+    return jsonify({"eligible": eligible, "reasons": reasons})
 @app.route('/api/hub/forum', methods=['GET'])
-def get_forum(): 
-    if db: return jsonify(db.get_community_feed())
-    return jsonify([])
-
+def get_forum(): return jsonify(db.get_community_feed()) if db else jsonify([])
 @app.route('/api/hub/post', methods=['POST'])
-def make_post(): 
-    if db: return jsonify({"success": db.create_community_post(request.json.get('uid'), request.json.get('name'), request.json.get('content'), request.json.get('type', 'General'), request.json.get('image_url'), request.json.get('poll_options'))})
-    return jsonify({"success": False})
-
+def make_post(): return jsonify({"success": db.create_community_post(request.json.get('uid'), request.json.get('name'), request.json.get('content'), request.json.get('type', 'General'), request.json.get('image_url'), request.json.get('poll_options'))}) if db else jsonify({"success": False})
 @app.route('/api/hub/vote', methods=['POST'])
-def vote_poll(): 
-    if db: return jsonify({"success": db.vote_community_poll(request.json.get('post_id'), request.json.get('option'), request.json.get('uid'))})
-    return jsonify({"success": False})
-
+def vote_poll(): return jsonify({"success": db.vote_community_poll(request.json.get('post_id'), request.json.get('option'), request.json.get('uid'))}) if db else jsonify({"success": False})
 @app.route('/api/hub/comment', methods=['POST'])
-def add_comment(): 
-    if db: return jsonify({"success": db.add_community_comment(request.json.get('post_id'), request.json.get('name'), request.json.get('content'))})
-    return jsonify({"success": False})
-
+def add_comment(): return jsonify({"success": db.add_community_comment(request.json.get('post_id'), request.json.get('name'), request.json.get('content'))}) if db else jsonify({"success": False})
 @app.route('/api/hub/upvote', methods=['POST'])
-def toggle_upvote(): 
-    if db: return jsonify({"success": db.toggle_post_upvote(request.json.get('post_id'), request.json.get('uid'))})
-    return jsonify({"success": False})
-
+def toggle_upvote(): return jsonify({"success": db.toggle_post_upvote(request.json.get('post_id'), request.json.get('uid'))}) if db else jsonify({"success": False})
 @app.route('/api/hub/schedule/<player_name>', methods=['GET'])
-def get_schedule(player_name): 
-    if db: return jsonify(db.get_player_upcoming_schedule(player_name))
-    return jsonify([])
-
+def get_schedule(player_name): return jsonify(db.get_player_upcoming_schedule(player_name)) if db else jsonify([])
 @app.route('/api/hub/tournament/update_cart', methods=['POST'])
-def update_cart(): 
-    if db: return jsonify(db.process_tournament_cart(request.json.get('uid'), request.json.get('tournament_id'), request.json.get('events'), request.json.get('total')))
-    return jsonify({"success": False})
+def update_cart(): return jsonify(db.process_tournament_cart(request.json.get('uid'), request.json.get('tournament_id'), request.json.get('events'), request.json.get('total'))) if db else jsonify({"success": False})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5001))

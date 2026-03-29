@@ -1,17 +1,132 @@
 <div id="view-pending" class="hidden space-y-6">
     <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
-        <h2 class="text-slate-400 font-bold uppercase tracking-widest text-sm">Universal Inbox</h2>
-        <div class="flex gap-2">
+        <h2 class="text-slate-400 font-bold uppercase tracking-widest text-sm">Universal Inbox & Account Tools</h2>
+        
+        <div class="flex gap-2 flex-wrap justify-end">
             <button onclick="window.openHistoryEditorModal()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 px-3 rounded text-xs transition-colors shadow-lg flex items-center gap-1">
                 <i class="fa-solid fa-clock-rotate-left"></i> History Editor
-            </button>
-            <button onclick="window.adminOverrideRatingPrompt()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-1.5 px-3 rounded text-xs transition-colors shadow-lg flex items-center gap-1">
-                <i class="fa-solid fa-wrench"></i> Override Rating
             </button>
         </div>
     </div>
     
     <div class="space-y-8">
+
+        <div>
+            <div class="flex justify-between items-center mb-3 border-b border-green-500/20 pb-1">
+                <h3 class="text-green-400 font-bold uppercase tracking-widest text-xs flex items-center gap-2">
+                    <i class="fa-solid fa-user-check"></i> Pending Account Approvals
+                </h3>
+                <button onclick="window.loadAccountManagementData()" class="text-slate-400 hover:text-white text-xs transition-colors">
+                    <i class="fa-solid fa-rotate-right"></i> Refresh
+                </button>
+            </div>
+            <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 overflow-x-auto shadow-md">
+                <table class="w-full text-left text-sm text-slate-300">
+                    <thead class="text-xs uppercase bg-slate-700/50 text-slate-400 border-b border-slate-600">
+                        <tr>
+                            <th class="px-4 py-3">User Email / Auth Info</th>
+                            <th class="px-4 py-3">Link to Player Profile</th>
+                            <th class="px-4 py-3">Ratings Central ID</th>
+                            <th class="px-4 py-3 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pendingAccountsBody" class="divide-y divide-slate-700/50">
+                        <tr><td colspan="4" class="text-center py-6 italic text-slate-500">Loading pending accounts...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div>
+            <h3 class="text-red-400 font-bold uppercase tracking-widest text-xs mb-3 border-b border-red-500/20 pb-1 flex items-center gap-2">
+                <i class="fa-solid fa-code-merge"></i> Merge Duplicate Accounts
+            </h3>
+            <div class="bg-slate-800 rounded-lg p-5 border border-slate-700 shadow-md">
+                <p class="text-slate-400 text-xs mb-4">Did someone sign up twice? Select the account to keep, and the duplicate account to permanently delete.</p>
+                <div class="flex flex-wrap gap-4 items-end">
+                    <div class="flex-1 min-w-[200px]">
+                        <label class="block text-xs font-bold text-slate-300 mb-1">Account to KEEP (Primary)</label>
+                        <select id="primaryAccountSelect" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white focus:border-blue-500 focus:outline-none">
+                            <option value="">-- Loading Users... --</option>
+                        </select>
+                    </div>
+                    <div class="flex-1 min-w-[200px]">
+                        <label class="block text-xs font-bold text-red-400 mb-1">Account to DELETE (Duplicate)</label>
+                        <select id="duplicateAccountSelect" class="w-full bg-slate-900 border border-red-900/50 rounded p-2 text-sm text-white focus:border-red-500 focus:outline-none">
+                            <option value="">-- Loading Users... --</option>
+                        </select>
+                    </div>
+                    <button onclick="window.submitAccountMerge()" class="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-6 rounded text-sm transition-colors shadow-lg whitespace-nowrap">
+                        Merge & Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <h3 class="text-indigo-400 font-bold uppercase tracking-widest text-xs mb-3 border-b border-indigo-500/20 pb-1 flex items-center gap-2">
+                <i class="fa-solid fa-calculator"></i> Ratings & Standard Deviation Editor
+            </h3>
+            <div class="bg-slate-800 rounded-lg p-5 border border-slate-700 shadow-md">
+                <p class="text-slate-400 text-xs mb-4">Force a specific rating for a player. Their Standard Deviation will automatically reset to ±65.</p>
+                <div class="flex flex-wrap gap-4 items-end">
+                    <div class="flex-1 min-w-[200px]">
+                        <label class="block text-xs font-bold text-slate-300 mb-1">Select Player</label>
+                        <select id="overridePlayerSelect" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white focus:border-indigo-500 focus:outline-none">
+                            <option value="">-- Loading Players... --</option>
+                        </select>
+                    </div>
+                    <div class="w-32">
+                        <label class="block text-xs font-bold text-slate-300 mb-1">New Rating</label>
+                        <input type="number" id="overrideRatingInput" placeholder="e.g. 1500" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white focus:border-indigo-500 focus:outline-none">
+                    </div>
+                    <div class="flex items-center gap-2 pb-2">
+                        <input type="checkbox" id="overrideRetroactive" checked class="w-4 h-4 text-indigo-600 bg-slate-900 border-slate-600 rounded focus:ring-indigo-500 focus:ring-2">
+                        <label for="overrideRetroactive" class="text-xs font-bold text-slate-300">Retrospective (Recalculate matches)</label>
+                    </div>
+                    <button onclick="window.submitRatingOverride()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-6 rounded text-sm transition-colors shadow-lg whitespace-nowrap">
+                        Override Rating
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <h3 class="text-emerald-400 font-bold uppercase tracking-widest text-xs mb-3 border-b border-emerald-500/20 pb-1 flex items-center gap-2">
+                <i class="fa-solid fa-handshake"></i> Manually Add Match
+            </h3>
+            <div class="bg-slate-800 rounded-lg p-5 border border-slate-700 shadow-md">
+                <p class="text-slate-400 text-xs mb-4">Insert a missing match history record. Ratings will recalculate automatically.</p>
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                    <div class="md:col-span-1">
+                        <label class="block text-xs font-bold text-slate-300 mb-1">Date</label>
+                        <input type="date" id="manualMatchDate" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white focus:border-emerald-500 focus:outline-none">
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-xs font-bold text-slate-300 mb-1">Player 1 (Winner)</label>
+                        <select id="manualMatchP1" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white focus:border-emerald-500 focus:outline-none">
+                            <option value="">-- Select --</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-xs font-bold text-slate-300 mb-1">Player 2 (Loser)</label>
+                        <select id="manualMatchP2" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white focus:border-emerald-500 focus:outline-none">
+                            <option value="">-- Select --</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-xs font-bold text-slate-300 mb-1">Scores (e.g. 11-5, 11-8)</label>
+                        <input type="text" id="manualMatchScores" placeholder="Optional" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white focus:border-emerald-500 focus:outline-none">
+                    </div>
+                    <div class="md:col-span-1">
+                        <button onclick="window.submitManualMatch()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors shadow-lg">
+                            Add Match
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div>
             <h3 class="text-yellow-500 font-bold uppercase tracking-widest text-xs mb-3 border-b border-yellow-500/20 pb-1 flex items-center gap-2">
                 <i class="fa-solid fa-triangle-exclamation"></i> Match Corrections
@@ -31,3 +146,246 @@
         </div>
     </div>
 </div>
+
+<script>
+    let globalPlayersForDropdown = [];
+
+    window.loadAccountManagementData = async function() {
+        try {
+            // Fetch pending accounts and players
+            const pendingRes = await fetch('/api/admin/pending_accounts');
+            const pendingData = await pendingRes.json();
+            
+            if (pendingData.success) {
+                globalPlayersForDropdown = pendingData.players;
+                renderPendingAccounts(pendingData.pending_users);
+                populateAllPlayerDropdowns(pendingData.players);
+            }
+
+            // Fetch all users for the merge dropdown
+            const allUsersRes = await fetch('/api/admin/all_users');
+            const allUsersData = await allUsersRes.json();
+            
+            if (allUsersData.success) {
+                renderMergeDropdowns(allUsersData.users);
+            }
+        } catch (error) {
+            console.error("Error loading account data:", error);
+        }
+    };
+
+    function populateAllPlayerDropdowns(players) {
+        let nameOptions = '<option value="">-- Select Player --</option>';
+        let idOptions = '<option value="">-- Select Player --</option>';
+        
+        players.sort((a,b) => (a.first_name || '').localeCompare(b.first_name || '')).forEach(p => {
+            const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim();
+            nameOptions += `<option value="${fullName}">${fullName}</option>`;
+            idOptions += `<option value="${p.id}">${fullName}</option>`;
+        });
+
+        // Populate rating override (uses ID)
+        const overrideSelect = document.getElementById('overridePlayerSelect');
+        if (overrideSelect) overrideSelect.innerHTML = idOptions;
+
+        // Populate manual match (uses Names)
+        const p1Select = document.getElementById('manualMatchP1');
+        const p2Select = document.getElementById('manualMatchP2');
+        if (p1Select) p1Select.innerHTML = nameOptions;
+        if (p2Select) p2Select.innerHTML = nameOptions;
+    }
+
+    function renderPendingAccounts(users) {
+        const tbody = document.getElementById('pendingAccountsBody');
+        tbody.innerHTML = '';
+
+        if (!users || users.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 italic text-slate-500">No pending accounts right now.</td></tr>`;
+            return;
+        }
+
+        let playerOptions = '<option value="">-- Select Player Profile --</option>';
+        globalPlayersForDropdown.sort((a,b) => (a.first_name || '').localeCompare(b.first_name || '')).forEach(p => {
+            playerOptions += `<option value="${p.id}">${p.first_name || ''} ${p.last_name || ''}</option>`;
+        });
+
+        users.forEach(user => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="px-4 py-3 font-medium text-white">${user.email || user.name || 'Unknown User'}</td>
+                <td class="px-4 py-3">
+                    <select id="link-player-${user.id}" class="w-full bg-slate-900 border border-slate-600 rounded p-1.5 text-sm text-white focus:border-blue-500 focus:outline-none">
+                        ${playerOptions}
+                    </select>
+                </td>
+                <td class="px-4 py-3">
+                    <input type="text" id="link-rc-${user.id}" placeholder="e.g. 123456" class="w-full bg-slate-900 border border-slate-600 rounded p-1.5 text-sm text-white focus:border-blue-500 focus:outline-none">
+                </td>
+                <td class="px-4 py-3 text-right">
+                    <button onclick="window.approveAccount('${user.id}')" class="bg-green-600 hover:bg-green-500 text-white font-bold py-1.5 px-3 rounded text-xs transition-colors shadow">
+                        Approve & Link
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function renderMergeDropdowns(users) {
+        const primary = document.getElementById('primaryAccountSelect');
+        const duplicate = document.getElementById('duplicateAccountSelect');
+        
+        let options = '<option value="">-- Select Account --</option>';
+        users.sort((a,b) => (a.email || '').localeCompare(b.email || '')).forEach(u => {
+            options += `<option value="${u.id}">${u.email || u.name} (${u.account_status || 'active'})</option>`;
+        });
+
+        if (primary) primary.innerHTML = options;
+        if (duplicate) duplicate.innerHTML = options;
+    }
+
+    window.approveAccount = async function(userId) {
+        const playerId = document.getElementById(`link-player-${userId}`).value;
+        const rcId = document.getElementById(`link-rc-${userId}`).value;
+
+        if (!playerId) {
+            alert("Please select a player profile to link this account to.");
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/admin/approve_account', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, player_id: playerId, ratings_central_id: rcId })
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                alert("Account approved and linked successfully!");
+                window.loadAccountManagementData(); 
+            } else {
+                alert("Error: " + data.error);
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Network error occurred.");
+        }
+    };
+
+    window.submitAccountMerge = async function() {
+        const primaryId = document.getElementById('primaryAccountSelect').value;
+        const duplicateId = document.getElementById('duplicateAccountSelect').value;
+
+        if (!primaryId || !duplicateId) {
+            alert("Please select both accounts to merge.");
+            return;
+        }
+        if (primaryId === duplicateId) {
+            alert("You cannot merge an account into itself.");
+            return;
+        }
+
+        if (!confirm("Are you ABSOLUTELY SURE? The duplicate account will be permanently deleted from the database. This action cannot be undone.")) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/admin/merge_accounts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ primary_user_id: primaryId, duplicate_user_id: duplicateId })
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                alert("Accounts merged successfully!");
+                window.loadAccountManagementData(); 
+            } else {
+                alert("Error: " + data.error);
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Network error occurred.");
+        }
+    };
+
+    window.submitRatingOverride = async function() {
+        const playerId = document.getElementById('overridePlayerSelect').value;
+        const rating = document.getElementById('overrideRatingInput').value;
+        const retroactive = document.getElementById('overrideRetroactive').checked;
+
+        if (!playerId || !rating) {
+            alert("Please select a player and enter a valid rating.");
+            return;
+        }
+
+        if(!confirm(`Are you sure you want to force this rating to ${rating}?`)) return;
+
+        try {
+            const response = await fetch('/api/admin/override_rating', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ player_id: playerId, rating: parseFloat(rating), retroactive: retroactive })
+            });
+            const data = await response.json();
+            if (data.success) {
+                alert("Rating successfully overridden and SD reset.");
+                document.getElementById('overrideRatingInput').value = '';
+            } else {
+                alert("Error overriding rating.");
+            }
+        } catch(e) {
+            alert("Network error.");
+        }
+    };
+
+    window.submitManualMatch = async function() {
+        const date = document.getElementById('manualMatchDate').value;
+        const p1 = document.getElementById('manualMatchP1').value;
+        const p2 = document.getElementById('manualMatchP2').value;
+        const scores = document.getElementById('manualMatchScores').value;
+
+        if (!date || !p1 || !p2) {
+            alert("Please provide the date and select both players.");
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/admin/manual_match', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ p1: p1, p2: p2, date: date, scores: scores })
+            });
+            const data = await response.json();
+            if (data.success) {
+                alert("Match manually added successfully!");
+                document.getElementById('manualMatchScores').value = '';
+            } else {
+                alert("Error adding match.");
+            }
+        } catch(e) {
+            alert("Network error.");
+        }
+    };
+
+    const pendingObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.attributeName === 'class') {
+                const target = mutation.target;
+                if (!target.classList.contains('hidden')) {
+                    window.loadAccountManagementData();
+                }
+            }
+        });
+    });
+    
+    setTimeout(() => {
+        const pendingDiv = document.getElementById('view-pending');
+        if (pendingDiv) pendingObserver.observe(pendingDiv, { attributes: true });
+        if (pendingDiv && !pendingDiv.classList.contains('hidden')) {
+            window.loadAccountManagementData();
+        }
+    }, 500);
+
+</script>

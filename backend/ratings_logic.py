@@ -16,27 +16,17 @@ def _g(phi):
 
 def _E(mu, mu_j, phi_j):
     """Internal Expectation helper"""
-    # Safety against overflow in exp()
     val = -_g(phi_j) * (mu - mu_j)
-    if val > 100: return 0.0 # exp(100) is huge, 1/(1+huge) is 0
-    if val < -100: return 1.0 # exp(-100) is 0, 1/(1+0) is 1
-    
+    if val > 100: return 0.0 
+    if val < -100: return 1.0 
     return 1.0 / (1.0 + math.exp(val))
 
 def _update_volatility(vol, delta, phi, v, tau):
-    """
-    Solves the Glicko-2 equation for new volatility.
-    Includes DivisionByZero protection.
-    """
-    # Safety Check: Prevent log(0) error
     if vol <= 0.0001: vol = 0.06 
-        
     a = math.log(vol ** 2)
     
     def f(x):
-        # Optimization: Limit exponential growth
         if x > 50: x = 50 
-        
         term1 = (math.exp(x) * (delta ** 2 - phi ** 2 - v - math.exp(x))) / \
                 (2 * ((phi ** 2 + v + math.exp(x)) ** 2))
         term2 = (x - a) / (tau ** 2)
@@ -54,12 +44,10 @@ def _update_volatility(vol, delta, phi, v, tau):
     fA = f(A)
     fB = f(B)
 
-    # Newton-Raphson iteration
-    for _ in range(50): # Limit iterations to prevent infinite loops
+    for _ in range(50): 
         if abs(B - A) <= EPSILON: break
-        
         denom = fB - fA
-        if abs(denom) < 1e-9: # Prevent division by zero
+        if abs(denom) < 1e-9: 
             C = A
         else:
             C = A + (A - B) * fA / denom
@@ -77,9 +65,6 @@ def _update_volatility(vol, delta, phi, v, tau):
     return math.exp(A / 2.0)
 
 def calculate_match(winner_stats, loser_stats, winner_score, loser_score):
-    """
-    Implements Glicko-2 with safeguards.
-    """
     # 1. SETUP DATA
     r_w = float(winner_stats.get('rating', DEFAULT_RATING))
     rd_w = float(winner_stats.get('rd', DEFAULT_RD))
@@ -92,7 +77,6 @@ def calculate_match(winner_stats, loser_stats, winner_score, loser_score):
     # Convert to Glicko-2 Scale
     mu_w = (r_w - 1500) / GLICKO_SCALE
     phi_w = rd_w / GLICKO_SCALE
-    
     mu_l = (r_l - 1500) / GLICKO_SCALE
     phi_l = rd_l / GLICKO_SCALE
 
@@ -109,9 +93,6 @@ def calculate_match(winner_stats, loser_stats, winner_score, loser_score):
     # --- WINNER CALC ---
     g_phi_l = _g(phi_l)
     E_w = _E(mu_w, mu_l, phi_l)
-    
-    # CRITICAL FIX: Clamp E to prevent division by zero in variance calculation
-    # If E is 1.0, then (1-E) is 0.0, causing the crash.
     E_w = max(0.0001, min(0.9999, E_w))
     
     v_w = 1.0 / ((g_phi_l ** 2) * E_w * (1 - E_w))
@@ -126,8 +107,6 @@ def calculate_match(winner_stats, loser_stats, winner_score, loser_score):
     # --- LOSER CALC ---
     g_phi_w = _g(phi_w)
     E_l = _E(mu_l, mu_w, phi_w)
-    
-    # CRITICAL FIX: Clamp E here too
     E_l = max(0.0001, min(0.9999, E_l))
     
     v_l = 1.0 / ((g_phi_w ** 2) * E_l * (1 - E_l))
@@ -139,16 +118,19 @@ def calculate_match(winner_stats, loser_stats, winner_score, loser_score):
     new_phi_l = 1.0 / math.sqrt(1.0 / (phi_star_l ** 2) + 1.0 / v_l)
     new_mu_l = mu_l + (new_phi_l ** 2) * (g_phi_w * (0.0 - E_l)) * dampening
 
-    # 5. CONVERT BACK
+    # 5. ENFORCE RD FLOOR (±20.0 MINIMUM) & CONVERT BACK
+    new_rd_w = max(20.0, new_phi_w * GLICKO_SCALE)
+    new_rd_l = max(20.0, new_phi_l * GLICKO_SCALE)
+
     return {
         'winner': {
             'rating': new_mu_w * GLICKO_SCALE + 1500,
-            'rd': new_phi_w * GLICKO_SCALE,
+            'rd': new_rd_w,
             'vol': new_vol_w
         },
         'loser': {
             'rating': new_mu_l * GLICKO_SCALE + 1500,
-            'rd': new_phi_l * GLICKO_SCALE,
+            'rd': new_rd_l,
             'vol': new_vol_l
         }
     }
