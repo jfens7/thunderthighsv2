@@ -10,4 +10,4 @@ credentials.json
 
 # Virtual Environment
 venv/
-.env
+.envcredentials copy.json
