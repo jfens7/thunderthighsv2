@@ -135,6 +135,7 @@
 
     window.loadAccountManagementData = async function() {
         if (playerDirectoryData.length === 0) await window.loadPlayerDirectory();
+        
         const pendingList = document.getElementById('pendingAccountsList'); 
         if (pendingList) {
             pendingList.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-emerald-500"></i></div>';
@@ -143,18 +144,30 @@
                 const data = Array.isArray(rawData) ? rawData : (rawData.pending_users || []);
                 if (data.length === 0) { pendingList.innerHTML = '<div class="text-slate-500 text-center py-10 italic border border-white/5 bg-slate-800/30 rounded-xl">Awesome! No pending accounts to approve.</div>'; } 
                 else { window.renderPendingAccounts(data, pendingList); }
-            } catch(e) {}
+            } catch(e) {
+                console.error("Error loading pending accounts", e);
+            }
         }
+        
         try {
-            const allUsersRes = await fetch('/api/admin/all_users'); const allUsersData = await allUsersRes.json();
+            const allUsersRes = await fetch('/api/admin/all_users'); 
+            const allUsersData = await allUsersRes.json();
+            
             if (allUsersData.success) {
                 globalVerifiedAccounts = allUsersData.users;
-                window.renderVerifiedAccounts();
-                window.renderMergeDropdowns(globalVerifiedAccounts);
+                
+                // Wrapped in TRY/CATCH blocks so one failure doesn't stop the rest of the page from drawing
+                try { window.renderVerifiedAccounts(); } catch(e) { console.error("Error rendering verified accounts", e); }
+                try { window.renderMergeDropdowns(globalVerifiedAccounts); } catch(e) { console.error("Error rendering merge dropdowns", e); }
+                
                 const missingList = document.getElementById('missingRCList');
-                if (missingList) window.renderMissingRC(globalVerifiedAccounts, missingList);
+                if (missingList) {
+                    try { window.renderMissingRC(globalVerifiedAccounts, missingList); } catch(e) { console.error("Error rendering missing RC list", e); }
+                }
             }
-        } catch(e) {}
+        } catch(e) {
+            console.error("Error fetching all users", e);
+        }
     };
 
     window.renderPendingAccounts = function(users, container) {
@@ -275,7 +288,9 @@
         if (filtered.length === 0) { list.innerHTML = '<div class="text-center py-6 text-slate-500 italic text-sm">No accounts found.</div>'; return; }
 
         let playerOptions = '<option value="">-- No Linked Profile --</option>';
-        playerDirectoryData.sort((a,b) => (a.name||'').localeCompare(b.name||'')).forEach(p => { playerOptions += `<option value="${p.name.replace(/'/g, "&#39;")}">${p.name}</option>`; });
+        if (playerDirectoryData && playerDirectoryData.length > 0) {
+            playerDirectoryData.sort((a,b) => (a.name||'').localeCompare(b.name||'')).forEach(p => { playerOptions += `<option value="${p.name.replace(/'/g, "&#39;")}">${p.name}</option>`; });
+        }
 
         let html = '';
         filtered.sort((a,b) => (a.name || '').localeCompare(b.name || '')).forEach(u => {

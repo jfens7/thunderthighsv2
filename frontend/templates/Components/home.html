@@ -7,12 +7,14 @@
         <h2 class="text-4xl md:text-5xl font-black text-white mb-4 tracking-tight drop-shadow-lg mt-6">GCTTA STATS</h2>
         <p class="text-slate-200 max-w-xl mx-auto text-base md:text-lg leading-relaxed font-light drop-shadow-md">Track your performance, view division standings, and analyze match history.</p>
         
-        <div class="mt-10 flex flex-col items-center justify-center">
-            <span class="bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-3 shadow-[0_0_10px_rgba(79,70,229,0.8)] border border-indigo-400">🔥 Live Now</span>
-            <a href="/player_auth" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-lg md:text-xl px-10 py-5 rounded-2xl shadow-[0_0_30px_rgba(79,70,229,0.5)] transition-all transform hover:scale-105 flex items-center gap-3 border border-white/20">
-                <i class="fa-solid fa-user-astronaut text-2xl"></i> ENTER PLAYER PORTAL
-            </a>
-            <p class="text-xs text-slate-400 mt-4">Create your account to view custom schedules, join the forum, and access your profile.</p>
+        <div class="mt-10 flex flex-col items-center justify-center gap-4">
+            <span class="bg-emerald-600/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.2)] border border-emerald-500/30">Player Portal Now Live</span>
+            
+            <button onclick="window.openRegisterModal()" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm md:text-base px-8 py-4 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all transform hover:scale-105 flex items-center gap-3 border border-white/20">
+                <i class="fa-solid fa-user-plus text-xl"></i> CREATE FREE ACCOUNT
+            </button>
+            
+            <button onclick="window.toggleAuthDropdown()" class="text-xs text-slate-400 hover:text-white underline underline-offset-4 transition-colors">Already have an account? Sign in</button>
         </div>
     </div>
 

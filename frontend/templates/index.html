@@ -7,6 +7,142 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://js.stripe.com/v3/"></script>
+    
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+      import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+      
+      fetch('/api/firebase-config').then(r => r.json()).then(config => {
+          const app = initializeApp(config);
+          const auth = getAuth(app);
+
+          window.handleEmailLogin = function() {
+              const email = document.getElementById('login-email').value;
+              const pass = document.getElementById('login-password').value;
+              if(!email || !pass) return alert("Please enter both email and password.");
+              
+              const btn = document.getElementById('login-btn');
+              const orig = btn.innerHTML;
+              btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+              btn.disabled = true;
+
+              signInWithEmailAndPassword(auth, email, pass).then(async (result) => {
+                  const token = await result.user.getIdToken();
+                  const res = await fetch('/api/auth/google', {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ token: token })
+                  });
+                  const data = await res.json();
+                  if(data.success) {
+                      window.toggleAuthDropdown();
+                      if(data.redirect && data.redirect !== '/') window.location.href = data.redirect;
+                      else window.switchTab('player-hub');
+                  } else { alert("Login failed: " + data.error); }
+                  btn.innerHTML = orig; btn.disabled = false;
+              }).catch((error) => { 
+                  alert("Incorrect email or password.");
+                  btn.innerHTML = orig; btn.disabled = false;
+              });
+          };
+
+          window.openRegisterModal = function() {
+              const modal = document.getElementById('registerModal');
+              if(modal) modal.classList.remove('hidden');
+          };
+
+          window.closeRegisterModal = function() {
+              const modal = document.getElementById('registerModal');
+              if(modal) modal.classList.add('hidden');
+          };
+
+          window.toggleRcFields = function() {
+              const noRc = document.getElementById('reg-no-rc').checked;
+              const rcGroup = document.getElementById('rc-fields-group');
+              if(noRc) {
+                  rcGroup.classList.add('opacity-50', 'pointer-events-none');
+                  document.getElementById('reg-rc-id').value = '';
+                  document.getElementById('reg-rc-rating').value = '';
+              } else {
+                  rcGroup.classList.remove('opacity-50', 'pointer-events-none');
+              }
+          };
+
+          window.handleRegistration = function() {
+              // Gather all the specific fields you requested
+              const first = document.getElementById('reg-first').value.trim();
+              const middle = document.getElementById('reg-middle').value.trim();
+              const last = document.getElementById('reg-last').value.trim();
+              const email = document.getElementById('reg-email').value.trim();
+              const pass1 = document.getElementById('reg-pass1').value;
+              const pass2 = document.getElementById('reg-pass2').value;
+              const dob = document.getElementById('reg-dob').value;
+              const club = document.getElementById('reg-club').value.trim();
+              
+              const noRc = document.getElementById('reg-no-rc').checked;
+              const rcId = document.getElementById('reg-rc-id').value.trim();
+              const rcRating = document.getElementById('reg-rc-rating').value.trim();
+
+              if(!first || !last || !email || !pass1 || !pass2 || !dob) return alert("Please fill out all required fields.");
+              if(pass1 !== pass2) return alert("Passwords do not match.");
+              if(pass1.length < 6) return alert("Password must be at least 6 characters.");
+              if(!noRc && (!rcId || !rcRating)) return alert("Please provide your Ratings Central details or check the 'I don't have one' box.");
+
+              // Combine the name and decide the payload rating
+              const fullName = middle ? `${first} ${middle} ${last}` : `${first} ${last}`;
+              const finalRating = noRc ? 1500 : (rcId ? rcId : rcRating);
+
+              const btn = document.getElementById('reg-btn');
+              const orig = btn.innerHTML;
+              btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> CREATING ACCOUNT...';
+              btn.disabled = true;
+
+              createUserWithEmailAndPassword(auth, email, pass1).then(async (result) => {
+                  const uid = result.user.uid;
+                  const res = await fetch('/api/hub/register', {
+                      method: 'POST', headers: {'Content-Type': 'application/json'},
+                      body: JSON.stringify({ name: fullName, email: email, dob: dob, uid: uid, estimated_rating: finalRating, club: club })
+                  });
+                  const data = await res.json();
+                  
+                  if(data.success) {
+                      alert("Account Created successfully! An Admin will approve your official match linking shortly.");
+                      window.closeRegisterModal();
+                      
+                      const token = await result.user.getIdToken();
+                      await fetch('/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token }) });
+                      
+                      window.switchTab('player-hub');
+                  } else {
+                      alert("Database Error: " + data.error);
+                  }
+                  btn.innerHTML = orig; btn.disabled = false;
+              }).catch(err => { 
+                  alert("Registration Error: " + err.message); 
+                  btn.innerHTML = orig; btn.disabled = false;
+              });
+          };
+
+          window.handlePlayerLogout = function() {
+              signOut(auth).then(() => { window.location.href = '/logout'; });
+          };
+
+          onAuthStateChanged(auth, (user) => {
+              if (user) {
+                  document.querySelectorAll('.auth-logged-out').forEach(el => el.classList.add('hidden'));
+                  document.querySelectorAll('.auth-logged-in').forEach(el => el.classList.remove('hidden'));
+                  
+                  const hubEmail = document.getElementById('hub-email');
+                  if (hubEmail) hubEmail.innerText = user.email;
+
+                  const dropEmail = document.getElementById('dropdown-email');
+                  if (dropEmail) dropEmail.innerText = user.email;
+              } else {
+                  document.querySelectorAll('.auth-logged-in').forEach(el => el.classList.add('hidden'));
+                  document.querySelectorAll('.auth-logged-out').forEach(el => el.classList.remove('hidden'));
+              }
+          });
+      });
+    </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap');
         
@@ -14,58 +150,26 @@
         
         body { font-family: 'Inter', sans-serif; background-color: var(--p-bg); color: #f8fafc; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
         
-        /* Premium UI Elements */
         .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); }
         .nav-item.active { color: var(--p-secondary); }
         .nav-item.active i { transform: translateY(-2px); color: var(--p-secondary); text-shadow: 0 0 10px rgba(14, 165, 233, 0.5); }
         .input-premium { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; transition: all 0.2s; }
         .input-premium:focus { border-color: var(--p-primary); box-shadow: 0 0 0 2px rgba(234,179,8,0.2); }
         
-        /* Animations */
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
         
-        /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 
-        /* Background Stars - CROSS SHAPE & RANDOM TWINKLE */
         #starContainer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
-        
-        .cross-star { 
-            position: absolute; 
-            background: white; 
-            /* This creates the 4-pointed cross/sparkle shape */
-            clip-path: polygon(50% 0%, 55% 45%, 100% 50%, 55% 55%, 50% 100%, 45% 55%, 0% 50%, 45% 45%);
-            opacity: 0; 
-        }
+        .cross-star { position: absolute; background: white; clip-path: polygon(50% 0%, 55% 45%, 100% 50%, 55% 55%, 50% 100%, 45% 55%, 0% 50%, 45% 45%); opacity: 0; }
+        @keyframes sporadic-twinkle { 0%, 20% { opacity: 0; transform: scale(0.3) rotate(0deg); } 50% { opacity: 1; transform: scale(1.2) rotate(45deg); box-shadow: 0 0 8px rgba(255,255,255,0.8); } 80%, 100% { opacity: 0; transform: scale(0.3) rotate(90deg); } }
 
-        /* The keyframe creates a pause at 0% and 100% so they stay dark, giving a random interval feel */
-        @keyframes sporadic-twinkle { 
-            0%, 20% { opacity: 0; transform: scale(0.3) rotate(0deg); } 
-            50% { opacity: 1; transform: scale(1.2) rotate(45deg); box-shadow: 0 0 8px rgba(255,255,255,0.8); } 
-            80%, 100% { opacity: 0; transform: scale(0.3) rotate(90deg); } 
-        }
-
-        /* METALLIC GOLD SHINE ANIMATION */
-        @keyframes shine-metallic {
-            0% { background-position: 200% center; }
-            100% { background-position: -200% center; }
-        }
-
-        .shining-gold-text {
-            background: linear-gradient(110deg, #b8860b 10%, #eab308 30%, #ffffe0 48%, #ffffff 50%, #ffffe0 52%, #eab308 70%, #b8860b 90%);
-            background-size: 200% auto;
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-            color: transparent; 
-            animation: shine-metallic 4s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
-            will-change: background-position;
-            filter: drop-shadow(0px 2px 12px rgba(234, 179, 8, 0.4));
-        }
+        @keyframes shine-metallic { 0% { background-position: 200% center; } 100% { background-position: -200% center; } }
+        .shining-gold-text { background: linear-gradient(110deg, #b8860b 10%, #eab308 30%, #ffffe0 48%, #ffffff 50%, #ffffe0 52%, #eab308 70%, #b8860b 90%); background-size: 200% auto; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; animation: shine-metallic 4s cubic-bezier(0.4, 0.0, 0.2, 1) infinite; will-change: background-position; filter: drop-shadow(0px 2px 12px rgba(234, 179, 8, 0.4)); }
     </style>
 </head>
 <body class="min-h-screen pb-24 lg:pb-6 relative flex flex-col">
@@ -95,10 +199,50 @@
             </div>
 
             <div class="flex items-center gap-3 shrink-0">
-                <button onclick="openDonateModal()" class="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white text-[11px] md:text-xs uppercase tracking-widest font-black px-4 py-2 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.4)] transition-transform hover:scale-105 flex items-center gap-2">
-                    <i class="fa-brands fa-apple-pay text-2xl leading-none -mt-0.5"></i> DONATE
-                </button>
                 
+                <div class="relative group" id="authDropdownContainer">
+                    <button onclick="window.toggleAuthDropdown()" class="auth-logged-out bg-slate-800 hover:bg-slate-700 border border-white/10 text-white text-[11px] md:text-xs uppercase tracking-widest font-bold px-4 py-2.5 rounded-xl transition-all shadow-lg flex items-center gap-2">
+                        <i class="fa-solid fa-right-to-bracket text-sky-500"></i> LOGIN / SIGNUP
+                    </button>
+                    
+                    <button onclick="window.toggleAuthDropdown()" class="auth-logged-in hidden bg-gradient-to-r from-yellow-600 to-amber-500 hover:from-yellow-500 hover:to-amber-400 text-black border border-yellow-400/50 text-[11px] md:text-xs uppercase tracking-widest font-black px-4 py-2.5 rounded-xl transition-all shadow-[0_0_15px_rgba(234,179,8,0.4)] flex items-center gap-2 hover:scale-[1.02]">
+                        <i class="fa-solid fa-user-astronaut"></i> MY HUB
+                    </button>
+
+                    <div id="authDropdownMenu" class="hidden absolute right-0 mt-3 w-72 bg-slate-800 border border-white/10 rounded-2xl shadow-2xl z-[100] overflow-hidden origin-top-right transition-all">
+                        
+                        <div class="auth-logged-out">
+                            <div class="p-4 border-b border-white/5 bg-slate-900/80">
+                                <p class="text-xs font-black text-white uppercase tracking-widest mb-1">Player Portal</p>
+                                <p class="text-[10px] text-slate-400 leading-tight">Sign in to view your personalized dashboard and register for events.</p>
+                            </div>
+                            <div class="p-4 flex flex-col gap-3">
+                                <input type="email" id="login-email" placeholder="Email Address" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2.5 text-white text-sm focus:border-sky-500 outline-none transition-colors">
+                                <input type="password" id="login-password" placeholder="Password" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2.5 text-white text-sm focus:border-sky-500 outline-none transition-colors" onkeypress="if(event.key === 'Enter') window.handleEmailLogin()">
+                                <button id="login-btn" onclick="window.handleEmailLogin()" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 rounded-lg transition text-sm shadow">Sign In</button>
+                            </div>
+                            <div class="border-t border-white/5 p-4 bg-slate-900/50">
+                                <p class="text-[10px] text-slate-400 mb-2 text-center">New to the portal?</p>
+                                <button onclick="window.openRegisterModal(); window.toggleAuthDropdown();" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg transition text-xs uppercase tracking-widest shadow">Create Account</button>
+                            </div>
+                        </div>
+                        
+                        <div class="auth-logged-in hidden">
+                            <div class="p-5 border-b border-white/5 bg-slate-900/80">
+                                <p class="text-xs font-black text-white uppercase tracking-widest mb-1">Signed In As</p>
+                                <p class="text-[10px] text-sky-400 font-mono truncate" id="dropdown-email">Loading...</p>
+                            </div>
+                            <button onclick="window.switchTab('player-hub'); window.toggleAuthDropdown();" class="w-full text-left px-5 py-4 text-sm text-white hover:bg-yellow-500/20 hover:text-yellow-400 transition-colors flex items-center gap-3 font-bold">
+                                <i class="fa-solid fa-user-astronaut text-lg"></i> Open Player Hub
+                            </button>
+                            <div class="border-t border-white/5"></div>
+                            <button onclick="window.handlePlayerLogout()" class="w-full text-left px-5 py-4 text-sm text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors flex items-center gap-3 font-bold">
+                                <i class="fa-solid fa-right-from-bracket text-lg"></i> Sign Out
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="relative w-48 md:w-64 group hidden md:block">
                     <input type="text" id="playerSearch" placeholder="Search for a player..." class="w-full bg-black/40 border border-white/10 text-white text-sm rounded-xl px-5 py-2 pl-11 focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all group-hover:bg-black/60 shadow-inner placeholder-slate-500" autocomplete="off">
                     <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-hover:text-sky-500 transition-colors"></i>
@@ -117,6 +261,36 @@
         {% include 'Components/notices.html' %}
         {% include 'Components/community.html' %}
         {% include 'Components/profile.html' %}
+
+        <div id="tab-player-hub" class="hidden w-full max-w-4xl px-4 animate-fade-in relative z-10">
+            <div class="glass-panel rounded-3xl p-6 md:p-10 shadow-2xl border border-yellow-500/30 relative overflow-hidden">
+                <div class="absolute -right-20 -top-20 w-64 h-64 bg-yellow-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                
+                <div class="flex justify-between items-start mb-8 relative z-10">
+                    <div>
+                        <h2 class="text-3xl md:text-4xl font-black text-white flex items-center gap-3 mb-2"><i class="fa-solid fa-user-astronaut text-yellow-500"></i> Player Hub</h2>
+                        <p class="text-sm text-slate-400 font-mono" id="hub-email">Loading...</p>
+                    </div>
+                    <button onclick="window.handlePlayerLogout()" class="bg-red-900/30 hover:bg-red-600 text-red-500 hover:text-white border border-red-500/30 font-bold py-2 px-4 rounded-xl text-xs uppercase tracking-widest shadow transition flex items-center gap-2">
+                        <i class="fa-solid fa-right-from-bracket"></i> Logout
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                    <div class="bg-slate-800/80 p-6 rounded-2xl border border-white/5 shadow-lg flex flex-col items-center justify-center text-center group hover:border-sky-500/50 transition-colors cursor-pointer" onclick="window.switchTab('search')">
+                        <div class="w-16 h-16 bg-sky-500/20 text-sky-400 rounded-full flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform"><i class="fa-solid fa-chart-pie"></i></div>
+                        <h3 class="text-white font-black text-lg mb-1">View My Stats</h3>
+                        <p class="text-xs text-slate-400">Jump to your public profile to see your match history and ratings.</p>
+                    </div>
+                    
+                    <div class="bg-slate-800/80 p-6 rounded-2xl border border-white/5 shadow-lg flex flex-col items-center justify-center text-center group hover:border-emerald-500/50 transition-colors cursor-pointer">
+                        <div class="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform"><i class="fa-solid fa-calendar-check"></i></div>
+                        <h3 class="text-white font-black text-lg mb-1">Tournament Registration</h3>
+                        <p class="text-xs text-slate-400">Sign up for upcoming club events. (Coming Soon!)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
     </main>
 
     <footer class="w-full max-w-4xl mx-auto px-4 pt-8 pb-12 text-center relative z-10">
@@ -125,9 +299,6 @@
                 &copy; 2026 Gold Coast Table Tennis Stats. <br class="md:hidden">
                 Created by Jakob Fensom and Jesse Wilson.
             </p>
-            <a href="/login" class="text-[10px] uppercase tracking-widest text-slate-600 hover:text-sky-400 transition-colors font-bold flex items-center gap-1.5 mt-1">
-                <i class="fa-solid fa-lock"></i> Admin Login
-            </a>
         </div>
     </footer>
 
@@ -141,14 +312,6 @@
                 <i class="fa-solid fa-trophy text-lg"></i>
                 <span class="text-[9px] font-medium tracking-tight">Ranks</span>
             </button>
-            <button id="b-nav-live-center" onclick="window.switchTab('live-center')" class="nav-item flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 relative text-slate-400 hidden">
-                <div class="absolute -top-1 -right-1 flex h-3 w-3">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                </div>
-                <i class="fa-solid fa-satellite-dish text-lg"></i>
-                <span class="text-[9px] font-medium tracking-tight">Live</span>
-            </button>
             <button id="b-nav-sheets" onclick="window.switchTab('sheets')" class="nav-item flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 text-slate-400">
                 <i class="fa-solid fa-calendar-week text-lg"></i>
                 <span class="text-[9px] font-medium tracking-tight">Matches</span>
@@ -157,10 +320,92 @@
                 <i class="fa-solid fa-magnifying-glass text-lg"></i>
                 <span class="text-[9px] font-medium tracking-tight">Search</span>
             </button>
-            <button id="b-nav-community" onclick="window.switchTab('community')" class="nav-item flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 text-slate-400">
-                <i class="fa-solid fa-earth-oceania text-lg"></i>
-                <span class="text-[9px] font-medium tracking-tight">Forum</span>
+            
+            <button id="b-nav-player-hub" onclick="window.switchTab('player-hub')" class="auth-logged-in hidden nav-item flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 text-yellow-500">
+                <i class="fa-solid fa-user-astronaut text-lg drop-shadow-[0_0_5px_rgba(234,179,8,0.5)]"></i>
+                <span class="text-[9px] font-black tracking-tight uppercase">Hub</span>
             </button>
+        </div>
+    </div>
+
+    <div id="registerModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-sm z-[150] flex items-center justify-center p-4 animate-fade-in overflow-y-auto">
+        <div class="bg-slate-900 rounded-3xl border border-emerald-500/30 w-full max-w-2xl shadow-2xl flex flex-col my-8 relative overflow-hidden">
+            <div class="absolute -right-20 -top-20 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            
+            <div class="p-6 border-b border-white/10 flex justify-between items-center relative z-10 bg-slate-900/80">
+                <div>
+                    <h3 class="text-2xl font-black text-white flex items-center gap-2"><i class="fa-solid fa-user-plus text-emerald-400"></i> Create Player Account</h3>
+                    <p class="text-xs text-slate-400 mt-1">Join the portal to track your stats and register for events.</p>
+                </div>
+                <button onclick="window.closeRegisterModal()" class="text-slate-400 hover:text-white transition bg-black/20 w-8 h-8 rounded-full flex justify-center items-center"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="p-6 relative z-10 space-y-5">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">First Name *</label>
+                        <input type="text" id="reg-first" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Middle Name</label>
+                        <input type="text" id="reg-middle" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Last Name *</label>
+                        <input type="text" id="reg-last" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Email Address *</label>
+                        <input type="email" id="reg-email" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Date of Birth *</label>
+                        <input type="date" id="reg-dob" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-emerald-500 outline-none text-sm" style="color-scheme: dark;">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Password *</label>
+                        <input type="password" id="reg-pass1" placeholder="Min 6 characters" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Confirm Password *</label>
+                        <input type="password" id="reg-pass2" placeholder="Re-type password" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Home Club</label>
+                    <input type="text" id="reg-club" placeholder="e.g. Gold Coast Table Tennis" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm">
+                </div>
+
+                <div class="bg-emerald-900/10 border border-emerald-500/20 rounded-xl p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="text-xs font-black text-emerald-400 uppercase tracking-widest"><i class="fa-solid fa-globe mr-1"></i> Ratings Central</h4>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" id="reg-no-rc" onchange="window.toggleRcFields()" class="w-4 h-4 accent-emerald-500 rounded bg-black/40 border-white/10">
+                            <span class="text-[10px] text-slate-300 font-bold uppercase tracking-widest mt-0.5">I don't have one</span>
+                        </label>
+                    </div>
+                    
+                    <div id="rc-fields-group" class="grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-300">
+                        <div>
+                            <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">RC ID Number</label>
+                            <input type="number" id="reg-rc-id" placeholder="e.g. 123456" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm font-mono">
+                        </div>
+                        <div>
+                            <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Estimated RC Rating</label>
+                            <input type="number" id="reg-rc-rating" placeholder="e.g. 1200" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm font-mono">
+                        </div>
+                    </div>
+                </div>
+
+                <button id="reg-btn" onclick="window.handleRegistration()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-transform hover:scale-[1.01] uppercase tracking-widest mt-2">Create Free Account</button>
+            </div>
         </div>
     </div>
 
@@ -179,22 +424,18 @@
     {% include 'Components/scripts.html' %}
     
     <script>
-        // NEW CROSS-STAR GENERATOR
         function generateStars() {
             const starContainer = document.getElementById('starContainer');
             if(!starContainer) return;
             
-            const numberOfStars = 100; // Adjust density as desired
+            const numberOfStars = 100; 
             const colors = ['#ffffff', '#e0f7fa', '#fff9c4', '#bbdefb', '#ffffff']; 
 
             for (let i = 0; i < numberOfStars; i++) {
                 const star = document.createElement('div');
-                
                 const xPos = Math.random() * 100;
                 const yPos = Math.random() * 100;
-                // Make the cross shapes slightly larger so they are visible
                 const size = Math.random() * 4 + 3; 
-                // Randomize speed and massive variations in delay
                 const animDuration = Math.random() * 4 + 2; 
                 const animDelay = Math.random() * 10; 
                 const starColor = colors[Math.floor(Math.random() * colors.length)];
@@ -205,8 +446,6 @@
                 star.style.width = `${size}px`;
                 star.style.height = `${size}px`;
                 star.style.backgroundColor = starColor;
-                
-                // Attach our custom animation that pauses randomly
                 star.style.animation = `sporadic-twinkle ${animDuration}s ease-in-out ${animDelay}s infinite`;
 
                 starContainer.appendChild(star);
@@ -219,12 +458,14 @@
             const feedbackModal = document.getElementById('feedbackModal');
             const compareModal = document.getElementById('compareModal');
             const matchDetailsModal = document.getElementById('matchDetailsModal');
+            const registerModal = document.getElementById('registerModal');
 
             if (reportModal && !reportModal.classList.contains('hidden')) { closeReportModal(); return; }
             if (donateModal && !donateModal.classList.contains('hidden')) { closeDonateModal(); return; }
             if (feedbackModal && !feedbackModal.classList.contains('hidden')) { document.getElementById('feedbackModal').classList.add('hidden'); return; }
             if (compareModal && !compareModal.classList.contains('hidden')) { closeCompareModal(); return; }
             if (matchDetailsModal && !matchDetailsModal.classList.contains('hidden')) { closeMatchDetails(); return; }
+            if (registerModal && !registerModal.classList.contains('hidden')) { window.closeRegisterModal(); return; }
             
             if (event.state && event.state.tab) { switchTab(event.state.tab, false); }
         });
@@ -232,8 +473,7 @@
         window.switchTab = function(tabId, pushHistory = true) {
             if(pushHistory) { history.pushState({ page: 'fixtures', tab: tabId }, "", "#" + tabId); }
             
-            // MAP ALL TABS SO THEY PROPERLY HIDE AND SHOW
-            ['home', 'week', 'sheets', 'search', 'notices', 'community', 'live-center', 'rules'].forEach(t => { 
+            ['home', 'week', 'sheets', 'search', 'notices', 'community', 'live-center', 'rules', 'player-hub'].forEach(t => { 
                 const el = document.getElementById(`tab-${t}`); 
                 if(el) el.classList.add('hidden'); 
                 const nav = document.getElementById(`nav-${t}`); 
@@ -260,7 +500,6 @@
                     if(searchInput) setTimeout(() => searchInput.focus(), 100);
                 }
                 
-                // AUTO-INITIALIZE COMMUNITY FORUM WHEN CLICKED
                 if(tabId === 'community' && typeof window.initCommunity === 'function') {
                     window.initCommunity();
                 }
@@ -268,7 +507,6 @@
             window.scrollTo({ top: 0, behavior: 'smooth' }); 
         };
 
-        // FAIL-SAFE: Stop the infinite loading loop if the database is genuinely empty.
         let loadAttempts = 0;
         const originalLoadInitialData = async () => {
             try {
@@ -313,7 +551,7 @@
                         loadStats(pName, false);
                     } else {
                         const tabId = initialHash.replace('#', '');
-                        if (['home', 'week', 'sheets', 'search', 'notices', 'community', 'live-center', 'rules'].includes(tabId)) {
+                        if (['home', 'week', 'sheets', 'search', 'notices', 'community', 'live-center', 'rules', 'player-hub'].includes(tabId)) {
                             switchTab(tabId, false);
                         } else {
                             switchTab('home', false);

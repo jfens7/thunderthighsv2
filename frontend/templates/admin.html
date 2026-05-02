@@ -36,10 +36,11 @@
 
     <div class="bg-slate-900 border-b border-white/5 px-4 flex gap-8 overflow-x-auto hide-scroll shrink-0">
         <button onclick="window.setAdminCategory('ops')" id="cat-ops" class="py-4 border-b-2 border-blue-500 text-blue-400 font-bold uppercase tracking-widest text-xs flex items-center gap-2"><i class="fa-solid fa-table-tennis-paddle-ball"></i> Match Ops</button>
-        <button onclick="window.setAdminCategory('players')" id="cat-players" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-users-gear"></i> Players & Math</button>
+        <button onclick="window.setAdminCategory('players')" id="cat-players" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-users-gear"></i> Players & Maths</button>
         <button onclick="window.setAdminCategory('accounts')" id="cat-accounts" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-users-rectangle"></i> Accounts</button>
         <button onclick="window.setAdminCategory('comms')" id="cat-comms" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-bullhorn"></i> Comms & Money</button>
         <button onclick="window.setAdminCategory('system')" id="cat-system" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-server"></i> System Logs</button>
+        <button onclick="window.setAdminCategory('diagnostics')" id="cat-diagnostics" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-microchip"></i> Diagnostics</button>
     </div>
 
     <div id="sub-ops" class="bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
@@ -52,14 +53,13 @@
 
     <div id="sub-players" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
         <button onclick="window.switchAdminTab('players')" id="tab-btn-players" class="px-4 py-2 text-xs font-bold text-purple-400 bg-purple-900/30 rounded-lg">Player Editor</button>
-        <button onclick="window.switchAdminTab('diagnostics')" id="tab-btn-diagnostics" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Glicko Simulator</button>
         <button onclick="window.switchAdminTab('schedules')" id="tab-btn-schedules" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"><i class="fa-solid fa-calendar-days mr-1"></i> Schedule Manager</button>
     </div>
 
     <div id="sub-accounts" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
         <button onclick="window.switchAdminTab('approvals')" id="tab-btn-approvals" class="px-4 py-2 text-xs font-bold text-green-400 bg-green-900/30 rounded-lg">New Approvals</button>
         <button onclick="window.switchAdminTab('directory')" id="tab-btn-directory" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Account Directory</button>
-        <button onclick="window.switchAdminTab('merge-accounts')" id="tab-btn-merge-accounts" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Merge Tools</button>
+        <button onclick="window.switchAdminTab('merge-accounts')" id="tab-btn-merge-accounts" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white super-admin-only">Merge Tools</button>
     </div>
 
     <div id="sub-comms" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
@@ -72,12 +72,32 @@
     </div>
 
     <div id="sub-system" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
-        <button onclick="window.switchAdminTab('audit')" id="tab-btn-audit" class="px-4 py-2 text-xs font-bold text-yellow-400 bg-yellow-900/30 rounded-lg">Audit Logs</button>
+        <button onclick="window.switchAdminTab('audit')" id="tab-btn-audit" class="px-4 py-2 text-xs font-bold text-yellow-400 bg-yellow-900/30 rounded-lg super-admin-only">Audit Logs</button>
         <button onclick="window.switchAdminTab('chat')" id="tab-btn-chat" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Admin Notes</button>
+    </div>
+
+    <div id="sub-diagnostics" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
+        <button onclick="window.switchAdminTab('diagnostics')" id="tab-btn-diagnostics" class="px-4 py-2 text-xs font-bold text-indigo-400 bg-indigo-900/30 rounded-lg">Traffic & Tools</button>
     </div>
 
     <div class="flex-1 overflow-y-auto p-6 pb-20">
         
+        <div id="admin-players" class="hidden animate-fade-in w-full max-w-5xl mx-auto">
+            {% include 'Components/Admin/view_players.html' ignore missing %}
+        </div>
+
+        <div id="admin-accounts-wrapper">
+            {% include 'Components/Admin/view_accounts.html' ignore missing %}
+        </div>
+
+        <div id="admin-diagnostics-wrapper">
+            {% include 'Components/Admin/view_diagnostics.html' ignore missing %}
+        </div>
+
+        <div id="admin-broadcast" class="hidden animate-fade-in w-full max-w-3xl mx-auto">
+            {% include 'Components/Admin/view_broadcast.html' ignore missing %}
+        </div>
+
         <div id="admin-community-mod" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
             <h2 class="text-red-400 font-bold uppercase tracking-widest text-sm border-b border-white/10 pb-4 mb-4"><i class="fa-solid fa-shield-halved mr-2"></i> Forum Moderation</h2>
             <div id="mod-forum-feed" class="space-y-4"></div>
@@ -95,8 +115,7 @@
         <div id="admin-manual" class="hidden animate-fade-in w-full max-w-3xl mx-auto">
             <div class="bg-slate-800 p-8 rounded-xl border border-white/10 shadow-xl">
                 <h2 class="text-emerald-400 font-black text-xl mb-2"><i class="fa-solid fa-pen-to-square mr-2"></i> Manual Match Creator</h2>
-                <p class="text-xs text-slate-400 mb-8">Inject a custom match directly into history. You can specify exact game scores (e.g. 11-8) and the system will calculate the final sets automatically.</p>
-                
+                <p class="text-xs text-slate-400 mb-8">Inject a custom match directly into history.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div class="relative">
                         <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Player 1 (Home)</label>
@@ -109,7 +128,6 @@
                         <div id="sugg-p2" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 rounded shadow-xl max-h-48 overflow-y-auto hidden border border-white/10"></div>
                     </div>
                 </div>
-
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                     <div>
                         <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Date</label>
@@ -120,7 +138,6 @@
                         <input type="text" id="manual-scores" placeholder="e.g. 11-8, 9-11, 14-12, 11-5" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm font-mono">
                     </div>
                 </div>
-
                 <button onclick="window.submitManualMatch()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.3)] transition text-sm">INJECT INTO HISTORY</button>
             </div>
         </div>
@@ -179,7 +196,7 @@
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
-                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Tournament ID (Copy from DB for now)</label>
+                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Tournament ID</label>
                             <input type="text" id="e-tournament-id" placeholder="e.g., gc-open-2026" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-500">
                         </div>
                         <div>
@@ -231,64 +248,6 @@
 
                     <button onclick="window.adminCreateEvent()" class="w-full bg-white hover:bg-slate-200 text-black font-black py-3 rounded-lg transition shadow-[0_0_15px_rgba(255,255,255,0.2)] text-sm"><i class="fa-solid fa-plus mr-2"></i> ADD EVENT TO TOURNAMENT</button>
                 </div>
-            </div>
-        </div>
-
-        <div id="admin-players" class="hidden animate-fade-in w-full max-w-5xl mx-auto">
-            {% include 'Components/Admin/view_players.html' %}
-        </div>
-
-        <div id="admin-accounts-wrapper">
-            {% include 'Components/Admin/view_accounts.html' %}
-        </div>
-
-        <div id="admin-diagnostics" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
-            <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
-                <h2 class="text-emerald-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-microchip mr-2"></i> Glicko-2 Match Simulator</h2>
-            </div>
-            <div class="bg-slate-800 p-6 rounded-xl border border-white/5 shadow-lg">
-                <div class="grid grid-cols-[1fr,auto,1fr] gap-6 items-center mb-8">
-                    <div>
-                        <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Player 1</label>
-                        <input type="text" id="diag-p1-search" placeholder="Search Player..." class="w-full bg-black/40 border border-white/10 rounded px-4 py-3 text-white focus:outline-none" autocomplete="off">
-                        <div id="diag-p1-suggestions" class="absolute z-50 w-64 mt-1 bg-slate-700 border border-white/10 rounded shadow-xl hidden"></div>
-                    </div>
-                    <div class="text-slate-600 font-black mt-6">VS</div>
-                    <div>
-                        <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Player 2</label>
-                        <input type="text" id="diag-p2-search" placeholder="Search Player..." class="w-full bg-black/40 border border-white/10 rounded px-4 py-3 text-white focus:outline-none" autocomplete="off">
-                        <div id="diag-p2-suggestions" class="absolute z-50 w-64 mt-1 bg-slate-700 border border-white/10 rounded shadow-xl hidden"></div>
-                    </div>
-                </div>
-                <div class="flex justify-center items-center gap-4 mb-8 bg-black/20 p-4 rounded-xl border border-white/5">
-                    <div class="flex flex-col items-center">
-                        <span class="text-[10px] text-slate-500 uppercase font-bold mb-2">P1 Sets</span>
-                        <input type="number" id="diag-s1" value="3" class="w-16 bg-slate-900 border border-white/10 text-white font-bold font-mono text-center rounded py-2 outline-none">
-                    </div>
-                    <span class="text-slate-600 font-black mt-4">-</span>
-                    <div class="flex flex-col items-center">
-                        <span class="text-[10px] text-slate-500 uppercase font-bold mb-2">P2 Sets</span>
-                        <input type="number" id="diag-s2" value="0" class="w-16 bg-slate-900 border border-white/10 text-white font-bold font-mono text-center rounded py-2 outline-none">
-                    </div>
-                </div>
-                <button id="diag-btn" onclick="window.runDiagnostics()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition-all shadow-lg"><i class="fa-solid fa-microchip"></i> Run Simulation</button>
-            </div>
-            <div id="diag-results" class="mt-6 hidden"></div>
-
-            <div class="mt-8 bg-slate-900 border border-slate-700 p-6 rounded-xl shadow-lg">
-                <h3 class="text-white font-bold mb-4 uppercase tracking-widest text-xs text-center"><i class="fa-solid fa-sliders text-yellow-500 mr-2"></i> Global Glicko Multipliers</h3>
-                <p class="text-[10px] text-slate-400 text-center mb-6">If the Loss Multiplier is higher than the Win Multiplier, the system is actively punishing losers. Set both to 1.0 for pure, mathematically fair exchanges.</p>
-                <div class="flex justify-center items-center gap-8">
-                    <div class="text-center">
-                        <label class="text-[10px] text-emerald-500 font-bold uppercase tracking-widest block mb-2">Win Multiplier</label>
-                        <input type="number" step="0.1" id="math-k-win" value="1.0" class="w-20 bg-black/50 border border-emerald-500/30 text-emerald-400 text-center font-mono font-bold py-2 rounded focus:outline-none focus:border-emerald-500">
-                    </div>
-                    <div class="text-center">
-                        <label class="text-[10px] text-red-500 font-bold uppercase tracking-widest block mb-2">Loss Multiplier</label>
-                        <input type="number" step="0.1" id="math-k-loss" value="1.4" class="w-20 bg-black/50 border border-red-500/30 text-red-400 text-center font-mono font-bold py-2 rounded focus:outline-none focus:border-red-500">
-                    </div>
-                </div>
-                <button onclick="window.saveMathMultipliers()" class="mt-6 w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-lg border border-white/10 transition-colors text-sm">SAVE & RECALCULATE HISTORY</button>
             </div>
         </div>
 
@@ -361,10 +320,6 @@
                     </div>
                 </div>
             </div>
-        </div>
-
-        <div id="admin-broadcast" class="hidden animate-fade-in w-full max-w-3xl mx-auto">
-            {% include 'Components/Admin/view_broadcast.html' %}
         </div>
 
         <div id="admin-sms-inbox" class="hidden animate-fade-in w-full max-w-4xl mx-auto">

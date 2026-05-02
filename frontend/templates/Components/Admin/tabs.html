@@ -2,6 +2,15 @@
     <button id="tab-btn-live" onclick="window.switchAdminTab('live')" class="px-6 py-4 font-bold text-sm text-yellow-500 border-b-2 border-yellow-500 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap">
         <i class="fa-solid fa-tower-broadcast"></i> Live Control <span id="liveMatchCount" class="bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1">0</span>
     </button>
+    
+    <button id="tab-btn-approvals" onclick="window.switchAdminTab('approvals')" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap relative">
+        <i class="fa-solid fa-users"></i> Accounts
+    </button>
+
+    <button id="tab-btn-diagnostics" onclick="window.switchAdminTab('diagnostics')" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap">
+        <i class="fa-solid fa-microchip"></i> Diagnostics
+    </button>
+
     <button id="tab-btn-inbox-match" onclick="window.switchAdminTab('inbox-match')" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap relative">
         <i class="fa-solid fa-inbox"></i> Match Inbox <span id="match-badge" class="hidden bg-yellow-500 text-black text-[10px] font-black px-1.5 py-0.5 rounded-full">0</span>
     </button>
@@ -29,10 +38,7 @@
     <button id="tab-btn-chat" onclick="window.switchAdminTab('chat')" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap">
         <i class="fa-solid fa-message"></i> Admin Notes
     </button>
-    <button id="tab-btn-diagnostics" onclick="window.switchAdminTab('diagnostics')" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap">
-        <i class="fa-solid fa-microchip"></i> Diagnostics
-    </button>
-    <button id="tab-btn-audit" onclick="window.switchAdminTab('audit')" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap">
+    <button id="tab-btn-audit" onclick="window.switchAdminTab('audit')" class="px-6 py-4 font-bold text-sm text-slate-400 hover:text-white transition-all flex items-center gap-2 border-b-2 border-transparent cursor-pointer whitespace-nowrap super-admin-only">
         <i class="fa-solid fa-shield-halved"></i> Security & Logs
     </button>
 </div>

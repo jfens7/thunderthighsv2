@@ -1,6 +1,155 @@
 <script>
     console.log("✅ Admin Operations Module Loaded");
 
+    window.applyRoleBasedUI = function() {
+        const userRole = '{{ role }}'; 
+        if (userRole === 'moderator' || userRole === 'admin') {
+            const superElements = document.querySelectorAll('.super-admin-only');
+            superElements.forEach(el => el.classList.add('hidden', 'pointer-events-none'));
+            console.log(`🔒 Role-Based UI Applied: Locked to ${userRole.toUpperCase()} level.`);
+        }
+    };
+
+    window.loadSystemDiagnostics = async function() {
+        window.applyRoleBasedUI();
+        
+        const vBox = document.getElementById('diag-views');
+        const hBox = document.getElementById('diag-humans');
+        const bBox = document.getElementById('diag-bots');
+        const logTable = document.getElementById('visitor-log-table');
+        
+        if (vBox) vBox.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-lg"></i>';
+        
+        try {
+            const res = await fetch('/api/admin/traffic');
+            const data = await res.json();
+            
+            if (vBox) vBox.innerText = data.views || 0;
+            if (hBox) hBox.innerText = data.humans || 0;
+            if (bBox) bBox.innerText = data.bots || 0;
+            
+            // THE FIX: Populate the Live Traffic Table!
+            if (logTable) {
+                if (!data.logs || data.logs.length === 0) {
+                    logTable.innerHTML = '<div class="text-center py-6 text-slate-500 text-xs italic">No traffic logged yet today.</div>';
+                } else {
+                    logTable.innerHTML = data.logs.map(log => {
+                        const botBadge = log.is_bot 
+                            ? '<span class="bg-amber-900/30 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest"><i class="fa-solid fa-robot mr-1"></i> Bot</span>' 
+                            : '<span class="bg-emerald-900/30 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest"><i class="fa-solid fa-user mr-1"></i> Human</span>';
+                        
+                        return `
+                        <div class="grid grid-cols-4 gap-4 p-3 border-b border-white/5 text-xs text-slate-300 items-center hover:bg-white/5 transition-colors">
+                            <div class="font-mono text-[10px] text-slate-500">${log.time}</div>
+                            <div class="font-mono">${log.ip}</div>
+                            <div class="font-bold flex items-center gap-2">
+                                ${log.device.includes('iPhone') ? '<i class="fa-brands fa-apple text-slate-400"></i>' : ''}
+                                ${log.device.includes('Mac') ? '<i class="fa-solid fa-laptop text-slate-400"></i>' : ''}
+                                ${log.device.includes('Windows') ? '<i class="fa-brands fa-windows text-slate-400"></i>' : ''}
+                                ${log.device.includes('Android') ? '<i class="fa-brands fa-android text-slate-400"></i>' : ''}
+                                ${log.device}
+                            </div>
+                            <div>${botBadge}</div>
+                        </div>`;
+                    }).join('');
+                }
+            }
+            
+        } catch(e) {
+            if (vBox) vBox.innerText = 'Err';
+        }
+    };
+
+    window.runMathDiagnostic = async function() {
+        const p1 = document.getElementById('diag-p1-search').value.trim();
+        const p2 = document.getElementById('diag-p2-search').value.trim();
+        const s1 = document.getElementById('diag-s1').value.trim();
+        const s2 = document.getElementById('diag-s2').value.trim();
+        
+        if (!p1 || !p2 || s1 === '' || s2 === '') return alert("Please fill all fields.");
+
+        const btn = document.getElementById('diag-btn');
+        const origText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> CALCULATING...';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch('/api/admin/glicko_calc', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ p1: p1, p2: p2, s1: s1, s2: s2 })
+            });
+            const out = await res.json();
+            const box = document.getElementById('diag-results');
+            box.classList.remove('hidden');
+            
+            if (out.success) {
+                const r = out.data;
+                const formatDelta = d => (d > 0 ? `+${d.toFixed(1)}` : d.toFixed(1));
+                const colP1 = r.p1.delta > 0 ? 'text-emerald-400' : 'text-red-400';
+                const colP2 = r.p2.delta > 0 ? 'text-emerald-400' : 'text-red-400';
+                
+                box.innerHTML = `
+                    <div class="text-sky-400 font-black mb-2 uppercase tracking-widest text-[10px] border-b border-white/10 pb-2">Calculation Success</div>
+                    <div class="flex justify-between items-center bg-black/40 p-2 rounded">
+                        <span class="text-slate-300 font-bold">${r.p1.name}</span>
+                        <div class="text-right">
+                            <span class="text-white">${Math.round(r.p1.new_rating)}</span>
+                            <span class="text-[10px] ${colP1} ml-2 font-black">${formatDelta(r.p1.delta)}</span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center bg-black/40 p-2 rounded">
+                        <span class="text-slate-300 font-bold">${r.p2.name}</span>
+                        <div class="text-right">
+                            <span class="text-white">${Math.round(r.p2.new_rating)}</span>
+                            <span class="text-[10px] ${colP2} ml-2 font-black">${formatDelta(r.p2.delta)}</span>
+                        </div>
+                    </div>
+                    <div class="text-[9px] text-slate-500 mt-2 italic text-center">Using current active multiplier scales.</div>
+                `;
+            } else {
+                box.innerHTML = `<span class="text-red-500">Error: ${out.error || "Unknown"}</span>`;
+            }
+        } catch (e) {
+            alert("Diagnostic Request Failed.");
+        } finally {
+            btn.innerHTML = origText;
+            btn.disabled = false;
+        }
+    };
+
+    window.scanForErrors = async function() {
+        const box = document.getElementById('error-results-box');
+        box.innerHTML = '<div class="text-center py-12"><i class="fa-solid fa-radar fa-spin text-red-500 text-3xl mb-4"></i><div class="text-xs text-slate-400 uppercase tracking-widest">Scanning entire database...</div></div>';
+        
+        try {
+            const res = await fetch('/api/admin/date_errors');
+            const errors = await res.json();
+            
+            if (errors.length === 0) {
+                box.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-circle-check text-emerald-500 text-4xl mb-4"></i><div class="text-emerald-400 font-black uppercase tracking-widest text-sm">System Clean!</div><div class="text-slate-500 text-xs mt-2">No missing dates found.</div></div>';
+                return;
+            }
+            
+            box.innerHTML = errors.map(e => `
+                <div class="bg-red-900/10 border border-red-500/20 p-3 rounded-lg mb-2 flex justify-between items-center">
+                    <div>
+                        <div class="text-red-400 font-black text-sm">${e.season} • ${e.division}</div>
+                        <div class="text-xs text-slate-400 mt-1">${e.match_summary}</div>
+                    </div>
+                    <div class="bg-red-950 px-2 py-1 rounded text-[10px] text-red-500 border border-red-900 font-mono">
+                        Week ${e.week}
+                    </div>
+                </div>
+            `).join('');
+            
+        } catch (e) {
+            box.innerHTML = '<div class="text-red-500 text-center py-10 text-sm">Network error during scan.</div>';
+        }
+    };
+
+    // ==========================================
+    // EXISTING OPERATIONS LOGIC
+    // ==========================================
     window.upcomingSchedules = [];
     window.loadSchedules = async function() {
         const listEl = document.getElementById('schedules-list'); if(!listEl) return;
@@ -188,7 +337,16 @@
         try { const res = await fetch('/api/admin/donations'); const data = await res.json(); list.innerHTML = data.length > 0 ? data.map(d => `<div class="bg-slate-800 p-3 rounded flex justify-between text-emerald-400"><span>${d.name}</span><span>$${d.amount}</span></div>`).join('') : ''; } catch (e) {}
     };
 
-    window.loadTrafficStats = async function() { try { const res = await fetch('/api/admin/traffic'); const data = await res.json(); document.getElementById('dash-traffic-views').innerText = data.views; document.getElementById('dash-traffic-uniques').innerText = data.uniques; } catch(e) {} };
+    window.loadTrafficStats = async function() { 
+        try { 
+            const res = await fetch('/api/admin/traffic'); 
+            const data = await res.json(); 
+            const views = document.getElementById('dash-traffic-views');
+            const uniques = document.getElementById('dash-traffic-uniques');
+            if (views) views.innerText = data.views; 
+            if (uniques) uniques.innerText = data.uniques; 
+        } catch(e) {} 
+    };
 
     window.loadAuditLogs = async function() {
         const list = document.getElementById('auditLogList'); if (!list) return;
@@ -203,4 +361,9 @@
     };
 
     window.manageUser = async function(email, action) { try { const res = await fetch('/api/admin/approve_user', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({email: email, action: action}) }); if ((await res.json()).success) window.loadAdminUsers(); } catch(e) {} };
+
+    // Fire automatically when loaded
+    document.addEventListener('DOMContentLoaded', () => {
+        window.loadSystemDiagnostics();
+    });
 </script>

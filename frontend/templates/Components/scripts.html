@@ -42,7 +42,6 @@
             suggContainer.classList.remove('hidden');
         });
 
-        // Hide when clicking outside
         document.addEventListener('click', (e) => {
             if (e.target !== inputElement && e.target !== suggContainer && !suggContainer.contains(e.target)) {
                 suggContainer.classList.add('hidden');
@@ -51,10 +50,56 @@
     }
 
     // ==========================================
+    // AUTH DROPDOWN & SMART INTERCEPTOR
+    // ==========================================
+    window.toggleAuthDropdown = function() {
+        const menu = document.getElementById('authDropdownMenu');
+        if (menu) menu.classList.toggle('hidden');
+    };
+
+    document.addEventListener('click', (e) => {
+        // 1. Close dropdown if clicking outside of it
+        const container = document.getElementById('authDropdownContainer');
+        const menu = document.getElementById('authDropdownMenu');
+        if (container && menu && !container.contains(e.target)) {
+            menu.classList.add('hidden');
+        }
+
+        // 2. Intercept ANY links trying to go to the old portal or login pages
+        const targetLink = e.target.closest('a');
+        if (targetLink) {
+            const href = targetLink.getAttribute('href');
+            if (href === '/player_auth' || href === '/dashboard' || href === '#player-portal') {
+                e.preventDefault();
+                const isLoggedIn = !document.querySelector('.auth-logged-in').classList.contains('hidden');
+                if(isLoggedIn) {
+                    window.switchTab('player-hub');
+                } else {
+                    window.switchTab('home'); 
+                    if (menu) menu.classList.remove('hidden'); 
+                }
+            }
+        }
+        
+        // 3. Intercept ANY buttons anywhere that say "PLAYER PORTAL"
+        const targetBtn = e.target.closest('button');
+        if (targetBtn && targetBtn.innerText && targetBtn.innerText.toUpperCase().includes('PLAYER PORTAL')) {
+            e.preventDefault();
+            const isLoggedIn = !document.querySelector('.auth-logged-in').classList.contains('hidden');
+            if(isLoggedIn) {
+                window.switchTab('player-hub');
+            } else {
+                window.switchTab('home');
+                if (menu) menu.classList.remove('hidden'); 
+            }
+        }
+    });
+
+    // ==========================================
     // UI ENGINE & NAVIGATION
     // ==========================================
     window.switchTab = function(tabId) {
-        const tabs = ['home', 'search', 'standings', 'results', 'profile', 'community', 'live'];
+        const tabs = ['home', 'search', 'standings', 'results', 'profile', 'community', 'live', 'player-hub'];
         tabs.forEach(t => {
             const el = document.getElementById(t + 'Container');
             if(el) el.classList.add('hidden');
@@ -94,7 +139,7 @@
         window.currentProfileName = playerName;
         if (pushHistory) { history.pushState({ page: 'profile', name: playerName }, "", "#profile/" + encodeURIComponent(playerName)); }
         
-        ['home', 'week', 'sheets', 'search', 'notices', 'community', 'live-center', 'rules'].forEach(t => { 
+        ['home', 'week', 'sheets', 'search', 'notices', 'community', 'live-center', 'rules', 'player-hub'].forEach(t => { 
             const el = document.getElementById(`tab-${t}`); 
             if(el) el.classList.add('hidden'); 
         });
@@ -129,7 +174,6 @@
         if (!window.currentProfileData) return;
         const d = window.currentProfileData;
         
-        // Dynamic Toggle Logic (Visual & Data)
         const toggleEl = document.getElementById('profileFillinToggle');
         const isCombined = toggleEl ? toggleEl.checked : true; 
         
@@ -148,7 +192,6 @@
             }
         }
         
-        // If checked, show Combined (Regular + Fill-in). If unchecked, show Regular only.
         const displayStats = isCombined ? d.combined : d.regular; 
         
         document.getElementById('playerRatingBadge').innerHTML = `
@@ -178,7 +221,6 @@
             const deltaColor = delta > 0 ? 'text-emerald-400' : (delta < 0 ? 'text-red-400' : 'text-slate-500');
             const deltaBadge = `<span class="${deltaColor} text-[10px] font-mono font-black ml-2 bg-black/40 px-1.5 py-0.5 rounded border border-white/5 shadow-inner">${deltaStr} <i class="fa-solid ${delta > 0 ? 'fa-arrow-trend-up' : (delta < 0 ? 'fa-arrow-trend-down' : 'fa-minus')} ml-1"></i></span>`;
             
-            // CRITICAL FIX: The Profile Badge
             const fillBadge = m.type === 'Fill-in' ? `<span class="text-[9px] bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 px-2 py-0.5 rounded font-black uppercase tracking-widest ml-2">Fill-in</span>` : '';
             
             let detailsHtml = m.details ? `<div class="mt-3 text-xs font-mono text-slate-400 bg-black/20 p-2.5 rounded-lg border border-white/5 tracking-wider">${m.details}</div>` : '';
@@ -304,7 +346,6 @@
                 const p1Won = s1 > s2;
                 const p2Won = s2 > s1;
                 
-                // CRITICAL FIX: The Match Centre Badges
                 const p1FillBadge = m.p1_fill ? `<span class="text-[8px] bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 px-1.5 py-0.5 rounded ml-2 uppercase font-black tracking-widest align-middle shadow-inner">Fill-in</span>` : '';
                 const p2FillBadge = m.p2_fill ? `<span class="text-[8px] bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 px-1.5 py-0.5 rounded mr-2 uppercase font-black tracking-widest align-middle shadow-inner">Fill-in</span>` : '';
                 
@@ -435,6 +476,218 @@
 
         } catch (e) {
             console.error("Initialization Failed", e);
+        }
+    };
+
+    // ==========================================
+    // DONATION & STRIPE CHECKOUT LOGIC
+    // ==========================================
+    let stripeInstance = null;
+    let stripeElements = null;
+
+    window.openDonateModal = function() {
+        const modal = document.getElementById('donateModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            document.getElementById('donate-step-1').classList.remove('hidden');
+            document.getElementById('donate-step-2').classList.add('hidden');
+        }
+    };
+
+    window.closeDonateModal = function() {
+        const modal = document.getElementById('donateModal');
+        if (modal) modal.classList.add('hidden');
+    };
+
+    window.setDonationAmount = function(amt) {
+        const input = document.getElementById('custom-donate-amount');
+        if (input) input.value = amt;
+    };
+
+    window.proceedToPayment = async function() {
+        const amt = document.getElementById('custom-donate-amount').value;
+        if (!amt || amt < 5) {
+            alert("Minimum donation is $5. Thank you for your support!");
+            return;
+        }
+
+        const btn = document.getElementById('proceed-pay-btn');
+        const origText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch('/api/create-payment-intent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount: amt })
+            });
+            const data = await res.json();
+
+            if (data.clientSecret) {
+                document.getElementById('donate-step-1').classList.add('hidden');
+                document.getElementById('donate-step-2').classList.remove('hidden');
+
+                if (typeof Stripe !== 'undefined') {
+                    if (!stripeInstance) stripeInstance = Stripe('pk_test_TYooMQauvdEDq54NiTphI7jx'); 
+                    stripeElements = stripeInstance.elements({ 
+                        clientSecret: data.clientSecret, 
+                        appearance: { theme: 'night' } 
+                    });
+                    const paymentElement = stripeElements.create('payment');
+                    paymentElement.mount('#payment-element');
+                } else {
+                    alert("Stripe library failed to load. Please refresh the page.");
+                }
+            } else {
+                alert("Error setting up payment: " + (data.error || 'Unknown Error'));
+            }
+        } catch (e) {
+            alert("Network Error while connecting to Stripe.");
+        } finally {
+            btn.innerHTML = origText;
+            btn.disabled = false;
+        }
+    };
+
+    window.submitStripePayment = async function() {
+        if (!stripeInstance || !stripeElements) return;
+        
+        const btn = document.getElementById('final-pay-btn');
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
+        btn.disabled = true;
+
+        const donorName = document.getElementById('donate-name').value || 'Anonymous';
+        const donationAmount = document.getElementById('custom-donate-amount').value;
+
+        const { error, paymentIntent } = await stripeInstance.confirmPayment({
+            elements: stripeElements,
+            confirmParams: {
+                return_url: window.location.href, 
+            },
+            redirect: 'if_required' 
+        });
+
+        if (error) {
+            const msg = document.getElementById('payment-message');
+            msg.innerText = error.message;
+            msg.classList.remove('hidden');
+            btn.innerHTML = '<i class="fa-solid fa-lock"></i> Pay Securely Now';
+            btn.disabled = false;
+        } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+            await fetch('/api/record_donation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    intent_id: paymentIntent.id, 
+                    name: donorName, 
+                    amount: donationAmount 
+                })
+            });
+            
+            document.getElementById('donate-step-2').innerHTML = `
+                <div class="text-center py-10">
+                    <div class="text-emerald-500 text-5xl mb-4"><i class="fa-solid fa-circle-check"></i></div>
+                    <h3 class="text-2xl font-black text-white mb-2">Thank You!</h3>
+                    <p class="text-slate-400">Your support means the world to us.</p>
+                    <button onclick="window.location.reload()" class="mt-6 bg-slate-800 hover:bg-slate-700 text-white font-bold py-2 px-6 rounded-lg">Close & Refresh</button>
+                </div>
+            `;
+        }
+    };
+
+    // ==========================================
+    // HYPOTHETICAL SANDBOX SIMULATOR LOGIC
+    // ==========================================
+    window.openSandboxModal = function() {
+        const modal = document.getElementById('sandboxModal');
+        if (!modal) return;
+        
+        document.getElementById('sim-p1').value = window.currentProfileName;
+        document.getElementById('sim-results').classList.add('hidden');
+        document.getElementById('sim-results').innerHTML = '';
+        
+        const p2Input = document.getElementById('sim-p2-search');
+        const p2Sugg = document.getElementById('sim-p2-sugg');
+        
+        const newP2Input = p2Input.cloneNode(true);
+        p2Input.parentNode.replaceChild(newP2Input, p2Input);
+        
+        newP2Input.addEventListener('input', (e) => {
+            const q = e.target.value.toLowerCase().trim();
+            if (q.length < 2) { p2Sugg.classList.add('hidden'); return; }
+            const matches = window.allPlayersRaw.filter(p => p.toLowerCase().includes(q) && p !== window.currentProfileName);
+            
+            p2Sugg.innerHTML = matches.slice(0, 5).map(p => `
+                <div class="px-3 py-2 hover:bg-indigo-600/30 cursor-pointer text-xs text-white font-bold border-b border-white/5 transition" 
+                     onclick="document.getElementById('sim-p2-search').value = '${p.replace(/'/g, "\\'")}'; document.getElementById('sim-p2-sugg').classList.add('hidden');">
+                    ${p}
+                </div>`).join('');
+            p2Sugg.classList.remove('hidden');
+        });
+        
+        modal.classList.remove('hidden');
+    };
+
+    window.runSandboxSimulation = async function() {
+        const p1 = document.getElementById('sim-p1').value;
+        const p2 = document.getElementById('sim-p2-search').value;
+        const s1 = document.getElementById('sim-s1').value;
+        const s2 = document.getElementById('sim-s2').value;
+        const kw = document.getElementById('sim-k-win').value;
+        const kl = document.getElementById('sim-k-loss').value;
+
+        if (!p1 || !p2) return alert("Select two valid players.");
+        
+        const btn = document.getElementById('sim-run-btn');
+        const origText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Calculating...';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch('/api/simulate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ p1: p1, p2: p2, s1: s1, s2: s2, k_win: kw, k_loss: kl })
+            });
+            const data = await res.json();
+            
+            const resultsBox = document.getElementById('sim-results');
+            resultsBox.classList.remove('hidden');
+
+            if (!data.success) {
+                resultsBox.innerHTML = `<div class="text-red-500 text-center font-bold">${data.error}</div>`;
+                return;
+            }
+
+            const r = data.data;
+            const p1Col = r.p1.delta > 0 ? 'text-emerald-400' : 'text-red-400';
+            const p1Sign = r.p1.delta > 0 ? '+' : '';
+            const p2Col = r.p2.delta > 0 ? 'text-emerald-400' : 'text-red-400';
+            const p2Sign = r.p2.delta > 0 ? '+' : '';
+
+            resultsBox.innerHTML = `
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-black/30 p-4 rounded-xl border border-white/5 text-center">
+                        <div class="text-xs text-slate-400 font-bold mb-1 truncate">${r.p1.name}</div>
+                        <div class="text-3xl font-black text-white font-mono">${Math.round(r.p1.new_rating)}</div>
+                        <div class="${p1Col} font-black text-sm mt-1">${p1Sign}${r.p1.delta.toFixed(1)} pts</div>
+                        <div class="text-[9px] text-slate-500 mt-2">SD: ±${r.p1.new_rd.toFixed(1)}</div>
+                    </div>
+                    <div class="bg-black/30 p-4 rounded-xl border border-white/5 text-center">
+                        <div class="text-xs text-slate-400 font-bold mb-1 truncate">${r.p2.name}</div>
+                        <div class="text-3xl font-black text-white font-mono">${Math.round(r.p2.new_rating)}</div>
+                        <div class="${p2Col} font-black text-sm mt-1">${p2Sign}${r.p2.delta.toFixed(1)} pts</div>
+                        <div class="text-[9px] text-slate-500 mt-2">SD: ±${r.p2.new_rd.toFixed(1)}</div>
+                    </div>
+                </div>
+            `;
+
+        } catch (e) {
+            alert("Error running simulation.");
+        } finally {
+            btn.innerHTML = origText;
+            btn.disabled = false;
         }
     };
 </script>

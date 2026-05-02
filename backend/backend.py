@@ -75,19 +75,86 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
     def _slugify(self, text): return re.sub(r'[^a-z0-9]', '', str(text).lower())
     def _extract_week(self, text): match = re.search(r'\d+', str(text)); return match.group() if match else str(text).strip().lower()
 
-    # --- System & Auth ---
-    def record_page_view(self, ip_address):
+    # --- System & Auth (UPGRADED DEVICE & IP TRACKING) ---
+    def record_page_view(self, ip_address, user_agent=""):
         if not self.db: return
-        try: today_str = datetime.datetime.now().strftime("%Y-%m-%d"); self.db.collection('daily_traffic').document(today_str).set({'date': today_str, 'views': firestore.Increment(1), 'ips': firestore.ArrayUnion([ip_address])}, merge=True)
-        except: pass
+        try:
+            now = datetime.datetime.utcnow() + datetime.timedelta(hours=10)
+            today_str = now.strftime("%Y-%m-%d")
+            time_str = now.strftime("%I:%M %p")
+            
+            doc_ref = self.db.collection('daily_traffic').document(today_str)
+            doc = doc_ref.get()
+
+            # Parse the User Agent to find the Device Type
+            ua_lower = user_agent.lower()
+            is_bot = any(bot in ua_lower for bot in ['bot', 'crawl', 'spider', 'slurp', 'inspect', 'lighthouse', 'headless'])
+            
+            device_name = "Unknown Device"
+            if is_bot: device_name = "Search Bot / Crawler"
+            elif "iphone" in ua_lower: device_name = "iPhone"
+            elif "ipad" in ua_lower: device_name = "iPad"
+            elif "android" in ua_lower: device_name = "Android Device"
+            elif "macintosh" in ua_lower or "mac os x" in ua_lower: device_name = "Mac"
+            elif "windows" in ua_lower: device_name = "Windows PC"
+            elif "linux" in ua_lower: device_name = "Linux PC"
+
+            log_entry = { "ip": ip_address, "device": device_name, "is_bot": is_bot, "time": time_str }
+
+            if doc.exists:
+                data = doc.to_dict()
+                ips = data.get('ips', [])
+                bot_ips = data.get('bot_ips', [])
+                logs = data.get('visitor_logs', [])
+
+                update_data = {'views': firestore.Increment(1)}
+                
+                # Only log unique IPs so the table doesn't get spammed by refreshes
+                if is_bot and ip_address not in bot_ips:
+                    bot_ips.append(ip_address)
+                    logs.insert(0, log_entry) # Put newest at the top
+                    update_data['bot_ips'] = bot_ips
+                    update_data['visitor_logs'] = logs[:100] # Keep max 100 logs
+                elif not is_bot and ip_address not in ips:
+                    ips.append(ip_address)
+                    logs.insert(0, log_entry)
+                    update_data['ips'] = ips
+                    update_data['visitor_logs'] = logs[:100]
+
+                doc_ref.update(update_data)
+            else:
+                initial_data = {
+                    'date': today_str,
+                    'views': 1,
+                    'ips': [] if is_bot else [ip_address],
+                    'bot_ips': [ip_address] if is_bot else [],
+                    'visitor_logs': [log_entry]
+                }
+                doc_ref.set(initial_data)
+        except Exception as e:
+            logger.error(f"Failed to record page view: {e}")
 
     def get_traffic_stats(self):
-        if not self.db: return {'views': 0, 'uniques': 0}
+        if not self.db: return {'views': 0, 'uniques': 0, 'humans': 0, 'bots': 0, 'logs': []}
         try:
-            doc = self.db.collection('daily_traffic').document(datetime.datetime.now().strftime("%Y-%m-%d")).get()
-            if doc.exists: data = doc.to_dict(); return {'views': data.get('views', 0), 'uniques': len(data.get('ips', []))}
-            return {'views': 0, 'uniques': 0}
-        except: return {'views': 0, 'uniques': 0}
+            now = datetime.datetime.utcnow() + datetime.timedelta(hours=10)
+            today_str = now.strftime("%Y-%m-%d")
+            
+            doc = self.db.collection('daily_traffic').document(today_str).get()
+            if doc.exists:
+                data = doc.to_dict()
+                real_humans = len(data.get('ips', []))
+                bots = len(data.get('bot_ips', []))
+                return {
+                    'views': data.get('views', 0),
+                    'uniques': real_humans + bots,
+                    'humans': real_humans,
+                    'bots': bots,
+                    'logs': data.get('visitor_logs', [])
+                }
+            return {'views': 0, 'uniques': 0, 'humans': 0, 'bots': 0, 'logs': []}
+        except:
+            return {'views': 0, 'uniques': 0, 'humans': 0, 'bots': 0, 'logs': []}
 
     def verify_admin_token(self, token):
         if not self.db: return None
@@ -108,6 +175,7 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
                 return {'email': email.lower(), 'role': 'pending'}
         except: return None
 
+    # ... (Rest of your backend.py functions remain completely identical here)
     def get_admin_users(self):
         if not self.db: return []
         try: 
@@ -174,18 +242,53 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             return True
         except: return False
 
-    # --- Ratings Central Engine ---
-    def search_ratings_central_by_name(self, player_name, target_club=None): return self.rc_scraper.search_by_name(player_name, target_club)
+    def search_ratings_central_by_name(self, player_name, target_club=None): 
+        if not self.db: return []
+        try:
+            docs = self.db.collection('rc_directory').stream()
+            results = []
+            player_name_lower = player_name.lower()
+            for d in docs:
+                data = d.to_dict()
+                if player_name_lower in data.get('search_name', ''):
+                    results.append({"id": data['rc_id'], "name": data['name'], "rating": f"{data['rating']}±{data['sd']}", "location": f"{data.get('state', 'QLD')}, Australia", "club": data['club'], "recent_opponents": f"Updated: {data['last_updated']}"})
+                    if len(results) >= 10: break
+            return results
+        except Exception as e:
+            return []
 
     def trigger_background_rc_scrape(self, player_name, rc_id, admin_email):
         def scrape_task():
             stats = self.rc_scraper.deep_scrape_profile(rc_id)
             if stats and self.db:
                 safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()
+                stats['last_rc_sync'] = firestore.SERVER_TIMESTAMP
                 self.db.collection('player_profiles').document(safe_id).set(stats, merge=True)
                 self._log_audit(admin_email, 'RC_SYNC', f"Deep Scraped RC Data for {player_name}", {})
         threading.Thread(target=scrape_task).start()
         return True
+
+    def auto_update_stale_rc_profiles(self):
+        if not self.db: return
+        try:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            profiles = self.db.collection('player_profiles').where('ratings_central_id', '!=', '').stream()
+            for doc in profiles:
+                data = doc.to_dict()
+                rc_id = data.get('ratings_central_id')
+                if not rc_id: continue
+                last_sync = data.get('last_rc_sync')
+                needs_update = False
+                if not last_sync: needs_update = True
+                else:
+                    try:
+                        if (now - last_sync).days >= 4: needs_update = True
+                    except: needs_update = True
+                if needs_update:
+                    logger.info(f"♻️ Auto-updating stale RC profile for: {data.get('name')}")
+                    self.trigger_background_rc_scrape(data.get('name'), rc_id, "SYSTEM_AUTO_UPDATER")
+        except Exception as e:
+            logger.error(f"RC Auto-Update Error: {e}")
 
     def admin_get_player_profile(self, player_name):
         if not self.db: return {}
@@ -204,7 +307,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             return True
         except: return False
 
-    # --- Accounts & Linking ---
     def register_player_account(self, name, dob, email, uid, estimated_rating, club="Unknown"):
         if not self.db: return {"success": False, "error": "DB Offline"}
         try:
@@ -234,7 +336,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             return True
         except: return False
 
-    # --- Match Overrides & Stats ---
     def admin_override_rating(self, player_id, new_rating, sd_override=None, retroactive=True, admin_email="Unknown"):
         if not self.db: return False
         try:
@@ -306,13 +407,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             self._log_audit(admin_email, 'CHAOS_CLEAR', "Cleared chaos mode settings", {}); self.refresh_data()
             return True
         except: return False
-
-
-    # ==========================================
-    # BULLETPROOF DATA GETTERS (DYNAMIC EXTRACTION)
-    # Automatically extracts seasons/divisions directly from the raw data
-    # so they can NEVER be empty, regardless of what the Sync Engine names them.
-    # ==========================================
     
     def get_seasons(self): 
         seasons = set()
@@ -320,16 +414,13 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
         if hasattr(self, 'seasons') and self.seasons: seasons.update(self.seasons)
         if hasattr(self, 'weekly_matches') and isinstance(self.weekly_matches, dict): seasons.update(self.weekly_matches.keys())
         if hasattr(self, 'season_stats') and isinstance(self.season_stats, dict): seasons.update(self.season_stats.keys())
-        
         clean_seasons = sorted([str(s) for s in seasons if str(s) != "Career"], reverse=True)
-        return clean_seasons if clean_seasons else ["Summer 2026"] # Failsafe
+        return clean_seasons if clean_seasons else ["Summer 2026"] 
         
     def get_divisions(self): 
         divs = set()
         if hasattr(self, 'divisions_list') and self.divisions_list: divs.update(self.divisions_list)
         if hasattr(self, 'divisions') and self.divisions: divs.update(self.divisions)
-        
-        # Deep extract just to be 100% sure
         if hasattr(self, 'weekly_matches') and isinstance(self.weekly_matches, dict):
             for s_data in self.weekly_matches.values():
                 if isinstance(s_data, dict):
@@ -337,9 +428,8 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
                         if isinstance(w_data, list):
                             for m in w_data:
                                 if 'division' in m: divs.add(m['division'])
-                                
         clean_divs = sorted(list(divs))
-        return clean_divs if clean_divs else ["Division 1"] # Failsafe
+        return clean_divs if clean_divs else ["Division 1"] 
         
     def get_all_players(self): 
         return getattr(self, 'all_players', getattr(self, 'players', {}))
@@ -404,17 +494,30 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             'peterman_id': players_data.get(player_name, {}).get('peterman_id', '')
         }
 
-    def admin_glicko_math(self, p1, p2, s1, s2):
-        p1_clean = self._clean_name(p1); p2_clean = self._clean_name(p2)
+    def simulate_match_public(self, p1, p2, s1, s2, custom_k_win=None, custom_k_loss=None):
+        p1_clean = self._clean_name(p1)
+        p2_clean = self._clean_name(p2)
         try: s1 = int(s1); s2 = int(s2)
         except: return {"error": "Invalid scores"}
 
-        r_eng = RatingEngine() 
-        p1_stats = self.rating_engine.get_rating(p1_clean).copy(); p2_stats = self.rating_engine.get_rating(p2_clean).copy()
-        r_eng.players[p1_clean] = p1_stats; r_eng.players[p2_clean] = p2_stats
-        res = r_eng.update_match(p1_clean, p2_clean, s1, s2, '', self.k_win, self.k_loss, True)
+        kw = float(custom_k_win) if custom_k_win else self.k_win
+        kl = float(custom_k_loss) if custom_k_loss else self.k_loss
 
-        return {"p1": {"name": p1_clean, "old_rating": res['p1_before'], "new_rating": res['p1_after'], "delta": res['p1_delta'], "old_rd": res['p1_rd_before'], "new_rd": res['p1_rd_after'], "rd_delta": res['p1_rd_after'] - res['p1_rd_before']}, "p2": {"name": p2_clean, "old_rating": res['p2_before'], "new_rating": res['p2_after'], "delta": res['p2_delta'], "old_rd": res['p2_rd_before'], "new_rd": res['p2_rd_after'], "rd_delta": res['p2_rd_after'] - res['p2_rd_before']}}
+        temp_engine = RatingEngine() 
+        p1_stats = self.rating_engine.get_rating(p1_clean).copy()
+        p2_stats = self.rating_engine.get_rating(p2_clean).copy()
+        temp_engine.players[p1_clean] = p1_stats
+        temp_engine.players[p2_clean] = p2_stats
+        res = temp_engine.update_match(p1_clean, p2_clean, s1, s2, '', kw, kl, True)
+
+        return {
+            "p1": {"name": p1_clean, "old_rating": res['p1_before'], "new_rating": res['p1_after'], "delta": res['p1_delta'], "old_rd": res['p1_rd_before'], "new_rd": res['p1_rd_after'], "rd_delta": res['p1_rd_after'] - res['p1_rd_before']}, 
+            "p2": {"name": p2_clean, "old_rating": res['p2_before'], "new_rating": res['p2_after'], "delta": res['p2_delta'], "old_rd": res['p2_rd_before'], "new_rd": res['p2_rd_after'], "rd_delta": res['p2_rd_after'] - res['p2_rd_before']},
+            "h2h": self.get_head_to_head(p1_clean, p2_clean)
+        }
+
+    def admin_glicko_math(self, p1, p2, s1, s2):
+        return self.simulate_match_public(p1, p2, s1, s2)
         
     def admin_set_rating_scales(self, k_win, k_loss, admin_email="Unknown"):
         if not self.db: return False
