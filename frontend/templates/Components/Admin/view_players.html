@@ -22,6 +22,23 @@
     <button onclick="window.submitPlayerMerge && window.submitPlayerMerge()" id="btn-merge-exec" class="w-full mt-4 bg-red-900/50 hover:bg-red-600 text-white font-bold py-3 rounded-lg border border-red-500/30 transition text-sm shadow-lg">Execute Merge</button>
 </div>
 
+<!-- NEW UNLINK / RESET LOGIN ACCOUNT -->
+<div class="bg-slate-800 p-5 rounded-xl border border-red-500/30 mb-6 shadow-lg relative">
+    <div class="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-lg">Danger Zone</div>
+    <h3 class="text-lg font-black text-white mb-2"><i class="fa-solid fa-user-slash text-red-400 mr-2"></i> Unlink App Login</h3>
+    <p class="text-xs text-slate-400 mb-4 leading-relaxed">Deletes a player's app login account so they can sign up again. <strong class="text-red-400">This will NOT delete their stats or match history.</strong></p>
+    
+    <div class="relative">
+        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Search Player Name</label>
+        <input type="text" id="unlink-search" placeholder="Type a name..." class="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-red-500 outline-none mb-4" autocomplete="off">
+        <div id="unlink-suggestions" class="hidden absolute z-50 w-full bg-slate-800 border border-white/10 rounded-lg mt-[-12px] shadow-2xl overflow-hidden max-h-48 overflow-y-auto custom-scrollbar"></div>
+    </div>
+    
+    <button onclick="window.unlinkPlayerAccount()" class="w-full bg-red-900/50 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+        <i class="fa-solid fa-trash-can"></i> Force Account Reset
+    </button>
+</div>
+
 <div class="bg-slate-800 p-5 rounded-xl border border-indigo-500/20 mb-6 shadow-lg relative">
     <h3 class="text-indigo-400 font-bold uppercase tracking-widest text-xs mb-3"><i class="fa-solid fa-calculator mr-2"></i> Ratings & Standard Deviation Editor</h3>
     <p class="text-[10px] text-slate-400 mb-4">Force a specific rating for a player. SD defaults to ±65 if left blank.</p>
