@@ -2,7 +2,14 @@
     console.log("✅ Admin Accounts Module Loaded");
 
     let playerDirectoryData = [];
-    window.loadPlayerDirectory = async function() { try { const res = await fetch('/api/admin/player_directory'); playerDirectoryData = await res.json(); } catch(e) {} };
+    window.loadPlayerDirectory = async function() { 
+        try { 
+            const res = await fetch('/api/admin/player_directory'); 
+            playerDirectoryData = await res.json(); 
+        } catch(e) {
+            console.error("Failed to fetch player directory:", e);
+        } 
+    };
 
     function attachPlayerSearch(inputId, suggId, hiddenId = null) {
         const input = document.getElementById(inputId); const sugg = document.getElementById(suggId);
@@ -156,8 +163,7 @@
             if (allUsersData.success) {
                 globalVerifiedAccounts = allUsersData.users;
                 
-                // Wrapped in TRY/CATCH blocks so one failure doesn't stop the rest of the page from drawing
-                try { window.renderVerifiedAccounts(); } catch(e) { console.error("Error rendering verified accounts", e); }
+                try { await window.renderVerifiedAccounts(); } catch(e) { console.error("Error rendering verified accounts", e); }
                 try { window.renderMergeDropdowns(globalVerifiedAccounts); } catch(e) { console.error("Error rendering merge dropdowns", e); }
                 
                 const missingList = document.getElementById('missingRCList');
@@ -281,8 +287,17 @@
         } catch(e) {}
     };
 
-    window.renderVerifiedAccounts = function() {
-        const list = document.getElementById('verified-accounts-list'); if (!list) return;
+    // --- UPGRADED ASYNC FUNCTION WITH DIRECTORY FAILSAFE ---
+    window.renderVerifiedAccounts = async function() {
+        const list = document.getElementById('verified-accounts-list'); 
+        if (!list) return;
+
+        // Failsafe: Ensure Player Directory is fully loaded before trying to build the dropdowns
+        if (playerDirectoryData.length === 0) {
+            list.innerHTML = '<div class="text-center py-6 text-emerald-500 italic text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i> Loading player directory...</div>';
+            await window.loadPlayerDirectory();
+        }
+
         const searchQ = (document.getElementById('account-search')?.value || '').toLowerCase();
         const filtered = globalVerifiedAccounts.filter(u => (u.name || '').toLowerCase().includes(searchQ) || (u.email || '').toLowerCase().includes(searchQ) || (u.linked_player_name || '').toLowerCase().includes(searchQ));
         if (filtered.length === 0) { list.innerHTML = '<div class="text-center py-6 text-slate-500 italic text-sm">No accounts found.</div>'; return; }
