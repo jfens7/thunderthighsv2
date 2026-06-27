@@ -1,4 +1,3 @@
-# backend/backend.py
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
 import datetime, re, os, json, sys, logging, random, string, hashlib, threading
@@ -175,7 +174,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
                 return {'email': email.lower(), 'role': 'pending'}
         except: return None
 
-    # ... (Rest of your backend.py functions remain completely identical here)
     def get_admin_users(self):
         if not self.db: return []
         try: 
