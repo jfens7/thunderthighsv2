@@ -167,9 +167,6 @@
         #starContainer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
         .cross-star { position: absolute; background: white; clip-path: polygon(50% 0%, 55% 45%, 100% 50%, 55% 55%, 50% 100%, 45% 55%, 0% 50%, 45% 45%); opacity: 0; }
         @keyframes sporadic-twinkle { 0%, 20% { opacity: 0; transform: scale(0.3) rotate(0deg); } 50% { opacity: 1; transform: scale(1.2) rotate(45deg); box-shadow: 0 0 8px rgba(255,255,255,0.8); } 80%, 100% { opacity: 0; transform: scale(0.3) rotate(90deg); } }
-
-        @keyframes shine-metallic { 0% { background-position: 200% center; } 100% { background-position: -200% center; } }
-        .shining-gold-text { background: linear-gradient(110deg, #b8860b 10%, #eab308 30%, #ffffe0 48%, #ffffff 50%, #ffffe0 52%, #eab308 70%, #b8860b 90%); background-size: 200% auto; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; animation: shine-metallic 4s cubic-bezier(0.4, 0.0, 0.2, 1) infinite; will-change: background-position; filter: drop-shadow(0px 2px 12px rgba(234, 179, 8, 0.4)); }
     </style>
 </head>
 <body class="min-h-screen pb-24 lg:pb-6 relative flex flex-col">
@@ -179,10 +176,12 @@
         <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
             
             <div class="flex items-center gap-3 cursor-pointer group shrink-0" onclick="window.switchTab('home')">
-                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="w-10 h-10 md:w-12 h-12 drop-shadow-[0_0_10px_rgba(234,179,8,0.5)] group-hover:scale-105 transition-transform duration-300">
-                <div class="flex flex-col leading-none shining-gold-text uppercase font-black tracking-tighter">
-                    <span class="text-[12px] md:text-[16px] leading-tight">Gold Coast Table Tennis</span>
-                    <span class="text-[16px] md:text-[22px] tracking-widest leading-none mt-[-2px]">Stats</span>
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="w-10 h-10 md:w-12 h-12 drop-shadow-[0_0_12px_rgba(56,189,248,0.3)] group-hover:drop-shadow-[0_0_16px_rgba(52,211,153,0.5)] group-hover:scale-105 transition-all duration-300">
+                <div class="flex flex-col justify-center mt-0.5">
+                    <span class="text-[8px] md:text-[10px] font-bold text-slate-400 uppercase tracking-[0.25em] leading-none mb-1 group-hover:text-slate-300 transition-colors">Gold Coast Table Tennis</span>
+                    <span class="text-xl md:text-2xl font-black uppercase tracking-tight leading-none text-white drop-shadow-md">
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-sky-400">GCTTA</span> STATS
+                    </span>
                 </div>
             </div>
             
@@ -200,6 +199,10 @@
 
             <div class="flex items-center gap-3 shrink-0">
                 
+                <a href="/login" class="bg-slate-800 hover:bg-slate-700 border border-white/10 text-slate-300 hover:text-white text-[11px] md:text-xs tracking-widest font-bold px-3 md:px-4 py-2.5 rounded-xl transition-all shadow-lg flex items-center gap-2">
+                    <i class="fa-solid fa-shield-halved text-blue-500"></i> <span class="hidden md:inline">ADMIN</span>
+                </a>
+
                 <div class="relative group" id="authDropdownContainer">
                     <button onclick="window.toggleAuthDropdown()" class="auth-logged-out bg-slate-800 hover:bg-slate-700 border border-white/10 text-white text-[11px] md:text-xs uppercase tracking-widest font-bold px-4 py-2.5 rounded-xl transition-all shadow-lg flex items-center gap-2">
                         <i class="fa-solid fa-right-to-bracket text-sky-500"></i> LOGIN / SIGNUP
