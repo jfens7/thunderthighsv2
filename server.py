@@ -148,7 +148,6 @@ def player_auth_page(): return render_template('player_auth.html')
 @app.route('/dashboard')
 def player_dashboard(): return render_template('dashboard.html')
 
-# THE FIX: Added the missing Web Config endpoint for the client SDK!
 @app.route('/api/firebase-config')
 def get_firebase_config():
     return jsonify({
@@ -163,18 +162,15 @@ def get_firebase_config():
 @app.route('/api/auth/google', methods=['POST'])
 def auth_google():
     if not db: return jsonify({"success": False, "error": "Database offline"})
-    
     try:
         decoded_token = fb_auth.verify_id_token(request.json.get('token'))
         email = decoded_token.get('email')
         uid = decoded_token.get('uid')
         if not email: return jsonify({"success": False, "error": "Invalid Token"})
-    except:
-        return jsonify({"success": False, "error": "Invalid Token"})
+    except: return jsonify({"success": False, "error": "Invalid Token"})
         
     user_data = db.verify_admin_token(request.json.get('token'))
     role = user_data['role'] if user_data else 'player'
-    
     session.permanent = True
     session['logged_in'] = True
     session['user_email'] = email
@@ -186,10 +182,84 @@ def auth_google():
         session['admin_role'] = role
         db._log_audit(email, 'SESSION_START', f"Authenticated as {role}.", {})
         return jsonify({"success": True, "redirect": "/admin"})
-    
     else:
         session['player_logged_in'] = True
         return jsonify({"success": True, "redirect": "/"})
+
+@app.route('/api/auth/admin_login', methods=['POST'])
+# Insert this route directly below your auth_admin_login() route in server.py
+@app.route('/api/auth/bypass_login', methods=['POST'])
+def auth_bypass_login():
+    if not db: 
+        return jsonify({"success": False, "error": "Database offline"}), 500
+    
+    req_email = request.json.get('email', '').lower()
+    input_code = request.json.get('code', '').strip()
+    
+    if not req_email or not input_code:
+        return jsonify({"success": False, "error": "Email and bypass code required."}), 400
+
+    # Query Firestore admin_users document for matching emergency credentials
+    try:
+        doc_ref = db.db.collection('admin_users').document(req_email)
+        doc = doc_ref.get()
+        
+        if not doc.exists:
+            return jsonify({"success": False, "error": "Unregistered emergency account."}), 403
+            
+        data = doc.to_dict()
+        stored_role = data.get('role')
+        
+        # We strictly enforce that bypass codes can only be used for temp emergency super-admin passes
+        if stored_role != 'temp_super_admin':
+            return jsonify({"success": False, "error": "Unauthorized operational mode."}), 403
+
+        # Verify their temp code against the bypass expiry logic in the database (stored as expiration timestamp)
+        expires_at = data.get('expires_at')
+        
+        # Fallback security assertion
+        if expires_at and datetime.datetime.now(datetime.timezone.utc) > expires_at:
+            doc_ref.update({'role': 'admin', 'expires_at': firestore.DELETE_FIELD})
+            return jsonify({"success": False, "error": "Bypass Code session has expired."}), 403
+
+        # Convert expiry timestamp to deterministic 6-digit PIN string for validation
+        # The PIN uses the microsecond/second values of the expiration timestamp
+        base_seed = int(expires_at.timestamp()) if hasattr(expires_at, 'timestamp') else int(datetime.datetime.utcnow().timestamp())
+        deterministic_6_digit_pin = str(abs(hash(base_seed)) % 1000000).zfill(6)
+
+        if input_code == deterministic_6_digit_pin:
+            session.permanent = True 
+            session['admin_logged_in'] = True
+            session['admin_email'] = req_email
+            session['admin_role'] = 'super_admin'
+            db._log_audit(req_email, 'SESSION_START', "Emergency Bypass Clearance executed successfully.", {})
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": "Invalid bypass code."}), 403
+            
+    except Exception as e:
+        logger.error(f"Emergency execution exception failure: {e}")
+        return jsonify({"success": False, "error": "System Authentication Error"}), 500
+def auth_admin_login():
+    if not db: return jsonify({"success": False, "error": "Database offline"})
+    try:
+        decoded_token = fb_auth.verify_id_token(request.json.get('token'))
+        email = decoded_token.get('email')
+        if not email: return jsonify({"success": False, "error": "Invalid Token"})
+    except: return jsonify({"success": False, "error": "Invalid Token"})
+        
+    user_data = db.verify_admin_token(request.json.get('token'))
+    if not user_data: return jsonify({"success": False, "error": "Token Verification Failed"})
+    
+    role = user_data['role']
+    if role in ['admin', 'super_admin', 'temp_super_admin', 'moderator']:
+        session.permanent = True 
+        session['admin_logged_in'] = True
+        session['admin_email'] = email
+        session['admin_role'] = role
+        db._log_audit(email, 'SESSION_START', f"Authenticated as {role} via Control Tower.", {})
+        return jsonify({"success": True})
+    else: return jsonify({"success": False, "error": "Access Denied. You are not an authorized Administrator."})
 
 @app.route('/logout')
 def logout(): 
@@ -203,7 +273,7 @@ def admin():
     return render_template('admin.html', email=session.get('admin_email'), role=session.get('admin_role'))
 
 
-# --- PUBLIC DATA APIS (PROTECTED BY SYNC LOCK) ---
+# --- PUBLIC DATA APIS ---
 
 @app.route('/api/players')
 @wait_for_sync
@@ -230,6 +300,12 @@ def get_player_stats(player_name):
     if stats: return jsonify(stats)
     return jsonify({"error": "Not found"}), 404
 
+@app.route('/api/rating_history/<player_name>')
+def rating_history(player_name):
+    if not db: return jsonify([])
+    clean_name = db._clean_name(player_name)
+    return jsonify(db.get_rating_history(clean_name))
+
 @app.route('/api/rankings/<season>/<division>')
 @wait_for_sync
 def get_rankings(season, division): return jsonify(db.get_division_rankings(season, division, request.args.get('week', 'Latest'))) if db else jsonify([])
@@ -247,12 +323,10 @@ def get_h2h(): return jsonify(db.get_head_to_head(request.args.get('p1', ''), re
 def public_simulate():
     if not db: return jsonify({"success": False, "error": "Database Offline"}), 500
     req = request.json
-    res = db.simulate_match_public(
-        req.get('p1'), req.get('p2'), req.get('s1'), req.get('s2'), 
-        req.get('k_win'), req.get('k_loss')
-    )
+    res = db.simulate_match_public(req.get('p1'), req.get('p2'), req.get('s1'), req.get('s2'), req.get('k_win'), req.get('k_loss'))
     if "error" in res: return jsonify({"success": False, "error": res["error"]})
     return jsonify({"success": True, "data": res})
+
 
 # --- ADMIN & HUB APIS ---
 
@@ -285,7 +359,6 @@ def sms_webhook():
         return jsonify({"status": "received"}), 200
     except Exception as e: return jsonify({"error": str(e)}), 500
 
-
 # --- ADMIN: ACCOUNT MANAGEMENT ---
 
 @app.route('/api/admin/pending_accounts')
@@ -296,8 +369,7 @@ def get_pending_accounts():
         pending_users = db.admin_get_pending_accounts()
         players = [{'id': name, 'name': name} for name in db.all_players.keys()]
         return jsonify({'success': True, 'pending_users': pending_users, 'players': players})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    except Exception as e: return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/admin/all_users')
 @login_required
@@ -316,8 +388,7 @@ def get_all_users():
                 u_data['ratings_central_id'] = profile_map.get(safe_id, '')
             all_users.append(u_data)
         return jsonify({'success': True, 'users': all_users})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    except Exception as e: return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/admin/search_rc', methods=['POST'])
 @login_required
@@ -454,34 +525,25 @@ def force_rc_sync(player_name):
     rc_id = request.json.get('rc_id')
     if not rc_id: return jsonify({"success": False, "error": "No RC ID provided"})
     db.trigger_background_rc_scrape(player_name, rc_id, session.get('admin_email'))
-    return jsonify({"success": True, "message": "Background scraper started! The full stats will be synced to Firebase shortly."})
+    return jsonify({"success": True, "message": "Background scraper started!"})
 
 # --- ADMIN: MATCHES & LOGIC ---
 
 @app.route('/api/admin/reports')
 @login_required
-def get_reports(): 
-    if db: return jsonify(db.admin_get_reports())
-    return jsonify([])
+def get_reports(): return jsonify(db.admin_get_reports()) if db else jsonify([])
 
 @app.route('/api/admin/date_errors')
 @login_required
-def get_date_errors(): 
-    if db: return jsonify(db.admin_get_date_errors())
-    return jsonify([])
+def get_date_errors(): return jsonify(db.admin_get_date_errors()) if db else jsonify([])
 
 @app.route('/api/admin/history')
 @login_required
-def search_history(): 
-    q = request.args.get('q', '')
-    if db: return jsonify(db.admin_search_history(q, source_filter=request.args.get('source', 'All')))
-    return jsonify([])
+def search_history(): return jsonify(db.admin_search_history(request.args.get('q', ''), source_filter=request.args.get('source', 'All'))) if db else jsonify([])
 
 @app.route('/api/admin/player_profile/<player_name>', methods=['GET'])
 @login_required
-def get_player_profile(player_name):
-    if db: return jsonify(db.admin_get_player_profile(player_name))
-    return jsonify({})
+def get_player_profile(player_name): return jsonify(db.admin_get_player_profile(player_name)) if db else jsonify({})
 
 @app.route('/api/admin/update_player_profile', methods=['POST'])
 @login_required
@@ -511,6 +573,12 @@ def set_rating_scales(): return jsonify({"success": db.admin_set_rating_scales(r
 @login_required
 def get_rating_scales(): return jsonify({"k_win": db.k_win, "k_loss": db.k_loss}) if db else jsonify({"k_win": 1.0, "k_loss": 1.4})
 
+@app.route('/api/admin/recalculate', methods=['POST'])
+@super_admin_required
+def admin_recalculate():
+    if not db: return jsonify({"success": False, "error": "Database offline"})
+    return jsonify(db.admin_recalculate_ratings(session.get('admin_email')))
+
 @app.route('/api/admin/chaos_config', methods=['GET'])
 @login_required
 def get_chaos_config(): return jsonify(db.admin_get_chaos_config()) if db else jsonify({"success": False})
@@ -525,9 +593,7 @@ def chaos_clear(): return jsonify({"success": db.admin_clear_chaos(session.get('
 
 @app.route('/api/admin/teams', methods=['GET'])
 @login_required
-def admin_teams(): 
-    if db: return jsonify(db.admin_get_teams())
-    return jsonify([])
+def admin_teams(): return jsonify(db.admin_get_teams()) if db else jsonify([])
 
 @app.route('/api/admin/update_team', methods=['POST'])
 @login_required
@@ -538,9 +604,7 @@ def admin_update_team(): return jsonify({"success": db.admin_update_team(request
 def upload_schedule():
     if not db: return jsonify({"success": False, "error": "DB Offline"})
     if 'pdf' not in request.files: return jsonify({"success": False, "error": "No file uploaded"})
-    season = request.form.get('season', 'Unknown')
-    division = request.form.get('division', 'Unknown')
-    return jsonify(db.admin_upload_pdf_schedule(season, division, request.files['pdf'], session.get('admin_email')))
+    return jsonify(db.admin_upload_pdf_schedule(request.form.get('season', 'Unknown'), request.form.get('division', 'Unknown'), request.files['pdf'], session.get('admin_email')))
 
 @app.route('/api/admin/upcoming_schedules', methods=['GET'])
 @login_required
@@ -602,6 +666,7 @@ def glicko_calc():
     if db: return jsonify({"success": True, "data": db.admin_glicko_math(request.json.get('p1'), request.json.get('p2'), request.json.get('s1'), request.json.get('s2'))})
     return jsonify({"success": False})
 
+
 # --- ADMIN: SYSTEM & COMMS ---
 
 @app.route('/api/admin/add_notice', methods=['POST'])
@@ -618,9 +683,7 @@ def delete_community_post(): return jsonify({"success": db.admin_delete_communit
 
 @app.route('/api/admin/messages')
 @login_required
-def get_admin_messages(): 
-    if db: return jsonify(db.get_admin_messages())
-    return jsonify([])
+def get_admin_messages(): return jsonify(db.get_admin_messages()) if db else jsonify([])
 
 @app.route('/api/admin/add_message', methods=['POST'])
 @login_required
@@ -644,16 +707,11 @@ def send_sms():
 
 @app.route('/api/admin/sms_inbox')
 @login_required
-def get_sms_inbox(): 
-    if not db: return jsonify([])
-    try: return jsonify(db.get_sms_inbox())
-    except Exception as e: return jsonify([])
+def get_sms_inbox(): return jsonify(db.get_sms_inbox()) if db else jsonify([])
 
 @app.route('/api/admin/donations')
 @login_required
-def admin_donations(): 
-    if db: return jsonify(db.admin_get_all_donations())
-    return jsonify([])
+def admin_donations(): return jsonify(db.admin_get_all_donations()) if db else jsonify([])
 
 @app.route('/api/admin/traffic')
 @login_required
@@ -688,8 +746,7 @@ def force_refresh():
 @login_required
 def create_tournament():
     if not db: return jsonify({"success": False, "error": "DB Offline"}), 503
-    req = request.get_json(silent=True)
-    return jsonify(db.admin_create_tournament(req, session.get('admin_email')))
+    return jsonify(db.admin_create_tournament(request.get_json(silent=True), session.get('admin_email')))
 
 @app.route('/api/admin/tournaments/events/create', methods=['POST'])
 @login_required

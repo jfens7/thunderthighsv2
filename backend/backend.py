@@ -1,3 +1,4 @@
+# backend/backend.py
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
 import datetime, re, os, json, sys, logging, random, string, hashlib, threading
@@ -57,7 +58,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
         if hasattr(self, 'sync_engine') and self.sync_engine:
             self.sync_engine.run_sync()
 
-    # --- Core Utilities ---
     def _clean_name(self, name): return self.alias_map.get(" ".join(str(name).split()).lower(), " ".join(str(name).split()).title()) if name else ""
     def _get_val(self, row, keys, default=''):
         row_keys_norm = {k.strip().lower(): k for k in row.keys()}
@@ -74,7 +74,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
     def _slugify(self, text): return re.sub(r'[^a-z0-9]', '', str(text).lower())
     def _extract_week(self, text): match = re.search(r'\d+', str(text)); return match.group() if match else str(text).strip().lower()
 
-    # --- System & Auth (UPGRADED DEVICE & IP TRACKING) ---
     def record_page_view(self, ip_address, user_agent=""):
         if not self.db: return
         try:
@@ -85,7 +84,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             doc_ref = self.db.collection('daily_traffic').document(today_str)
             doc = doc_ref.get()
 
-            # Parse the User Agent to find the Device Type
             ua_lower = user_agent.lower()
             is_bot = any(bot in ua_lower for bot in ['bot', 'crawl', 'spider', 'slurp', 'inspect', 'lighthouse', 'headless'])
             
@@ -108,12 +106,11 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
 
                 update_data = {'views': firestore.Increment(1)}
                 
-                # Only log unique IPs so the table doesn't get spammed by refreshes
                 if is_bot and ip_address not in bot_ips:
                     bot_ips.append(ip_address)
-                    logs.insert(0, log_entry) # Put newest at the top
+                    logs.insert(0, log_entry) 
                     update_data['bot_ips'] = bot_ips
-                    update_data['visitor_logs'] = logs[:100] # Keep max 100 logs
+                    update_data['visitor_logs'] = logs[:100] 
                 elif not is_bot and ip_address not in ips:
                     ips.append(ip_address)
                     logs.insert(0, log_entry)
@@ -546,3 +543,108 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
 
         matches.sort(key=lambda x: datetime.datetime.strptime(x['date'], "%d/%m/%Y") if x['date'] != "nodate" else datetime.datetime.min, reverse=True)
         return {"p1": p1_clean, "p2": p2_clean, "p1_wins": p1_wins, "p2_wins": p2_wins, "total_matches": len(matches), "history": matches}
+
+    def get_rating_history(self, player_name):
+        if not self.db: return []
+        try:
+            docs = self.db.collection('player_rating_history').where('player_name', '==', player_name).order_by('timestamp', direction=firestore.Query.DESCENDING).limit(100).stream()
+            history = []
+            for d in docs:
+                data = d.to_dict()
+                date_val = data.get('date', 'Unknown')
+                if hasattr(data.get('timestamp'), 'strftime'):
+                    date_val = data.get('timestamp').strftime("%d/%m/%Y")
+                history.append({
+                    "date": date_val,
+                    "rating": round(data.get('rating', 0)),
+                    "sd": round(data.get('sd', 0)),
+                    "opponent": data.get('opponent', ''),
+                    "result": data.get('result_str', '')
+                })
+            return history
+        except Exception as e:
+            logger.error(f"Error fetching rating history: {e}")
+            return []
+
+    def admin_recalculate_ratings(self, admin_email="Unknown"):
+        if not self.db: return {"success": False, "error": "DB Offline"}
+        try:
+            matches_ref = self.db.collection('match_results').where('status', '==', 'approved').stream()
+            matches = []
+            for m in matches_ref:
+                data = m.to_dict()
+                data['id'] = m.id
+                date_obj = self._parse_date(data.get('date'))
+                data['_sort_date'] = date_obj if date_obj else datetime.date.min
+                matches.append(data)
+            
+            matches.sort(key=lambda x: (x['_sort_date'], x.get('timestamp') or datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)))
+            
+            from backend.glicko import RatingEngine
+            fresh_engine = RatingEngine()
+            
+            batch = self.db.batch()
+            history_writes = 0
+            
+            for m in matches:
+                p1 = m.get('home_players', [''])[0]
+                p2 = m.get('away_players', [''])[0]
+                s1 = m.get('live_home_sets', 0)
+                s2 = m.get('live_away_sets', 0)
+                
+                if not p1 or not p2: continue
+                
+                p1_clean = self._clean_name(p1)
+                p2_clean = self._clean_name(p2)
+                
+                res = fresh_engine.update_match(p1_clean, p2_clean, s1, s2, m['id'], self.k_win, self.k_loss, True)
+                
+                h1_ref = self.db.collection('player_rating_history').document()
+                h1_data = {
+                    'player_name': p1_clean,
+                    'rating': res['p1_after'],
+                    'sd': res['p1_rd_after'],
+                    'opponent': p2_clean,
+                    'result_str': f"{s1}-{s2}",
+                    'date': m.get('date'),
+                    'timestamp': m.get('timestamp') or firestore.SERVER_TIMESTAMP
+                }
+                batch.set(h1_ref, h1_data)
+                
+                h2_ref = self.db.collection('player_rating_history').document()
+                h2_data = {
+                    'player_name': p2_clean,
+                    'rating': res['p2_after'],
+                    'sd': res['p2_rd_after'],
+                    'opponent': p1_clean,
+                    'result_str': f"{s2}-{s1}",
+                    'date': m.get('date'),
+                    'timestamp': m.get('timestamp') or firestore.SERVER_TIMESTAMP
+                }
+                batch.set(h2_ref, h2_data)
+                
+                history_writes += 2
+                if history_writes >= 400:
+                    batch.commit()
+                    batch = self.db.batch()
+                    history_writes = 0
+            
+            if history_writes > 0:
+                batch.commit()
+            
+            for p_name, r_data in fresh_engine.players.items():
+                self.db.collection('rating_overrides').document(p_name).set({
+                    'name': p_name,
+                    'rating': r_data['rating'],
+                    'rd': r_data['rd'],
+                    'vol': r_data['vol'],
+                    'timestamp': firestore.SERVER_TIMESTAMP,
+                    'author': 'SYSTEM_RECALC'
+                })
+            
+            self._log_audit(admin_email, 'RECALCULATE_ALL', f"Replayed and recalculated {len(matches)} matches.", {})
+            self.refresh_data()
+            return {"success": True, "message": f"Successfully recalculated {len(matches)} matches."}
+        except Exception as e:
+            logger.error(f"Recalc Error: {e}")
+            return {"success": False, "error": str(e)}

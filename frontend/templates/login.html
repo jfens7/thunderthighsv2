@@ -16,83 +16,185 @@
 
     <div class="bg-slate-900 border border-white/10 p-8 rounded-2xl w-full max-w-md shadow-2xl text-center mt-10">
         <div class="bg-blue-600/20 text-blue-500 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(37,99,235,0.4)]">
-            <i class="fa-solid fa-shield-halved text-4xl"></i>
+            <i class="fa-solid fa-lock text-4xl"></i>
         </div>
-        <h1 class="text-2xl font-black mb-2 tracking-tight">Admin Portal</h1>
-        <p class="text-sm text-slate-400 mb-8">Sign in with your authorized Google Account to access the control panel.</p>
+        <h1 class="text-2xl font-black mb-2 tracking-tight">Admin Control Tower</h1>
+        <p class="text-sm text-slate-400 mb-8">Enter your authorized credentials or use an emergency bypass code.</p>
         
-        <button id="googleSignInBtn" disabled class="w-full bg-slate-800 text-slate-400 border border-white/5 font-bold py-3 px-4 rounded-xl transition flex items-center justify-center gap-3 shadow-lg cursor-wait">
-            <i class="fa-solid fa-circle-notch fa-spin text-lg"></i>
-            Checking session...
-        </button>
+        <div class="flex rounded-xl bg-black/40 p-1 mb-6 border border-white/5">
+            <button id="tabNormal" onclick="switchMode('normal')" class="flex-1 rounded-lg py-2.5 text-xs font-black uppercase tracking-wider bg-white/5 text-slate-400 transition-all">Credentials</button>
+            <button id="tabBypass" onclick="switchMode('bypass')" class="flex-1 rounded-lg py-2.5 text-xs font-black uppercase tracking-wider text-slate-400 transition-all">Bypass Code</button>
+        </div>
 
-        <div id="error-msg" class="hidden mt-4 text-red-400 text-sm font-bold bg-red-900/30 border border-red-500/20 py-2 px-3 rounded-lg"></div>
+        <div class="space-y-4 text-left">
+            <div id="normalForm" class="space-y-4">
+                <div>
+                    <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Email Address</label>
+                    <input type="email" id="adminEmail" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-blue-500 outline-none text-sm transition-colors" autocomplete="email">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Password</label>
+                    <input type="password" id="adminPassword" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-blue-500 outline-none text-sm transition-colors" autocomplete="current-password">
+                </div>
+            </div>
+
+            <div id="bypassForm" class="space-y-4 hidden animate-fade-in">
+                <div>
+                    <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Admin Email</label>
+                    <input type="email" id="bypassEmail" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-yellow-500 outline-none text-sm transition-colors" placeholder="registered-admin@example.com">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">6-Digit Bypass Code</label>
+                    <input type="text" id="bypassCodeInput" maxlength="6" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-yellow-500 outline-none text-sm font-mono tracking-widest text-center text-xl" placeholder="••••••">
+                </div>
+            </div>
+            
+            <button id="loginBtn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3.5 px-4 rounded-xl transition shadow-[0_0_15px_rgba(37,99,235,0.4)] hover:shadow-[0_0_25px_rgba(37,99,235,0.6)] uppercase tracking-widest mt-4 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-right-to-bracket"></i> Authenticate
+            </button>
+        </div>
+
+        <div id="error-msg" class="hidden mt-6 text-red-400 text-sm font-bold bg-red-900/30 border border-red-500/20 py-3 px-4 rounded-lg"></div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        const firebaseConfig = { apiKey: "AIzaSyDq05wFsKLHtt8G0Z5yLOG9pIk9UX24S4o", authDomain: "gctta-stats-live.firebaseapp.com", projectId: "gctta-stats-live", storageBucket: "gctta-stats-live.firebasestorage.app", messagingSenderId: "1070856258556", appId: "1:1070856258556:web:be438e04c1941abc3c6879" };
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const provider = new GoogleAuthProvider();
+        let loginMode = 'normal';
 
-        const btn = document.getElementById('googleSignInBtn');
-        const errorMsg = document.getElementById('error-msg');
+        window.switchMode = function(mode) {
+            loginMode = mode;
+            const normalTab = document.getElementById('tabNormal');
+            const bypassTab = document.getElementById('tabBypass');
+            const normalForm = document.getElementById('normalForm');
+            const bypassForm = document.getElementById('bypassForm');
+            const btn = document.getElementById('loginBtn');
+            const iconDiv = document.querySelector('.fa-lock').parentNode;
 
-        // Helper functions to instantly switch the button's look
-        function setButtonActive() {
-            btn.disabled = false;
-            btn.className = "w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-3 px-4 rounded-xl transition flex items-center justify-center gap-3 shadow-lg cursor-pointer";
-            btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5"> Sign in with Google';
-        }
-
-        function setButtonLoading(text) {
-            btn.disabled = true;
-            btn.className = "w-full bg-slate-800 text-slate-400 border border-white/5 font-bold py-3 px-4 rounded-xl transition flex items-center justify-center gap-3 shadow-lg cursor-wait";
-            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-lg"></i> ${text}`;
-        }
-
-        // --- AUTOMATICALLY RECONNECT EXISTING SESSIONS ---
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                setButtonLoading("Restoring Session...");
-                
-                user.getIdToken(true).then((token) => {
-                    return fetch('/api/auth/google', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({token: token})
-                    });
-                }).then(res => res.json()).then(data => {
-                    if(data.success) { window.location.href = '/admin'; } 
-                    else {
-                        errorMsg.innerText = data.error;
-                        errorMsg.classList.remove('hidden');
-                        setButtonActive();
-                        signOut(auth); // Kick them out if not an approved admin
-                    }
-                }).catch(e => {
-                    setButtonActive();
-                });
+            if (mode === 'bypass') {
+                bypassTab.className = "flex-1 rounded-lg py-2.5 text-xs font-black uppercase tracking-wider bg-yellow-600/20 text-yellow-400 transition-all border border-yellow-500/30";
+                normalTab.className = "flex-1 rounded-lg py-2.5 text-xs font-black uppercase tracking-wider text-slate-400 transition-all";
+                normalForm.classList.add('hidden');
+                bypassForm.classList.remove('hidden');
+                btn.className = "w-full bg-yellow-600 hover:bg-yellow-500 text-slate-900 font-black py-3.5 px-4 rounded-xl transition shadow-[0_0_15px_rgba(234,179,8,0.4)] hover:shadow-[0_0_25px_rgba(234,179,8,0.6)] uppercase tracking-widest mt-4 flex items-center justify-center gap-2";
+                btn.innerHTML = '<i class="fa-solid fa-bolt"></i> APPLY BYPASS';
+                iconDiv.className = "bg-yellow-600/20 text-yellow-500 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(234,179,8,0.4)]";
             } else {
-                // If Firebase confirms NO user is logged in, unlock the button!
-                setButtonActive();
+                normalTab.className = "flex-1 rounded-lg py-2.5 text-xs font-black uppercase tracking-wider bg-white/5 text-white transition-all";
+                bypassTab.className = "flex-1 rounded-lg py-2.5 text-xs font-black uppercase tracking-wider text-slate-400 transition-all";
+                normalForm.classList.remove('hidden');
+                bypassForm.classList.add('hidden');
+                btn.className = "w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3.5 px-4 rounded-xl transition shadow-[0_0_15px_rgba(37,99,235,0.4)] hover:shadow-[0_0_25px_rgba(37,99,235,0.6)] uppercase tracking-widest mt-4 flex items-center justify-center gap-2";
+                btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> AUTHENTICATE';
+                iconDiv.className = "bg-blue-600/20 text-blue-500 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(37,99,235,0.4)]";
             }
-        });
+        }
+        // Default orientation on load
+        window.switchMode('normal');
 
-        // --- MANUAL LOGIN BUTTON TRIGGER ---
-        btn.addEventListener('click', () => {
-            setButtonLoading("Authenticating...");
-            errorMsg.classList.add('hidden');
+        fetch('/api/firebase-config').then(res => res.json()).then(config => {
+            const app = initializeApp(config);
+            const auth = getAuth(app);
+
+            const btn = document.getElementById('loginBtn');
+            const errorMsg = document.getElementById('error-msg');
+            const emailInput = document.getElementById('adminEmail');
+            const passInput = document.getElementById('adminPassword');
             
-            signInWithPopup(auth, provider).then((result) => {
-                // If successful, onAuthStateChanged (above) will instantly catch it and handle the redirect!
-            }).catch(error => {
-                errorMsg.innerText = "Popup blocked or login failed.";
-                errorMsg.classList.remove('hidden');
-                setButtonActive();
+            const bypassEmailInput = document.getElementById('bypassEmail');
+            const bypassCodeInput = document.getElementById('bypassCodeInput');
+
+            function setBtnLoading(loading, text = 'VERIFYING...') {
+                if (loading) {
+                    btn.disabled = true;
+                    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${text}`;
+                    btn.classList.add('opacity-75', 'cursor-wait');
+                } else {
+                    btn.disabled = false;
+                    btn.innerHTML = loginMode === 'bypass' ? '<i class="fa-solid fa-bolt"></i> APPLY BYPASS' : '<i class="fa-solid fa-right-to-bracket"></i> AUTHENTICATE';
+                    btn.classList.remove('opacity-75', 'cursor-wait');
+                }
+            }
+
+            onAuthStateChanged(auth, async (user) => {
+                if (user && loginMode === 'normal') {
+                    setBtnLoading(true);
+                    try {
+                        const token = await user.getIdToken(true);
+                        const response = await fetch('/api/auth/admin_login', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({token: token})
+                        });
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            window.location.href = '/admin';
+                        } else {
+                            errorMsg.innerText = data.error || "Access Denied. Account lacks Admin clearance.";
+                            errorMsg.classList.remove('hidden');
+                            await signOut(auth);
+                            setBtnLoading(false);
+                        }
+                    } catch (e) {
+                        setBtnLoading(false);
+                    }
+                }
+            });
+
+            btn.addEventListener('click', async () => {
+                errorMsg.classList.add('hidden');
+
+                if (loginMode === 'bypass') {
+                    const email = bypassEmailInput.value.trim();
+                    const code = bypassCodeInput.value.trim();
+
+                    if (!email || !code) {
+                        errorMsg.innerText = "Please enter your admin email and 6 digit bypass code.";
+                        errorMsg.classList.remove('hidden');
+                        return;
+                    }
+
+                    setBtnLoading(true, 'APPLYING BYPASS...');
+                    try {
+                        const response = await fetch('/api/auth/bypass_login', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({email: email, code: code})
+                        });
+                        const data = await response.json();
+                        if (data.success) {
+                            window.location.href = '/admin';
+                        } else {
+                            errorMsg.innerText = data.error || "Invalid bypass code.";
+                            errorMsg.classList.remove('hidden');
+                            setBtnLoading(false);
+                        }
+                    } catch(e) {
+                        errorMsg.innerText = "Network failure communicating with server.";
+                        errorMsg.classList.remove('hidden');
+                        setBtnLoading(false);
+                    }
+                } else {
+                    const email = emailInput.value.trim();
+                    const pass = passInput.value;
+                    
+                    if(!email || !pass) {
+                        errorMsg.innerText = "Please enter both email and password.";
+                        errorMsg.classList.remove('hidden');
+                        return;
+                    }
+
+                    setBtnLoading(true);
+                    try {
+                        await signInWithEmailAndPassword(auth, email, pass);
+                    } catch (error) {
+                        errorMsg.innerText = "Incorrect email or password.";
+                        errorMsg.classList.remove('hidden');
+                        setBtnLoading(false);
+                    }
+                }
             });
         });
     </script>
