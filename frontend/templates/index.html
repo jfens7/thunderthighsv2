@@ -315,9 +315,9 @@
                 <i class="fa-solid fa-trophy text-lg"></i>
                 <span class="text-[9px] font-medium tracking-tight">Ranks</span>
             </button>
-            <button id="b-nav-sheets" onclick="window.switchTab('sheets')" class="nav-item flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 text-slate-400">
-                <i class="fa-solid fa-calendar-week text-lg"></i>
-                <span class="text-[9px] font-medium tracking-tight">Matches</span>
+            <button id="b-nav-notices" onclick="window.switchTab('notices')" class="nav-item flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 text-slate-400">
+                <i class="fa-solid fa-bullhorn text-lg"></i>
+                <span class="text-[9px] font-medium tracking-tight">Notices</span>
             </button>
             <button id="b-nav-search" onclick="window.switchTab('search')" class="nav-item flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 text-slate-400">
                 <i class="fa-solid fa-magnifying-glass text-lg"></i>
@@ -527,7 +527,7 @@
                 const [sRes, dRes] = await Promise.all([fetch('/api/seasons'), fetch('/api/divisions')]);
                 const seasons = await sRes.json(); const divisions = await dRes.json();
                 
-                const latestSeason = seasons.includes("Summer 2026") ? "Summer 2026" : (seasons[seasons.length - 1] || "Career");
+                const latestSeason = seasons.includes("Winter 2026") ? "Winter 2026" : (seasons[seasons.length - 1] || "Career");
                 currentSeason = latestSeason;
 
                 const sSelect = document.getElementById('seasonSelect'); if (sSelect) { sSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; sSelect.appendChild(opt); }); sSelect.value = latestSeason; }

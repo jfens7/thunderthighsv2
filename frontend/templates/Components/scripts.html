@@ -165,6 +165,7 @@
             window.renderProfile();
             
         } catch(e) {
+            window.currentProfileData = null;
             document.getElementById('playerRatingBadge').innerHTML = "N/A";
             document.getElementById('matchHistory').innerHTML = '<div class="text-center py-10 text-red-500">Error loading profile data.</div>';
         }
@@ -202,6 +203,9 @@
         document.getElementById('wins').innerText = displayStats.wins || 0;
         document.getElementById('losses').innerText = displayStats.losses || 0;
         document.getElementById('winRate').innerText = displayStats.win_rate || "0%";
+        
+        // Always render insights since data might have changed
+        window.renderInsights();
 
         const histContainer = document.getElementById('matchHistory');
         if (!displayStats.match_history || displayStats.match_history.length === 0) {
@@ -245,6 +249,350 @@
             </div>`;
         }).join('');
     }
+
+    window.switchProfileTab = function(tabId) {
+        document.getElementById('profile-tab-history').classList.add('hidden');
+        document.getElementById('profile-tab-insights').classList.add('hidden');
+        
+        document.getElementById('tab-btn-history').classList.remove('text-yellow-500', 'border-yellow-500');
+        document.getElementById('tab-btn-history').classList.add('text-slate-500', 'border-transparent');
+        document.getElementById('tab-btn-insights').classList.remove('text-yellow-500', 'border-yellow-500');
+        document.getElementById('tab-btn-insights').classList.add('text-slate-500', 'border-transparent');
+        
+        document.getElementById('profile-tab-' + tabId).classList.remove('hidden');
+        document.getElementById('tab-btn-' + tabId).classList.add('text-yellow-500', 'border-yellow-500');
+        document.getElementById('tab-btn-' + tabId).classList.remove('text-slate-500', 'border-transparent');
+
+        if (tabId === 'insights') window.renderInsights();
+    };
+
+    window.openCompareModal = function() {
+        if (!window.currentProfileName) return;
+        document.getElementById('h2h-p1-name').innerText = window.currentProfileName;
+        document.getElementById('h2h-p1-hidden').value = window.currentProfileName;
+        
+        const h2hSearch = document.getElementById('h2h-search');
+        const h2hSugg = document.getElementById('h2h-suggestions');
+        
+        // Clone to remove any old listeners
+        const newSearch = h2hSearch.cloneNode(true);
+        h2hSearch.parentNode.replaceChild(newSearch, h2hSearch);
+        
+        newSearch.value = '';
+        document.getElementById('h2h-results-area').innerHTML = '<div class="text-center py-16 text-slate-500"><div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/5"><i class="fa-solid fa-magnifying-glass text-2xl"></i></div><p class="font-bold text-sm">Search for an opponent to compare stats.</p></div>';
+        
+        newSearch.addEventListener('input', (e) => {
+            const v = e.target.value.toLowerCase().trim();
+            h2hSugg.innerHTML = '';
+            if (v.length < 2) { h2hSugg.classList.add('hidden'); return; }
+            
+            const matches = window.allPlayersRaw.filter(p => p.toLowerCase().includes(v) && p !== window.currentProfileName).slice(0, 5);
+            if (matches.length > 0) {
+                h2hSugg.classList.remove('hidden');
+                matches.forEach(m => {
+                    let div = document.createElement('div');
+                    div.className = "px-4 py-3 hover:bg-sky-900/30 cursor-pointer text-white font-bold border-b border-white/5 transition-colors";
+                    div.innerText = m;
+                    div.onclick = () => {
+                        newSearch.value = m;
+                        h2hSugg.classList.add('hidden');
+                        runCompare(window.currentProfileName, m);
+                    };
+                    h2hSugg.appendChild(div);
+                });
+            } else {
+                h2hSugg.classList.add('hidden');
+            }
+        });
+        
+        document.addEventListener('click', (e) => {
+            if (!newSearch.contains(e.target) && !h2hSugg.contains(e.target)) {
+                h2hSugg.classList.add('hidden');
+            }
+        });
+        
+        document.getElementById('compareModal').classList.remove('hidden');
+        setTimeout(() => newSearch.focus(), 100);
+    };
+    window.closeCompareModal = () => document.getElementById('compareModal').classList.add('hidden');
+
+    async function runCompare(p1, p2) {
+        const resultsArea = document.getElementById('h2h-results-area');
+        resultsArea.innerHTML = '<div class="text-center py-16 text-sky-500"><i class="fa-solid fa-spinner fa-spin text-3xl mb-3"></i><p class="font-bold text-sm">Simulating match up...</p></div>';
+        
+        try {
+            const res = await fetch(`/api/h2h?p1=${encodeURIComponent(p1)}&p2=${encodeURIComponent(p2)}`);
+            const data = await res.json();
+            
+            if (data.error) throw new Error(data.error);
+            
+            const p1Lower = p1.toLowerCase();
+            const p2Lower = p2.toLowerCase();
+            
+            const historyHtml = data.history && data.history.length > 0 
+                ? data.history.map(m => {
+                    const p1IsMatchP1 = m.p1.toLowerCase() === p1Lower;
+                    const ourP1Score = p1IsMatchP1 ? m.s1 : m.s2;
+                    const ourP2Score = p1IsMatchP1 ? m.s2 : m.s1;
+                    const isP1Win = ourP1Score > ourP2Score;
+                    return `
+                    <div class="bg-black/30 p-3 rounded-xl border ${isP1Win ? 'border-sky-500/20' : 'border-red-500/20'} mb-2 flex justify-between items-center">
+                        <div>
+                            <div class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">${m.date}</div>
+                            <div class="text-white font-bold text-sm mt-0.5">${isP1Win ? `<span class="text-sky-400">${p1}</span> won` : `<span class="text-red-400">${p2}</span> won`}</div>
+                        </div>
+                        <div class="font-mono font-black ${isP1Win ? 'text-sky-400' : 'text-red-400'} text-lg bg-black/50 px-2 py-0.5 rounded shadow-inner border border-white/5">${ourP1Score}-${ourP2Score}</div>
+                    </div>`
+                }).join('')
+                : '<div class="text-center py-6 text-slate-500 italic text-sm border border-white/5 bg-black/20 rounded-xl">No previous matches recorded between these two players.</div>';
+
+            resultsArea.innerHTML = `
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="bg-black/40 border border-white/5 rounded-2xl p-4 text-center">
+                        <div class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">${p1} Wins</div>
+                        <div class="text-4xl font-black text-sky-400">${data.p1_wins}</div>
+                    </div>
+                    <div class="bg-black/40 border border-white/5 rounded-2xl p-4 text-center">
+                        <div class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">${p2} Wins</div>
+                        <div class="text-4xl font-black text-red-400">${data.p2_wins}</div>
+                    </div>
+                </div>
+                
+                <div class="bg-slate-800/80 rounded-2xl border border-white/10 p-4 mb-6">
+                    <div class="text-xs text-center text-slate-400 font-bold uppercase tracking-widest mb-4">Matchup Analysis & Simulated Odds</div>
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="text-center w-1/3">
+                            <div class="text-white font-bold">${data.p1_rating} <span class="text-xs text-slate-400 font-normal">±${data.p1_rd}</span></div>
+                            <div class="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">Current Rating</div>
+                        </div>
+                        <div class="w-1/3 flex justify-center">
+                            <div class="bg-slate-900 px-3 py-1 rounded-full border border-white/10 text-[10px] font-bold text-slate-300 tracking-widest">VS</div>
+                        </div>
+                        <div class="text-center w-1/3">
+                            <div class="text-white font-bold">${data.p2_rating} <span class="text-xs text-slate-400 font-normal">±${data.p2_rd}</span></div>
+                            <div class="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">Current Rating</div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-black/40 rounded-xl p-3 border border-white/5">
+                        <div class="flex justify-between text-xs font-bold mb-2 uppercase tracking-wide">
+                            <span class="text-sky-400">${data.p1_prob}% Win Prob</span>
+                            <span class="text-red-400">${data.p2_prob}% Win Prob</span>
+                        </div>
+                        <div class="w-full bg-slate-700 h-2 rounded-full overflow-hidden flex">
+                            <div class="bg-sky-500 h-full transition-all duration-1000" style="width: ${data.p1_prob}%"></div>
+                            <div class="bg-red-500 h-full transition-all duration-1000" style="width: ${data.p2_prob}%"></div>
+                        </div>
+                        <div class="flex justify-between mt-3">
+                            <div class="bg-slate-900 px-3 py-1.5 rounded-lg border border-white/10 flex flex-col items-start">
+                                <span class="text-slate-500 uppercase font-bold tracking-widest text-[8px] block mb-0.5">Simulated Odds</span>
+                                <span class="text-sky-300 font-mono font-bold text-sm">$${data.p1_odds}</span>
+                            </div>
+                            <div class="bg-slate-900 px-3 py-1.5 rounded-lg border border-white/10 flex flex-col items-end">
+                                <span class="text-slate-500 uppercase font-bold tracking-widest text-[8px] block mb-0.5">Simulated Odds</span>
+                                <span class="text-red-300 font-mono font-bold text-sm">$${data.p2_odds}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h3 class="text-white font-black text-sm uppercase tracking-widest mb-3 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left text-slate-500"></i> Match History</h3>
+                <div class="space-y-1">
+                    ${historyHtml}
+                </div>
+            `;
+        } catch(e) {
+            resultsArea.innerHTML = `<div class="text-center py-16 text-red-500"><i class="fa-solid fa-circle-exclamation text-3xl mb-3"></i><p class="font-bold text-sm">Could not load comparison data.</p></div>`;
+        }
+    }
+
+    window.renderInsights = function() {
+        const loading = document.getElementById('insightsLoading');
+        const content = document.getElementById('insightsContent');
+        
+        if (!window.currentProfileData) return;
+        const d = window.currentProfileData;
+        
+        // Use insights data from the backend
+        const insights = d.insights || {};
+        const totalMatches = d.career_matches || 0;
+        
+        if (totalMatches === 0) {
+            loading.classList.add('hidden');
+            content.classList.remove('hidden');
+            content.innerHTML = '<div class="col-span-1 text-center text-slate-500 italic py-10 bg-slate-800/30 rounded-xl">Not enough matches for insights.</div>';
+            return;
+        }
+
+        loading.classList.add('hidden');
+        content.classList.remove('hidden');
+        
+        // Remove grid classes for stacked layout
+        content.className = "flex flex-col gap-6";
+
+        function renderInsightSection(title, dataArray, descriptionTemplate) {
+            dataArray = dataArray || [];
+            const count = dataArray.length;
+            const percentage = totalMatches > 0 ? ((count / totalMatches) * 100).toFixed(1) + '%' : '0%';
+            
+            // Calculate win rate for this specific subset
+            let sectionWins = 0;
+            dataArray.forEach(m => {
+                if (m.result && m.result.includes('Win')) sectionWins++;
+            });
+            let winPercentage = count > 0 ? Math.round((sectionWins / count) * 100) + '%' : '0%';
+            
+            let desc = descriptionTemplate
+                .replace('{percentage}', `<span class="font-bold text-white">${percentage}</span>`)
+                .replace('{winPercentage}', `<span class="font-bold text-emerald-400">${winPercentage}</span>`);
+            
+            // Generate rows for the first 3 matches
+            const topMatches = dataArray.slice(0, 3);
+            const extraMatches = dataArray.slice(3);
+            
+            let renderMatchRow = (m) => {
+                let resText = m.result;
+                let resClass = m.result.includes('Win') ? 'text-slate-300' : 'text-slate-300';
+                
+                // Add delta string if present
+                if (m.delta) {
+                    let deltaStr = '';
+                    if (m.delta > 0) deltaStr = `<span class="text-emerald-500 ml-1">(▲${Math.round(m.delta)})</span>`;
+                    else if (m.delta < 0) deltaStr = `<span class="text-red-500 ml-1">(▼${Math.abs(Math.round(m.delta))})</span>`;
+                    resText += ` ${deltaStr}`;
+                }
+                
+                return `
+                    <div class="flex justify-between items-center py-2 border-b border-white/5 last:border-0 text-sm">
+                        <div class="font-bold text-white">${m.opponent} <span class="text-xs text-slate-500 font-normal">(${m.season})</span></div>
+                        <div class="${resClass}">${resText}</div>
+                    </div>
+                `;
+            };
+            
+            let topRowsHtml = topMatches.map(renderMatchRow).join('');
+            let extraRowsHtml = extraMatches.map(renderMatchRow).join('');
+            
+            let moreMatchesHtml = '';
+            if (extraMatches.length > 0) {
+                const safeTitle = title.replace(/\s+/g, '-').toLowerCase();
+                moreMatchesHtml = `
+                    <div id="extra-${safeTitle}" class="hidden flex-col">
+                        ${extraRowsHtml}
+                    </div>
+                    <div class="mt-2 text-xs text-orange-400 cursor-pointer flex items-center justify-between hover:text-orange-300 transition-colors" onclick="document.getElementById('extra-${safeTitle}').classList.toggle('hidden'); this.querySelector('i').classList.toggle('fa-chevron-down'); this.querySelector('i').classList.toggle('fa-chevron-up');">
+                        <span>More Matches</span>
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </div>
+                `;
+            }
+            
+            let matchesTableHtml = '';
+            if (count > 0) {
+                matchesTableHtml = `
+                    <div class="w-full">
+                        <div class="flex justify-between items-center text-emerald-500 text-sm font-semibold border-b border-emerald-500/30 pb-2 mb-2">
+                            <div>Opponent</div>
+                            <div>Result</div>
+                        </div>
+                        <div class="flex flex-col">
+                            ${topRowsHtml}
+                        </div>
+                        ${moreMatchesHtml}
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="mb-8">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-orange-500 font-semibold text-2xl">${title}</h4>
+                        <span class="text-white text-2xl font-medium">${count}</span>
+                    </div>
+                    <p class="text-sm text-slate-400 mb-4 leading-relaxed">${desc}</p>
+                    ${matchesTableHtml}
+                </div>
+            `;
+        }
+        
+        let wins = d.career_wins || 0;
+        let losses = d.career_losses || 0;
+        let winRate = totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0;
+        let rating = d.rating || 1500;
+        let name = d.name || 'Player';
+        let firstYear = d.first_year || "unknown";
+        
+        let html = `
+            <div class="mb-8 text-center pt-2">
+                <h3 class="text-3xl text-white font-bold tracking-tight">${name}</h3>
+                <p class="text-slate-400 mt-1">Rated ${rating}</p>
+            </div>
+            
+            <div class="border-t border-b border-white/10 py-6 mb-8 text-sm text-slate-300 leading-relaxed">
+                With ${wins} wins and ${losses} losses, they've won <span class="text-yellow-500 font-bold">${winRate}%</span> of their ${totalMatches} career matches. They have been competing in GCTTA events since ${firstYear}.
+            </div>
+        `;
+        
+        html += renderInsightSection(
+            'Sweeps', 
+            insights.sweeps, 
+            "Matches where the player never lost a game. Matches like these happened {percentage} of the time and, and he won them all."
+        );
+        
+        html += renderInsightSection(
+            'Blowouts', 
+            insights.blowouts, 
+            "Matches where the player never won a game. Matches like these happened {percentage} of the time and, and he lost them all."
+        );
+        
+        html += renderInsightSection(
+            'Close Calls', 
+            insights.close_calls, 
+            "Matches that came down to the final game. Matches like these happened {percentage} of the time and he won about {winPercentage} of them."
+        );
+        
+        html += renderInsightSection(
+            'Big Swings', 
+            insights.big_swings, 
+            "Matches where large gains or losses were made because of the big difference in the opponent's rating. Matches like these happened {percentage} of the time and he won about {winPercentage} of them."
+        );
+        
+        html += renderInsightSection(
+            'Nail Biters <span class="text-xs text-slate-500 font-normal ml-2 block sm:inline mt-1 sm:mt-0 tracking-normal">(Requires detailed point scoring data, which will take time and resources to fully backfill)</span>', 
+            insights.nail_biters, 
+            "Matches that came down to last 2 points of the last match. Matches like these happened {percentage} of the time and he won about {winPercentage} of them."
+        );
+        
+        html += renderInsightSection(
+            'Strong Starts <span class="text-xs text-slate-500 font-normal ml-2 block sm:inline mt-1 sm:mt-0 tracking-normal">(Requires detailed point scoring data, which will take time and resources to fully backfill)</span>', 
+            insights.strong_starts, 
+            "Matches where the player won the first game. Matches like these happened {percentage} of the time and he won about {winPercentage} of them."
+        );
+        
+        html += renderInsightSection(
+            'Comebacks <span class="text-xs text-slate-500 font-normal ml-2 block sm:inline mt-1 sm:mt-0 tracking-normal">(Requires detailed point scoring data, which will take time and resources to fully backfill)</span>', 
+            insights.comebacks, 
+            "After being 1 set away from losing the match, the player won straight sets to win the match. Matches like these happened {percentage} of the time and, and he won them all."
+        );
+        
+        html += renderInsightSection(
+            'Letdowns <span class="text-xs text-slate-500 font-normal ml-2 block sm:inline mt-1 sm:mt-0 tracking-normal">(Requires detailed point scoring data, which will take time and resources to fully backfill)</span>', 
+            insights.letdowns, 
+            "After needing 1 set to win, the player ended up losing the match. Matches like these happened {percentage} of the time and, and he lost them all."
+        );
+        
+        html += renderInsightSection(
+            'Merciless <span class="text-xs text-slate-500 font-normal ml-2 block sm:inline mt-1 sm:mt-0 tracking-normal">(Requires detailed point scoring data, which will take time and resources to fully backfill)</span>', 
+            insights.merciless, 
+            "Matches where the player had a game where they won or lost at zero. Matches like these happened {percentage} of the time and he won about {winPercentage} of them."
+        );
+
+        if (!html) {
+            html = '<div class="text-center text-slate-500 italic py-10 bg-slate-800/30 rounded-xl">Insights will appear here as more match data is collected.</div>';
+        }
+
+        content.innerHTML = html;
+    };
 
     // ==========================================
     // STANDINGS / LEADERBOARDS

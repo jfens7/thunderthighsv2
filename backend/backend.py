@@ -431,7 +431,7 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
         if hasattr(self, 'weekly_matches') and isinstance(self.weekly_matches, dict): seasons.update(self.weekly_matches.keys())
         if hasattr(self, 'season_stats') and isinstance(self.season_stats, dict): seasons.update(self.season_stats.keys())
         clean_seasons = sorted([str(s) for s in seasons if str(s) != "Career"], reverse=True)
-        return clean_seasons if clean_seasons else ["Summer 2026"] 
+        return clean_seasons if clean_seasons else ["Winter 2026"] 
         
     def get_divisions(self): 
         divs = set()
@@ -485,8 +485,13 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
         season_data = getattr(self, 'season_stats', getattr(self, 'stats_by_season', {}))
         data = players_data if season == "Career" else season_data.get(season, {})
         
-        if player_name not in data: return None
-        raw = data[player_name]
+        if player_name not in data:
+            if season != "Career" and player_name in players_data:
+                raw = {'combined': {}, 'regular': {}, 'fillin': {}}
+            else:
+                return None
+        else:
+            raw = data[player_name]
         rat = self.rating_engine.get_rating(player_name)
         
         def format_bucket(stats):
@@ -499,6 +504,122 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             disp_hist.reverse()
             return {'matches': len(hist), 'wins': wins, 'losses': len(hist)-wins, 'win_rate': f"{win_rate}%", 'match_history': disp_hist}
             
+        def calculate_insights(hist):
+            sweeps = []
+            blowouts = []
+            close_calls = []
+            big_swings = []
+            strong_starts = []
+            merciless = []
+            comebacks = []
+            letdowns = []
+            nail_biters = []
+            
+            for m in hist:
+                try:
+                    score = m.get('score', '')
+                    if not score: continue
+                    parts = score.split('-')
+                    if len(parts) != 2: continue
+                    sets_for = int(parts[0])
+                    sets_against = int(parts[1])
+                    result = m.get('result', '')
+                    opp = m.get('opponent', 'Unknown')
+                    delta = m.get('delta', 0)
+                    
+                    match_data = {
+                        'opponent': opp,
+                        'result': f"{result}: {score}",
+                        'season': m.get('season', 'Career'),
+                        'delta': delta,
+                        'details': m.get('details', '')
+                    }
+                    
+                    if result == "Win" and sets_against == 0:
+                        sweeps.append(match_data)
+                    if result == "Loss" and sets_for == 0:
+                        blowouts.append(match_data)
+                    if abs(sets_for - sets_against) == 1:
+                        close_calls.append(match_data)
+                    if abs(delta) >= 70:
+                        big_swings.append(match_data)
+                        
+                    details = m.get('details', '')
+                    if details:
+                        games = [g.strip() for g in details.split(',') if g.strip()]
+                        if games:
+                            # Game 1 strong start
+                            g1 = games[0].split('-')
+                            if len(g1) == 2:
+                                if int(g1[0]) > int(g1[1]):
+                                    strong_starts.append(match_data)
+                                    
+                            # Merciless
+                            has_zero = False
+                            for g in games:
+                                pts = g.split('-')
+                                if len(pts) == 2 and (int(pts[0]) == 0 or int(pts[1]) == 0):
+                                    has_zero = True
+                            if has_zero:
+                                merciless.append(match_data)
+                                
+                            # Nail Biters
+                            last_g = games[-1].split('-')
+                            if len(last_g) == 2:
+                                p1_pts, p2_pts = int(last_g[0]), int(last_g[1])
+                                if p1_pts >= 10 and p2_pts >= 10 and abs(p1_pts - p2_pts) <= 2:
+                                    nail_biters.append(match_data)
+                                elif (p1_pts == 11 and p2_pts == 9) or (p1_pts == 9 and p2_pts == 11):
+                                    nail_biters.append(match_data)
+                except Exception:
+                    pass
+            
+            # Sort all lists by some logical criteria, or just reverse them to show newest first
+            def format_insight(arr):
+                arr.reverse()
+                return arr
+                
+            return {
+                'sweeps': format_insight(sweeps),
+                'blowouts': format_insight(blowouts),
+                'close_calls': format_insight(close_calls),
+                'big_swings': format_insight(big_swings),
+                'strong_starts': format_insight(strong_starts),
+                'merciless': format_insight(merciless),
+                'comebacks': format_insight(comebacks),
+                'letdowns': format_insight(letdowns),
+                'nail_biters': format_insight(nail_biters)
+            }
+
+        # User requested insights to ALWAYS be career history, even if a specific season is selected for match history
+        career_raw = players_data.get(player_name, {})
+        career_hist = career_raw.get('combined', {}).get('history', [])
+        insights_data = calculate_insights(career_hist)
+        
+        # We also need the total career matches to return so the frontend can calculate percentages accurately
+        total_career_matches = len(career_hist)
+        total_career_wins = sum(1 for m in career_hist if m.get('result') == "Win")
+        total_career_losses = total_career_matches - total_career_wins
+        
+        first_year = "unknown"
+        if career_hist:
+            oldest_match = career_hist[-1]  # or [0] depending on how it's sorted, let's just find min year
+            first_year_candidates = []
+            for m in career_hist:
+                date_str = m.get('date', '')
+                if date_str and '/' in date_str:
+                    parts = date_str.split('/')
+                    if len(parts) == 3:
+                        first_year_candidates.append(parts[2])
+                elif m.get('season'):
+                    season = str(m.get('season'))
+                    import re
+                    match = re.search(r'\d{4}', season)
+                    if match:
+                        first_year_candidates.append(match.group(0))
+            if first_year_candidates:
+                first_year = min(first_year_candidates)
+
         return {
             'name': player_name, 
             'rating': int(rat.get('rating', 1500)), 
@@ -507,6 +628,11 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             'combined': format_bucket(raw.get('combined', {})), 
             'regular': format_bucket(raw.get('regular', {})), 
             'fillin': format_bucket(raw.get('fillin', {})), 
+            'insights': insights_data,
+            'career_matches': total_career_matches,
+            'career_wins': total_career_wins,
+            'career_losses': total_career_losses,
+            'first_year': first_year,
             'peterman_id': players_data.get(player_name, {}).get('peterman_id', '')
         }
 
@@ -563,7 +689,79 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
                     elif m['s2'] > m['s1']: p1_wins += 1
 
         matches.sort(key=lambda x: datetime.datetime.strptime(x['date'], "%d/%m/%Y") if x['date'] != "nodate" else datetime.datetime.min, reverse=True)
-        return {"p1": p1_clean, "p2": p2_clean, "p1_wins": p1_wins, "p2_wins": p2_wins, "total_matches": len(matches), "history": matches}
+        
+        rat1 = self.rating_engine.get_rating(p1_clean)
+        rat2 = self.rating_engine.get_rating(p2_clean)
+        r1 = rat1.get('rating', 1500)
+        r2 = rat2.get('rating', 1500)
+        rd1 = rat1.get('rd', 350)
+        rd2 = rat2.get('rd', 350)
+        
+        # Complex Odds Algorithm
+        import math
+        
+        # 1. Rating & SD based probability (Glicko-style expectation)
+        q = math.log(10) / 400
+        rd_combined = math.sqrt(rd1**2 + rd2**2)
+        g_rd = 1 / math.sqrt(1 + 3 * (q * rd_combined / math.pi)**2)
+        rating_prob_p1 = 1 / (1 + 10 ** (g_rd * (r2 - r1) / 400))
+        
+        # 2. Match History and Closeness (Sets) with Recency Weighting
+        total_m = len(matches)
+        h2h_prob_p1 = 0.5
+        if total_m > 0:
+            weighted_wins_p1 = 0
+            weighted_total = 0
+            
+            weighted_sets_p1 = 0
+            weighted_sets_total = 0
+            
+            for i, m in enumerate(matches):
+                # Decay factor: more recent matches (lower index) carry more weight
+                weight = 0.85 ** i
+                
+                if m['p1'] == p1_clean:
+                    s1_p1, s2_p2 = m['s1'], m['s2']
+                else:
+                    s1_p1, s2_p2 = m['s2'], m['s1']
+                    
+                if s1_p1 > s2_p2:
+                    weighted_wins_p1 += weight
+                weighted_total += weight
+                
+                weighted_sets_p1 += s1_p1 * weight
+                weighted_sets_total += (s1_p1 + s2_p2) * weight
+                    
+            h2h_win_rate = weighted_wins_p1 / weighted_total if weighted_total > 0 else 0.5
+            set_ratio = weighted_sets_p1 / weighted_sets_total if weighted_sets_total > 0 else 0.5
+            
+            # Blend pure win rate with set closeness
+            h2h_prob_p1 = (h2h_win_rate * 0.7) + (set_ratio * 0.3)
+            
+        # 3. Blend them together based on sample size of head-to-head matches
+        # The more they play, the more H2H matters (caps at 60% weight after 15+ matches)
+        h2h_weight = min(total_m / 25.0, 0.6) 
+        
+        final_prob_p1 = (rating_prob_p1 * (1 - h2h_weight)) + (h2h_prob_p1 * h2h_weight)
+        
+        # Cap probabilities to avoid 1.00 odds
+        final_prob_p1 = max(0.01, min(0.99, final_prob_p1))
+        final_prob_p2 = 1 - final_prob_p1
+        
+        odds_p1 = round(1 / final_prob_p1, 2)
+        odds_p2 = round(1 / final_prob_p2, 2)
+        
+        return {
+            "p1": p1_clean, "p2": p2_clean, 
+            "p1_wins": p1_wins, "p2_wins": p2_wins, 
+            "total_matches": total_m, 
+            "history": matches,
+            "p1_rating": int(r1), "p1_rd": int(rd1),
+            "p2_rating": int(r2), "p2_rd": int(rd2),
+            "p1_odds": f"{odds_p1:.2f}", "p2_odds": f"{odds_p2:.2f}",
+            "p1_prob": round(final_prob_p1 * 100, 1),
+            "p2_prob": round(final_prob_p2 * 100, 1)
+        }
 
     def get_rating_history(self, player_name):
         if not self.db: return []
