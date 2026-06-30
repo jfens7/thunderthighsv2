@@ -1,5 +1,10 @@
 # server.py
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file if it exists
+load_dotenv()
+
 import logging
 import datetime
 import threading
@@ -9,13 +14,13 @@ from functools import wraps
 from flask import Flask, render_template, jsonify, request, session, redirect, url_for, make_response
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
-from firebase_admin import auth as fb_auth
+from firebase_admin import auth as fb_auth, firestore
 
 from backend.backend import ThunderData
 
 app = Flask(__name__, static_folder="frontend/static", template_folder="frontend/templates")
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'gctta-super-secret-session-key')
-stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
+stripe.api_key = os.environ.get('STRIPE_SECRET_KEY', '').strip(' "\'')
 app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=30)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -337,6 +342,9 @@ def public_simulate():
 @app.route('/api/create-payment-intent', methods=['POST'])
 def create_payment():
     try: 
+        if not stripe.api_key:
+            return jsonify(error="Stripe Secret Key is missing. Please configure it in the AI Studio Settings menu."), 400
+
         amount = int(float(request.json.get('amount', 5.00)) * 100)
         # FIX: Replaced explicit payment types with automatic_payment_methods to fix Payment Element checkout
         intent = stripe.PaymentIntent.create(
@@ -346,6 +354,12 @@ def create_payment():
         )
         return jsonify({'clientSecret': intent.client_secret})
     except Exception as e: return jsonify(error=str(e)), 403
+
+@app.route('/api/stripe-config')
+def stripe_config():
+    return jsonify({
+        'publicKey': os.environ.get('STRIPE_PUBLIC_KEY', 'pk_test_TYooMQauvdEDq54NiTphI7jx').strip(' "\'')
+    })
 
 @app.route('/api/record_donation', methods=['POST'])
 def record_donation(): return jsonify({"success": db.record_donation(request.json.get('intent_id'), request.json.get('name'), request.json.get('amount'))}) if db else jsonify({"success": False})
