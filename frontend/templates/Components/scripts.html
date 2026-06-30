@@ -529,7 +529,11 @@
                 document.getElementById('donate-step-2').classList.remove('hidden');
 
                 if (typeof Stripe !== 'undefined') {
-                    if (!stripeInstance) stripeInstance = Stripe('pk_test_TYooMQauvdEDq54NiTphI7jx'); 
+                    if (!stripeInstance) {
+                        const configRes = await fetch('/api/stripe-config');
+                        const configData = await configRes.json();
+                        stripeInstance = Stripe(configData.publicKey);
+                    }
                     stripeElements = stripeInstance.elements({ 
                         clientSecret: data.clientSecret, 
                         appearance: { theme: 'night' } 

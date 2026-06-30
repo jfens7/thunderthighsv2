@@ -1,6 +1,42 @@
 <script>
     console.log("✅ Admin UI Script Loaded Successfully!");
 
+    window.submitChangePassword = async function() {
+        const newPass = document.getElementById('newAdminPassword').value;
+        const confirmPass = document.getElementById('confirmAdminPassword').value;
+        
+        if (!newPass || newPass.length < 6) return alert("Password must be at least 6 characters.");
+        if (newPass !== confirmPass) return alert("Passwords do not match.");
+        
+        try {
+            const btn = document.querySelector('#changePasswordModal button.bg-indigo-600');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
+            btn.disabled = true;
+            
+            const res = await fetch('/api/admin/change_password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: newPass })
+            });
+            const data = await res.json();
+            
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            
+            if (data.success) {
+                alert("✅ Password successfully updated! You can now use this password for future logins.");
+                document.getElementById('newAdminPassword').value = '';
+                document.getElementById('confirmAdminPassword').value = '';
+                document.getElementById('changePasswordModal').classList.add('hidden');
+            } else {
+                alert("❌ Error updating password: " + data.error);
+            }
+        } catch(e) {
+            alert("❌ System error occurred.");
+        }
+    };
+
     // ==========================================
     // UI NAVIGATION ENGINE
     // ==========================================
@@ -687,6 +723,7 @@
     window.submitRatingOverride = async function() {
         const id = document.getElementById('override-id').value; 
         const rating = document.getElementById('override-score').value; 
+        const sd = document.getElementById('override-sd').value;
         const isRetro = document.getElementById('override-retro').checked;
         
         if (!id || !rating) return alert("Please select a player and provide a rating.");
@@ -695,7 +732,7 @@
             const res = await fetch('/api/admin/override_rating', { 
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ player_id: id, rating: rating, retroactive: isRetro }) 
+                body: JSON.stringify({ player_id: id, rating: rating, sd: sd, retroactive: isRetro }) 
             });
             const data = await res.json();
             
@@ -704,6 +741,7 @@
                 document.getElementById('override-id').value = ''; 
                 document.getElementById('override-search').value = ''; 
                 document.getElementById('override-score').value = ''; 
+                document.getElementById('override-sd').value = ''; 
                 if (document.getElementById('override-context')) document.getElementById('override-context').innerHTML = '';
             } else {
                 alert("❌ Error applying rating override.");

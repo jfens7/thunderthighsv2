@@ -14,7 +14,8 @@ from functools import wraps
 from flask import Flask, render_template, jsonify, request, session, redirect, url_for, make_response
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
-from firebase_admin import auth as fb_auth, firestore
+from firebase_admin import auth as fb_auth
+from google.cloud import firestore
 
 from backend.backend import ThunderData
 
@@ -215,6 +216,21 @@ def auth_admin_login():
     else: return jsonify({"success": False, "error": "Access Denied. You are not an authorized Administrator."})
 
 
+@app.route('/api/admin/change_password', methods=['POST'])
+@login_required
+def admin_change_password():
+    email = session.get('admin_email')
+    new_pass = request.json.get('password')
+    if not new_pass or len(new_pass) < 6:
+        return jsonify({"success": False, "error": "Password must be at least 6 characters."})
+    try:
+        user = fb_auth.get_user_by_email(email)
+        fb_auth.update_user(user.uid, password=new_pass)
+        db._log_audit(email, 'PASSWORD_CHANGE', "Admin updated their own password via Control Tower.", {})
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
 @app.route('/api/auth/bypass_login', methods=['POST'])
 def auth_bypass_login():
     if not db: 
@@ -344,9 +360,8 @@ def create_payment():
     try: 
         if not stripe.api_key:
             return jsonify(error="Stripe Secret Key is missing. Please configure it in the AI Studio Settings menu."), 400
-
         amount = int(float(request.json.get('amount', 5.00)) * 100)
-        # FIX: Replaced explicit payment types with automatic_payment_methods to fix Payment Element checkout
+        
         intent = stripe.PaymentIntent.create(
             amount=amount, 
             currency='aud', 
@@ -360,6 +375,15 @@ def stripe_config():
     return jsonify({
         'publicKey': os.environ.get('STRIPE_PUBLIC_KEY', 'pk_test_TYooMQauvdEDq54NiTphI7jx').strip(' "\'')
     })
+
+@app.route('/.well-known/apple-developer-merchantid-domain-association')
+def apple_pay_domain_association():
+    # Apple Pay requires domain verification. 
+    # Store the contents of the verification file in this environment variable.
+    content = os.environ.get('APPLE_PAY_DOMAIN_ASSOCIATION', '')
+    if content:
+        return content, 200, {'Content-Type': 'text/plain'}
+    return "Domain verification not configured. Please add APPLE_PAY_DOMAIN_ASSOCIATION to env.", 404
 
 @app.route('/api/record_donation', methods=['POST'])
 def record_donation(): return jsonify({"success": db.record_donation(request.json.get('intent_id'), request.json.get('name'), request.json.get('amount'))}) if db else jsonify({"success": False})
