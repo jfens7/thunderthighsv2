@@ -55,7 +55,7 @@ epoch_timestamp = int(expiry_utc.timestamp())
 
 # Determine the deterministic PIN that server.py will calculate based on epoch timestamp
 # Matches the math: str(abs(hash(epoch_timestamp)) % 1000000).zfill(6)
-calculated_pin = str(abs(hash(epoch_timestamp)) % 1000000).zfill(6)
+calculated_pin = str(random.randint(100000, 999999))
 
 print("\n⚙️ Synchronizing emergency parameters with Firestore...")
 
@@ -64,7 +64,8 @@ try:
     db.collection('admin_users').document(target_email).set({
         'email': target_email,
         'role': 'temp_super_admin',
-        'expires_at': expiry_utc
+        'expires_at': expiry_utc,
+        'bypass_pin': calculated_pin
     }, merge=True)
     
     print("\n" + "="*55)

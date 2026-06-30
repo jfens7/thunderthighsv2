@@ -340,12 +340,33 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
                     if i == player_id: player_name = n; break
             if not player_name: return False
 
-            payload = {'name': player_name, 'rating': float(new_rating), 'rd': final_sd, 'vol': 0.06, 'date_str': '1900-01-01' if retroactive else datetime.datetime.now().strftime("%Y-%m-%d"), 'timestamp': firestore.SERVER_TIMESTAMP, 'author': admin_email}
+            payload = {'name': player_name, 'rating': float(new_rating), 'rd': final_sd, 'vol': 0.06, 'date_str': '1900-01-01' if retroactive else datetime.datetime.now().strftime("%Y-%m-%d"), 'timestamp': firestore.SERVER_TIMESTAMP, 'author': admin_email, 'retroactive': retroactive}
             self.db.collection('rating_overrides').document(player_name).set(payload)
+            
+            # --- NEW: Persist straight to the player profile object ---
+            safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()
+            self.db.collection('player_profiles').document(safe_id).set({
+                'rating': float(new_rating),
+                'sd': final_sd,
+                'last_updated': firestore.SERVER_TIMESTAMP
+            }, merge=True)
+            
+            # Immediately update the in-memory rating engine so it reflects in UI without a full sync
+            if player_name not in self.rating_engine.players:
+                self.rating_engine.get_rating(player_name)
+            self.rating_engine.players[player_name]['rating'] = float(new_rating)
+            self.rating_engine.players[player_name]['rd'] = final_sd
+
             self._log_audit(admin_email, 'OVERRIDE_RATING', f"Forced {player_name} to Rating: {new_rating}, SD: {final_sd}", {"name": player_name})
-            self.refresh_data()
+            
+            # Only recalculate everyone if the override is retroactive (needs to replay matches)
+            if retroactive:
+                threading.Thread(target=self.refresh_data, daemon=True).start()
+                
             return True
-        except: return False
+        except Exception as e:
+            logger.error(f"Override Rating Error: {e}")
+            return False
 
     def admin_bulk_fix_date(self, season, division, week, new_date, admin_email="Unknown"):
         if not self.db: return False
@@ -547,7 +568,8 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
     def get_rating_history(self, player_name):
         if not self.db: return []
         try:
-            docs = self.db.collection('player_rating_history').where('player_name', '==', player_name).order_by('timestamp', direction=firestore.Query.DESCENDING).limit(100).stream()
+            p_clean = self._clean_name(player_name)
+            docs = self.db.collection('player_rating_history').where('player_name', '==', p_clean).limit(200).stream()
             history = []
             for d in docs:
                 data = d.to_dict()
@@ -556,15 +578,121 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
                     date_val = data.get('timestamp').strftime("%d/%m/%Y")
                 history.append({
                     "date": date_val,
-                    "rating": round(data.get('rating', 0)),
-                    "sd": round(data.get('sd', 0)),
+                    "rating": round(data.get('rating', 0), 1),
+                    "sd": round(data.get('sd', 0), 1),
+                    "rating_change": round(data.get('rating_change', 0), 1),
+                    "sd_change": round(data.get('sd_change', 0), 1),
                     "opponent": data.get('opponent', ''),
-                    "result": data.get('result_str', '')
+                    "result_str": data.get('result_str', ''),
+                    "is_decay": data.get('is_decay', False),
+                    "_timestamp_val": data.get('timestamp').timestamp() if hasattr(data.get('timestamp'), 'timestamp') else 0
                 })
-            return history
+            
+            history.sort(key=lambda x: x.get('_timestamp_val', 0), reverse=True)
+            
+            if not history and hasattr(self, 'match_history_log'):
+                # Fallback to generated match history log for players without specific history ledger items
+                for m in reversed(self.match_history_log):
+                    if p_clean in m['home_players'] or p_clean in m['away_players']:
+                        is_home = p_clean in m['home_players']
+                        history.append({
+                            "date": m.get('date', 'Unknown'),
+                            "rating": round(m.get('p1_after') if is_home else m.get('p2_after'), 1),
+                            "sd": round(m.get('p1_rd_after') if is_home else m.get('p2_rd_after'), 1),
+                            "rating_change": round(m.get('p1_delta') if is_home else m.get('p2_delta'), 1),
+                            "sd_change": round((m.get('p1_rd_after') - m.get('p1_rd_before')) if is_home else (m.get('p2_rd_after') - m.get('p2_rd_before')), 1),
+                            "opponent": m.get('p2') if is_home else m.get('p1'),
+                            "result_str": m.get('score', ''),
+                            "is_decay": False
+                        })
+                
+            return history[:100]
         except Exception as e:
             logger.error(f"Error fetching rating history: {e}")
             return []
+
+    def admin_recalculate_recent(self, admin_email="Unknown"):
+        if not self.db: return {"success": False, "error": "DB Offline"}
+        try:
+            cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=21)
+            
+            # 1. Fetch matches ONLY from the last 21 days
+            matches_ref = self.db.collection('match_results').where('status', '==', 'approved').stream()
+            matches = []
+            for m in matches_ref:
+                data = m.to_dict()
+                timestamp = data.get('timestamp')
+                if timestamp and hasattr(timestamp, 'replace') and timestamp.replace(tzinfo=datetime.timezone.utc) >= cutoff:
+                    data['id'] = m.id
+                    date_obj = self._parse_date(data.get('date'))
+                    data['_sort_date'] = date_obj if date_obj else datetime.date.min
+                    matches.append(data)
+            
+            matches.sort(key=lambda x: (x['_sort_date'], x.get('timestamp')))
+            
+            # 2. Get Baselines from 21 days ago
+            from backend.glicko import RatingEngine
+            fresh_engine = RatingEngine()
+            
+            involved_players = set()
+            for m in matches:
+                involved_players.update(m.get('home_players', []))
+                involved_players.update(m.get('away_players', []))
+                
+            for p in involved_players:
+                p_clean = self._clean_name(p)
+                hist_docs = self.db.collection('player_rating_history').where('player_name', '==', p_clean).where('timestamp', '<', cutoff).order_by('timestamp', direction=firestore.Query.DESCENDING).limit(1).stream()
+                
+                baseline_found = False
+                for doc in hist_docs:
+                    d = doc.to_dict()
+                    fresh_engine.players[p_clean] = {'rating': d.get('rating', 1500.0), 'rd': d.get('sd', 350.0), 'vol': 0.06}
+                    baseline_found = True
+                if not baseline_found:
+                    fresh_engine.players[p_clean] = {'rating': 1500.0, 'rd': 350.0, 'vol': 0.06}
+
+            # 3. Wipe ONLY recent history ledger entries
+            recent_hist = self.db.collection('player_rating_history').where('timestamp', '>=', cutoff).stream()
+            batch = self.db.batch()
+            deletes = 0
+            for doc in recent_hist:
+                batch.delete(doc.reference)
+                deletes += 1
+                if deletes >= 400:
+                    batch.commit()
+                    batch = self.db.batch()
+                    deletes = 0
+            if deletes > 0: batch.commit()
+
+            # 4. Replay the last 3 weeks
+            batch = self.db.batch()
+            writes = 0
+            for m in matches:
+                p1 = self._clean_name(m.get('home_players', [''])[0])
+                p2 = self._clean_name(m.get('away_players', [''])[0])
+                s1 = m.get('live_home_sets', 0)
+                s2 = m.get('live_away_sets', 0)
+                
+                if not p1 or not p2: continue
+                res = fresh_engine.update_match(p1, p2, s1, s2, m['id'], self.k_win, self.k_loss, True)
+                
+                for p, s_after, rd_after, opp, s_str, r_delta, sd_delta in [
+                    (p1, res['p1_after'], res['p1_rd_after'], p2, f"{s1}-{s2}", res['p1_delta'], res['p1_rd_after'] - res['p1_rd_before']),
+                    (p2, res['p2_after'], res['p2_rd_after'], p1, f"{s2}-{s1}", res['p2_delta'], res['p2_rd_after'] - res['p2_rd_before'])
+                ]:
+                    ref = self.db.collection('player_rating_history').document()
+                    batch.set(ref, {'player_name': p, 'rating': s_after, 'sd': rd_after, 'rating_change': r_delta, 'sd_change': sd_delta, 'opponent': opp, 'result_str': s_str, 'date': m.get('date'), 'timestamp': m.get('timestamp') or firestore.SERVER_TIMESTAMP, 'is_decay': False})
+                    writes += 1
+                    if writes >= 400:
+                        batch.commit()
+                        batch = self.db.batch()
+                        writes = 0
+            if writes > 0: batch.commit()
+            
+            self._log_audit(admin_email, 'RECALCULATE_RECENT', f"Rebuilt last 21 days ({len(matches)} matches).", {})
+            threading.Thread(target=self.refresh_data, daemon=True).start()
+            return {"success": True, "message": f"Successfully recalculated last 3 weeks."}
+        except Exception as e: return {"success": False, "error": str(e)}
 
     def admin_recalculate_ratings(self, admin_email="Unknown"):
         if not self.db: return {"success": False, "error": "DB Offline"}
@@ -586,6 +714,23 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             batch = self.db.batch()
             history_writes = 0
             
+            # --- INACTIVITY CREEP TRACKING ---
+            import math
+            last_played = {}
+            c_system = 15.6  # Glicko decay constant 
+            grace_period_days = 14
+            MAX_RD = 350.0
+            
+            # Wipe old history ledger before rebuilding
+            old_hist = self.db.collection('player_rating_history').stream()
+            for doc in old_hist:
+                batch.delete(doc.reference)
+                history_writes += 1
+                if history_writes >= 400:
+                    batch.commit()
+                    batch = self.db.batch()
+                    history_writes = 0
+            
             for m in matches:
                 p1 = m.get('home_players', [''])[0]
                 p2 = m.get('away_players', [''])[0]
@@ -593,57 +738,61 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
                 s2 = m.get('live_away_sets', 0)
                 
                 if not p1 or not p2: continue
-                
                 p1_clean = self._clean_name(p1)
                 p2_clean = self._clean_name(p2)
+                match_date = m['_sort_date']
                 
+                # --- APPLY INACTIVITY PENALTY BEFORE MATCH ---
+                for p_clean in [p1_clean, p2_clean]:
+                    if p_clean in last_played:
+                        days_missed = (match_date - last_played[p_clean]).days
+                        if days_missed > grace_period_days:
+                            weeks_missed = (days_missed - grace_period_days) / 7.0
+                            old_stats = fresh_engine.get_rating(p_clean)
+                            old_rd = old_stats.get('rd', 350.0)
+                            
+                            new_rd = min(math.sqrt(old_rd**2 + (c_system**2 * weeks_missed)), MAX_RD)
+                            
+                            if new_rd > old_rd + 1.0:
+                                fresh_engine.players[p_clean]['rd'] = new_rd
+                                decay_ref = self.db.collection('player_rating_history').document()
+                                batch.set(decay_ref, {
+                                    'player_name': p_clean, 'rating': old_stats['rating'], 'sd': new_rd,
+                                    'rating_change': 0, 'sd_change': new_rd - old_rd,
+                                    'opponent': 'Inactivity Decay', 'result_str': f'{days_missed} days missed',
+                                    'date': match_date.strftime("%d/%m/%Y"),
+                                    'timestamp': m.get('timestamp') or firestore.SERVER_TIMESTAMP,
+                                    'is_decay': True
+                                })
+                                history_writes += 1
+
                 res = fresh_engine.update_match(p1_clean, p2_clean, s1, s2, m['id'], self.k_win, self.k_loss, True)
+                last_played[p1_clean] = match_date
+                last_played[p2_clean] = match_date
                 
-                h1_ref = self.db.collection('player_rating_history').document()
-                h1_data = {
-                    'player_name': p1_clean,
-                    'rating': res['p1_after'],
-                    'sd': res['p1_rd_after'],
-                    'opponent': p2_clean,
-                    'result_str': f"{s1}-{s2}",
-                    'date': m.get('date'),
-                    'timestamp': m.get('timestamp') or firestore.SERVER_TIMESTAMP
-                }
-                batch.set(h1_ref, h1_data)
-                
-                h2_ref = self.db.collection('player_rating_history').document()
-                h2_data = {
-                    'player_name': p2_clean,
-                    'rating': res['p2_after'],
-                    'sd': res['p2_rd_after'],
-                    'opponent': p1_clean,
-                    'result_str': f"{s2}-{s1}",
-                    'date': m.get('date'),
-                    'timestamp': m.get('timestamp') or firestore.SERVER_TIMESTAMP
-                }
-                batch.set(h2_ref, h2_data)
-                
-                history_writes += 2
-                if history_writes >= 400:
-                    batch.commit()
-                    batch = self.db.batch()
-                    history_writes = 0
+                # --- RECORD MATCH LEDGER ---
+                for p, s_after, rd_after, opp, s_str, r_delta, sd_delta in [
+                    (p1_clean, res['p1_after'], res['p1_rd_after'], p2_clean, f"{s1}-{s2}", res['p1_delta'], res['p1_rd_after'] - res['p1_rd_before']),
+                    (p2_clean, res['p2_after'], res['p2_rd_after'], p1_clean, f"{s2}-{s1}", res['p2_delta'], res['p2_rd_after'] - res['p2_rd_before'])
+                ]:
+                    h_ref = self.db.collection('player_rating_history').document()
+                    batch.set(h_ref, {
+                        'player_name': p, 'rating': s_after, 'sd': rd_after,
+                        'rating_change': r_delta, 'sd_change': sd_delta,
+                        'opponent': opp, 'result_str': s_str,
+                        'date': m.get('date'), 'timestamp': m.get('timestamp') or firestore.SERVER_TIMESTAMP,
+                        'is_decay': False
+                    })
+                    history_writes += 1
+                    if history_writes >= 400:
+                        batch.commit()
+                        batch = self.db.batch()
+                        history_writes = 0
             
-            if history_writes > 0:
-                batch.commit()
+            if history_writes > 0: batch.commit()
             
-            for p_name, r_data in fresh_engine.players.items():
-                self.db.collection('rating_overrides').document(p_name).set({
-                    'name': p_name,
-                    'rating': r_data['rating'],
-                    'rd': r_data['rd'],
-                    'vol': r_data['vol'],
-                    'timestamp': firestore.SERVER_TIMESTAMP,
-                    'author': 'SYSTEM_RECALC'
-                })
-            
-            self._log_audit(admin_email, 'RECALCULATE_ALL', f"Replayed and recalculated {len(matches)} matches.", {})
-            self.refresh_data()
+            self._log_audit(admin_email, 'RECALCULATE_ALL', f"Replayed and recalculated {len(matches)} matches with decay.", {})
+            threading.Thread(target=self.refresh_data, daemon=True).start()
             return {"success": True, "message": f"Successfully recalculated {len(matches)} matches."}
         except Exception as e:
             logger.error(f"Recalc Error: {e}")

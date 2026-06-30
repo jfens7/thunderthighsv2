@@ -284,6 +284,13 @@ class SheetsSyncEngine:
                     'p2_fill': m['p2_fill']
                 })
         
+        for p in overrides_dict:
+            if p not in player_overrides_applied:
+                if p not in app.rating_engine.players: app.rating_engine.get_rating(p)
+                app.rating_engine.players[p]['rating'] = overrides_dict[p]['rating']
+                app.rating_engine.players[p]['rd'] = overrides_dict[p]['rd']
+                app.rating_engine.players[p]['vol'] = overrides_dict[p]['vol']
+
         try:
             app.player_ids = {}; app.id_to_name = {}; ws = self.sheet_results.worksheet("Players"); all_values = ws.get_all_values()
             headers = [str(h).lower().strip() for h in all_values[0]]; name_col = headers.index("player name") if "player name" in headers else 0; id_col = headers.index("player id") if "player id" in headers else 1; existing_names = {}
@@ -301,7 +308,7 @@ class SheetsSyncEngine:
                 batch = app.db.batch(); batch_count = 0
                 for player_name, stats in app.all_players.items():
                     rat = app.rating_engine.get_rating(player_name); safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()
-                    batch.set(app.db.collection('player_profiles').document(safe_id), {'name': player_name, 'rating': int(rat['rating']), 'wins': stats['combined']['wins'], 'losses': stats['combined']['losses'], 'matches_played': stats['combined']['matches'], 'last_updated': datetime.datetime.now()}, merge=True)
+                    batch.set(app.db.collection('player_profiles').document(safe_id), {'name': player_name, 'rating': float(rat['rating']), 'sd': float(rat['rd']), 'wins': stats['combined']['wins'], 'losses': stats['combined']['losses'], 'matches_played': stats['combined']['matches'], 'last_updated': datetime.datetime.now()}, merge=True)
                     batch_count += 1
                     if batch_count >= 400: batch.commit(); batch = app.db.batch(); batch_count = 0
                 if batch_count > 0: batch.commit()

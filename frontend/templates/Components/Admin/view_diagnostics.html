@@ -104,5 +104,33 @@
             </div>
             <button onclick="window.saveMathMultipliers()" class="mt-6 w-full bg-slate-900 hover:bg-slate-700 text-white font-bold py-3 rounded-xl border border-white/10 transition-colors text-xs uppercase tracking-widest shadow">SAVE & RECALCULATE HISTORY</button>
         </div>
+        <div class="bg-slate-800 p-6 rounded-2xl border border-white/5 shadow-xl flex flex-col">
+            <h3 class="text-lg font-bold text-white mb-4"><i class="fa-solid fa-server text-rose-500 mr-2"></i> Core Engine Controls</h3>
+            <p class="text-xs text-slate-400 mb-6">Master controls to rebuild player rating and variance ledgers from historical matches. Warning: The Full Recalculate is a heavy operation.</p>
+            
+            <div class="space-y-4 mb-auto">
+                <button onclick="window.recalcRecent()" id="btn-recalc-recent" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-4 rounded-xl border border-white/10 transition flex items-center justify-between text-sm shadow-inner group">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                        <div class="text-left">
+                            <div class="text-white">Recalculate Last 3 Weeks</div>
+                            <div class="text-[10px] text-slate-400 font-normal">Rebuilds recent matches & deltas</div>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-slate-500 text-xs group-hover:text-white"></i>
+                </button>
+
+                <button onclick="window.recalcFull()" id="btn-recalc-full" class="w-full bg-rose-900/40 hover:bg-rose-900/60 text-white font-bold py-3 px-4 rounded-xl border border-rose-500/30 transition flex items-center justify-between text-sm shadow-inner group">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-radiation"></i></div>
+                        <div class="text-left">
+                            <div class="text-white">Full Database Recalculation</div>
+                            <div class="text-[10px] text-rose-300/70 font-normal">Replays history chronologically + decays</div>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-rose-500/50 text-xs group-hover:text-rose-400"></i>
+                </button>
+            </div>
+        </div>
     </div>
 </div>

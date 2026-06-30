@@ -1,0 +1,11 @@
+{
+  "name": "table-tennis-rankings",
+  "version": "1.0.0",
+  "description": "Table Tennis Rankings System",
+  "main": "server.py",
+  "scripts": {
+    "start": "gunicorn server:app",
+    "build": "echo 'No build required for Python'"
+  },
+  "dependencies": {}
+}

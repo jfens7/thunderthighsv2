@@ -117,6 +117,52 @@
         }
     };
 
+    window.recalcRecent = async function() {
+        if(!confirm("⚠️ Replay the last 3 weeks of matches chronologically to fix recent rating bugs?")) return;
+        const btn = document.getElementById('btn-recalc-recent');
+        const origHtml = btn.innerHTML;
+        btn.innerHTML = '<div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center"><i class="fa-solid fa-spinner fa-spin"></i></div><div class="text-left text-white">Rebuilding recent history...</div></div>';
+        btn.disabled = true;
+        
+        try {
+            const res = await fetch('/api/admin/recalculate_recent', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+            const data = await res.json();
+            if (data.success) {
+                alert("✅ Last 3 weeks recalculated successfully!");
+            } else {
+                alert("❌ Error: " + data.error);
+            }
+        } catch(e) {
+            alert("Network error.");
+        } finally {
+            btn.innerHTML = origHtml;
+            btn.disabled = false;
+        }
+    };
+
+    window.recalcFull = async function() {
+        if(!confirm("🚨 DANGER: This will wipe all historical ledgers and replay the ENTIRE club history chronologically. It may take 30+ seconds. Are you absolutely sure?")) return;
+        const btn = document.getElementById('btn-recalc-full');
+        const origHtml = btn.innerHTML;
+        btn.innerHTML = '<div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center"><i class="fa-solid fa-radiation fa-spin"></i></div><div class="text-left text-white">Rebuilding entire database...</div></div>';
+        btn.disabled = true;
+        
+        try {
+            const res = await fetch('/api/admin/recalculate', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+            const data = await res.json();
+            if (data.success) {
+                alert("✅ Full database recalculation complete!");
+            } else {
+                alert("❌ Error: " + data.error);
+            }
+        } catch(e) {
+            alert("Network error. The process might still be running in the background.");
+        } finally {
+            btn.innerHTML = origHtml;
+            btn.disabled = false;
+        }
+    };
+
     window.scanForErrors = async function() {
         const box = document.getElementById('error-results-box');
         box.innerHTML = '<div class="text-center py-12"><i class="fa-solid fa-radar fa-spin text-red-500 text-3xl mb-4"></i><div class="text-xs text-slate-400 uppercase tracking-widest">Scanning entire database...</div></div>';

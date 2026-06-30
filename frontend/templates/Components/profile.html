@@ -99,9 +99,9 @@
         <div class="p-6 border-b border-white/10 flex justify-between items-center relative z-10 shrink-0">
             <div>
                 <h3 class="text-white font-black text-xl flex items-center gap-2">
-                    <i class="fa-solid fa-chart-line text-yellow-500"></i> Rating History
+                    <i class="fa-solid fa-chart-line text-yellow-500"></i> Rating Ledger
                 </h3>
-                <p class="text-xs text-slate-400 mt-1">Chronological ledger of rating updates</p>
+                <p class="text-xs text-slate-400 mt-1">Track your math + SD over time</p>
             </div>
             <button onclick="document.getElementById('ratingHistoryModal').classList.add('hidden')" class="text-slate-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 w-8 h-8 rounded-full flex items-center justify-center">
                 <i class="fa-solid fa-xmark"></i>
@@ -130,18 +130,37 @@
             if (history.length === 0) {
                 content.innerHTML = '<div class="text-slate-500 text-center py-8">No historical data recorded yet.</div>';
             } else {
-                content.innerHTML = history.map(h => `
-                    <div class="p-3 bg-black/40 rounded-xl border border-white/5 flex items-center justify-between group hover:border-yellow-500/30 transition-colors">
+                content.innerHTML = history.map(h => {
+                    const isInactivity = h.is_decay;
+                    
+                    // Rating delta logic (Green is up, Red is down)
+                    const rDelta = h.rating_change > 0 ? `+${h.rating_change}` : h.rating_change;
+                    const rColor = h.rating_change > 0 ? 'text-green-400' : (h.rating_change < 0 ? 'text-red-400' : 'text-slate-500');
+                    
+                    // SD delta logic (Red is up/worse, Green is down/better precision)
+                    const sdDelta = h.sd_change > 0 ? `+${h.sd_change}` : h.sd_change;
+                    const sdColor = h.sd_change > 0 ? 'text-red-400' : (h.sd_change < 0 ? 'text-green-400' : 'text-slate-500');
+
+                    return `
+                    <div class="p-3 bg-black/40 rounded-xl border ${isInactivity ? 'border-orange-500/20' : 'border-white/5'} flex items-center justify-between group hover:border-yellow-500/30 transition-colors">
                         <div>
-                            <div class="text-white font-bold text-sm mb-0.5">${h.opponent ? `vs ${h.opponent}` : 'System Override'}</div>
-                            <div class="text-[10px] text-slate-400 uppercase tracking-widest">${h.date} ${h.result ? `• ${h.result}` : ''}</div>
+                            <div class="text-white font-bold text-sm mb-0.5 flex items-center gap-2">
+                                ${isInactivity ? '<i class="fa-solid fa-stopwatch text-orange-400"></i> <span class="text-orange-200 text-xs">Inactivity Decay</span>' : (h.opponent ? `vs ${h.opponent}` : 'System Override')}
+                            </div>
+                            <div class="text-[10px] text-slate-400 uppercase tracking-widest">${h.date} ${h.result_str ? `• ${h.result_str}` : ''}</div>
                         </div>
-                        <div class="text-right">
-                            <div class="text-yellow-400 font-mono font-bold">${h.rating}</div>
-                            <div class="text-[10px] text-slate-500">SD: ${h.sd}</div>
+                        <div class="flex items-center gap-4">
+                            <div class="text-right w-16">
+                                <div class="text-yellow-400 font-mono font-bold text-base leading-none">${h.rating}</div>
+                                <div class="text-[10px] ${rColor} font-bold mt-1">${rDelta != 0 ? rDelta : '-'}</div>
+                            </div>
+                            <div class="text-left w-12 border-l border-white/10 pl-3">
+                                <div class="text-slate-300 font-mono text-[11px] leading-none">SD ${h.sd}</div>
+                                <div class="text-[10px] ${sdColor} font-bold mt-1">${sdDelta != 0 ? sdDelta : '-'}</div>
+                            </div>
                         </div>
                     </div>
-                `).join('');
+                `}).join('');
             }
         } catch(e) {
             content.innerHTML = '<div class="text-red-400 text-center py-8">Failed to load history ledger.</div>';

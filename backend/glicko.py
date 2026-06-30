@@ -1,9 +1,10 @@
 # backend/glicko.py
 import datetime
+import math
 
-DEFAULT_RATING = 1000.0
-DEFAULT_RD = 300.0
-RATING_START_DATE = datetime.date(2025, 12, 25)
+DEFAULT_RATING = 1500.0
+DEFAULT_RD = 350.0
+RATING_START_DATE = datetime.date(2022, 1, 1)
 
 def calculate_match(w, l, s1, s2, k_win=1.0, k_loss=1.4, anti_riot=True, point_scalar=1.0):
     total_sets = s1 + s2
@@ -49,6 +50,23 @@ class RatingEngine:
             if rd_val < 0: rd_val = DEFAULT_RD
             self.players[name] = {'rating': r_val, 'rd': rd_val, 'vol': float(vol) if vol is not None else 0.06}
         except ValueError: pass
+
+    def apply_time_decay(self, name, days_since_last, max_rd=350.0, c_value=15.0):
+        """
+        Standard Glicko decay: RD_new = min( sqrt(RD_old^2 + c^2 * t), max_rd )
+        t = weeks missed. c_value determines how fast uncertainty grows.
+        """
+        stats = self.get_rating(name)
+        if days_since_last <= 14: return 0.0 # Grace period of 2 weeks
+        
+        weeks_missed = (days_since_last - 14) / 7.0
+        old_rd = stats['rd']
+        
+        # Calculate new variance mathematically
+        new_rd = min(max_rd, math.sqrt((old_rd ** 2) + ((c_value ** 2) * weeks_missed)))
+        
+        stats['rd'] = new_rd
+        return new_rd - old_rd
         
     def update_match(self, p1_name, p2_name, s1, s2, game_history='', k_win=1.0, k_loss=1.4, anti_riot=True):
         p1_stats = self.get_rating(p1_name); p2_stats = self.get_rating(p2_name)

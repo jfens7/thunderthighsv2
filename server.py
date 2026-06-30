@@ -186,60 +186,8 @@ def auth_google():
         session['player_logged_in'] = True
         return jsonify({"success": True, "redirect": "/"})
 
+
 @app.route('/api/auth/admin_login', methods=['POST'])
-# Insert this route directly below your auth_admin_login() route in server.py
-@app.route('/api/auth/bypass_login', methods=['POST'])
-def auth_bypass_login():
-    if not db: 
-        return jsonify({"success": False, "error": "Database offline"}), 500
-    
-    req_email = request.json.get('email', '').lower()
-    input_code = request.json.get('code', '').strip()
-    
-    if not req_email or not input_code:
-        return jsonify({"success": False, "error": "Email and bypass code required."}), 400
-
-    # Query Firestore admin_users document for matching emergency credentials
-    try:
-        doc_ref = db.db.collection('admin_users').document(req_email)
-        doc = doc_ref.get()
-        
-        if not doc.exists:
-            return jsonify({"success": False, "error": "Unregistered emergency account."}), 403
-            
-        data = doc.to_dict()
-        stored_role = data.get('role')
-        
-        # We strictly enforce that bypass codes can only be used for temp emergency super-admin passes
-        if stored_role != 'temp_super_admin':
-            return jsonify({"success": False, "error": "Unauthorized operational mode."}), 403
-
-        # Verify their temp code against the bypass expiry logic in the database (stored as expiration timestamp)
-        expires_at = data.get('expires_at')
-        
-        # Fallback security assertion
-        if expires_at and datetime.datetime.now(datetime.timezone.utc) > expires_at:
-            doc_ref.update({'role': 'admin', 'expires_at': firestore.DELETE_FIELD})
-            return jsonify({"success": False, "error": "Bypass Code session has expired."}), 403
-
-        # Convert expiry timestamp to deterministic 6-digit PIN string for validation
-        # The PIN uses the microsecond/second values of the expiration timestamp
-        base_seed = int(expires_at.timestamp()) if hasattr(expires_at, 'timestamp') else int(datetime.datetime.utcnow().timestamp())
-        deterministic_6_digit_pin = str(abs(hash(base_seed)) % 1000000).zfill(6)
-
-        if input_code == deterministic_6_digit_pin:
-            session.permanent = True 
-            session['admin_logged_in'] = True
-            session['admin_email'] = req_email
-            session['admin_role'] = 'super_admin'
-            db._log_audit(req_email, 'SESSION_START', "Emergency Bypass Clearance executed successfully.", {})
-            return jsonify({"success": True})
-        else:
-            return jsonify({"success": False, "error": "Invalid bypass code."}), 403
-            
-    except Exception as e:
-        logger.error(f"Emergency execution exception failure: {e}")
-        return jsonify({"success": False, "error": "System Authentication Error"}), 500
 def auth_admin_login():
     if not db: return jsonify({"success": False, "error": "Database offline"})
     try:
@@ -260,6 +208,62 @@ def auth_admin_login():
         db._log_audit(email, 'SESSION_START', f"Authenticated as {role} via Control Tower.", {})
         return jsonify({"success": True})
     else: return jsonify({"success": False, "error": "Access Denied. You are not an authorized Administrator."})
+
+
+@app.route('/api/auth/bypass_login', methods=['POST'])
+def auth_bypass_login():
+    if not db: 
+        return jsonify({"success": False, "error": "Database offline"}), 500
+    
+    req_email = request.json.get('email', '').lower()
+    input_code = request.json.get('code', '').strip()
+    
+    if not req_email or not input_code:
+        return jsonify({"success": False, "error": "Email and bypass code required."}), 400
+
+    try:
+        doc_ref = db.db.collection('admin_users').document(req_email)
+        doc = doc_ref.get()
+        
+        if not doc.exists:
+            return jsonify({"success": False, "error": "Unregistered emergency account."}), 403
+            
+        data = doc.to_dict()
+        stored_role = data.get('role')
+        
+        if stored_role != 'temp_super_admin':
+            return jsonify({"success": False, "error": "Unauthorized operational mode."}), 403
+
+        expires_at = data.get('expires_at')
+        
+        if expires_at and datetime.datetime.now(datetime.timezone.utc) > expires_at:
+            doc_ref.update({'role': 'pending', 'expires_at': firestore.DELETE_FIELD, 'bypass_pin': firestore.DELETE_FIELD})
+            return jsonify({"success": False, "error": "Bypass Code session has expired."}), 403
+
+        expected_pin = data.get('bypass_pin')
+        
+        # Legacy support for hash-based PINs if bypass_pin isn't stored
+        if not expected_pin:
+            base_seed = int(expires_at.timestamp()) if hasattr(expires_at, 'timestamp') else int(datetime.datetime.utcnow().timestamp())
+            expected_pin = str(abs(hash(base_seed)) % 1000000).zfill(6)
+
+        if input_code == str(expected_pin):
+            # FIX: Invalidate bypass instantly so it cannot be reused after logout
+            doc_ref.update({'role': 'pending', 'expires_at': firestore.DELETE_FIELD, 'bypass_pin': firestore.DELETE_FIELD})
+            
+            session.permanent = True 
+            session['admin_logged_in'] = True
+            session['admin_email'] = req_email
+            session['admin_role'] = 'super_admin'
+            db._log_audit(req_email, 'SESSION_START', "Emergency Bypass Clearance executed successfully.", {})
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": "Invalid bypass code."}), 403
+            
+    except Exception as e:
+        logger.error(f"Emergency execution exception failure: {e}")
+        return jsonify({"success": False, "error": "System Authentication Error"}), 500
+
 
 @app.route('/logout')
 def logout(): 
@@ -334,7 +338,13 @@ def public_simulate():
 def create_payment():
     try: 
         amount = int(float(request.json.get('amount', 5.00)) * 100)
-        return jsonify({'clientSecret': stripe.PaymentIntent.create(amount=amount, currency='aud', automatic_payment_methods={'enabled': True}).client_secret})
+        # FIX: Replaced explicit payment types with automatic_payment_methods to fix Payment Element checkout
+        intent = stripe.PaymentIntent.create(
+            amount=amount, 
+            currency='aud', 
+            automatic_payment_methods={"enabled": True}
+        )
+        return jsonify({'clientSecret': intent.client_secret})
     except Exception as e: return jsonify(error=str(e)), 403
 
 @app.route('/api/record_donation', methods=['POST'])
@@ -578,6 +588,12 @@ def get_rating_scales(): return jsonify({"k_win": db.k_win, "k_loss": db.k_loss}
 def admin_recalculate():
     if not db: return jsonify({"success": False, "error": "Database offline"})
     return jsonify(db.admin_recalculate_ratings(session.get('admin_email')))
+
+@app.route('/api/admin/recalculate_recent', methods=['POST'])
+@super_admin_required
+def admin_recalculate_recent():
+    if not db: return jsonify({"success": False, "error": "Database offline"})
+    return jsonify(db.admin_recalculate_recent(session.get('admin_email')))
 
 @app.route('/api/admin/chaos_config', methods=['GET'])
 @login_required

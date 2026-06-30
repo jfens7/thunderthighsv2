@@ -11,3 +11,4 @@ credentials.json
 # Virtual Environment
 venv/
 .envcredentials copy.json
+.env

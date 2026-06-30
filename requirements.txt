@@ -66,3 +66,4 @@ Werkzeug==3.1.4
 wheel==0.45.1
 pdfplumber==0.10.3
 beautifulsoup4
+python-dotenv==1.0.1
