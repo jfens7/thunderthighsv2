@@ -221,10 +221,12 @@ class SheetsSyncEngine:
                 for p in [m['p1'], m['p2']]:
                     if p in last_played_dates:
                         days_inactive = (m['date'] - last_played_dates[p]).days
-                        if days_inactive >= 7:
-                            weeks_missed = days_inactive // 7
+                        if days_inactive > 14:
+                            import math
+                            weeks_missed = (days_inactive - 14) / 7.0
+                            c_system = 15.6
                             p_stats = app.rating_engine.get_rating(p)
-                            new_rd = min(350.0, p_stats['rd'] + (weeks_missed * DECAY_PER_WEEK))
+                            new_rd = min(350.0, math.sqrt(p_stats['rd']**2 + (c_system**2 * weeks_missed)))
                             app.rating_engine.players[p]['rd'] = new_rd
                     last_played_dates[p] = m['date']
 
@@ -234,6 +236,11 @@ class SheetsSyncEngine:
                         if p not in app.rating_engine.players: app.rating_engine.get_rating(p)
                         app.rating_engine.players[p]['rating'] = overrides_dict[p]['rating']; app.rating_engine.players[p]['rd'] = overrides_dict[p]['rd']; app.rating_engine.players[p]['vol'] = overrides_dict[p]['vol']
                         player_overrides_applied.add(p)
+                        try:
+                            override_date = datetime.datetime.strptime(overrides_dict[p]['date'], "%Y-%m-%d").date()
+                            if p not in last_played_dates or override_date > last_played_dates[p]:
+                                last_played_dates[p] = override_date
+                        except: pass
 
             deltas = {'p1_delta': 0, 'p2_delta': 0}
             if m['date'] > RATING_START_DATE: 
@@ -290,6 +297,24 @@ class SheetsSyncEngine:
                 app.rating_engine.players[p]['rating'] = overrides_dict[p]['rating']
                 app.rating_engine.players[p]['rd'] = overrides_dict[p]['rd']
                 app.rating_engine.players[p]['vol'] = overrides_dict[p]['vol']
+                try:
+                    override_date = datetime.datetime.strptime(overrides_dict[p]['date'], "%Y-%m-%d").date()
+                    if p not in last_played_dates or override_date > last_played_dates[p]:
+                        last_played_dates[p] = override_date
+                except: pass
+
+        # Apply decay up to today
+        today = datetime.date.today()
+        import math
+        for p, last_date in last_played_dates.items():
+            days_inactive = (today - last_date).days
+            if days_inactive > 14:
+                weeks_missed = (days_inactive - 14) / 7.0
+                c_system = 15.6
+                p_stats = app.rating_engine.get_rating(p)
+                new_rd = min(350.0, math.sqrt(p_stats['rd']**2 + (c_system**2 * weeks_missed)))
+                if new_rd > p_stats['rd'] + 0.1:
+                    app.rating_engine.players[p]['rd'] = new_rd
 
         try:
             app.player_ids = {}; app.id_to_name = {}; ws = self.sheet_results.worksheet("Players"); all_values = ws.get_all_values()

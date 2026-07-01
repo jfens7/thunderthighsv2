@@ -25,32 +25,39 @@
                 </button>
                 
                 <div class="w-full space-y-3">
-                    <div class="flex flex-col md:flex-row gap-3 w-full">
-                        <div class="relative flex-1">
-                            <i class="fa-solid fa-calendar absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                            <select id="seasonSelect" style="color-scheme: dark;" class="w-full bg-black/40 border border-white/10 text-white text-base md:text-sm rounded-xl pl-11 pr-8 py-3.5 md:py-2.5 focus:ring-2 focus:ring-yellow-500 focus:outline-none appearance-none cursor-pointer hover:bg-black/60 transition-colors shadow-inner font-bold">
-                                <option value="Career">Career</option>
-                            </select>
-                            <i class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"></i>
-                        </div>
-
-                        <div class="relative flex-1">
-                            <i class="fa-solid fa-layer-group absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                            <select id="profileDivisionSelect" style="color-scheme: dark;" class="w-full bg-black/40 border border-white/10 text-white text-base md:text-sm rounded-xl pl-11 pr-8 py-3.5 md:py-2.5 focus:ring-2 focus:ring-yellow-500 focus:outline-none appearance-none cursor-pointer hover:bg-black/60 transition-colors shadow-inner font-bold">
-                                <option value="All">All Divisions</option>
-                            </select>
-                            <i class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"></i>
-                        </div>
+                    <div class="flex bg-black/40 rounded-xl p-1 shadow-inner border border-white/5 w-full mb-1">
+                        <button id="source-btn-fixtures" onclick="setDataSource('fixtures')" class="flex-1 py-2 text-sm md:text-xs font-black uppercase tracking-wider rounded-lg bg-sky-600 text-white shadow transition-all">GCTTA Fixtures</button>
+                        <button id="source-btn-rc" onclick="setDataSource('rc')" class="flex-1 py-2 text-sm md:text-xs font-black uppercase tracking-wider rounded-lg text-slate-400 hover:text-white transition-all">Ratings Central</button>
                     </div>
-                    
-                    <label class="flex items-center justify-between md:justify-start cursor-pointer bg-black/40 px-5 py-3.5 md:py-2.5 rounded-xl border border-white/10 hover:bg-black/60 transition-colors w-full shadow-inner">
-                        <div class="text-base md:text-sm font-bold text-slate-300">Include Fill-in Matches</div>
-                        <div class="relative md:ml-4 flex-shrink-0">
-                            <input type="checkbox" id="profileFillinToggle" class="sr-only" checked onchange="renderProfile()">
-                            <div id="toggleBg" class="block bg-sky-500 w-12 h-7 rounded-full transition-colors duration-300"></div>
-                            <div id="toggleDot" class="absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition-transform duration-300 translate-x-5 shadow-md"></div>
+
+                    <div id="fixtureFiltersContainer" class="space-y-3">
+                        <div class="flex flex-col md:flex-row gap-3 w-full">
+                            <div class="relative flex-1">
+                                <i class="fa-solid fa-calendar absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                <select id="seasonSelect" style="color-scheme: dark;" class="w-full bg-black/40 border border-white/10 text-white text-base md:text-sm rounded-xl pl-11 pr-8 py-3.5 md:py-2.5 focus:ring-2 focus:ring-yellow-500 focus:outline-none appearance-none cursor-pointer hover:bg-black/60 transition-colors shadow-inner font-bold">
+                                    <option value="Career">Career</option>
+                                </select>
+                                <i class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"></i>
+                            </div>
+
+                            <div class="relative flex-1">
+                                <i class="fa-solid fa-layer-group absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                <select id="profileDivisionSelect" style="color-scheme: dark;" class="w-full bg-black/40 border border-white/10 text-white text-base md:text-sm rounded-xl pl-11 pr-8 py-3.5 md:py-2.5 focus:ring-2 focus:ring-yellow-500 focus:outline-none appearance-none cursor-pointer hover:bg-black/60 transition-colors shadow-inner font-bold">
+                                    <option value="All">All Divisions</option>
+                                </select>
+                                <i class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"></i>
+                            </div>
                         </div>
-                    </label>
+                        
+                        <label class="flex items-center justify-between md:justify-start cursor-pointer bg-black/40 px-5 py-3.5 md:py-2.5 rounded-xl border border-white/10 hover:bg-black/60 transition-colors w-full shadow-inner">
+                            <div class="text-base md:text-sm font-bold text-slate-300">Include Fill-in Matches</div>
+                            <div class="relative md:ml-4 flex-shrink-0">
+                                <input type="checkbox" id="profileFillinToggle" class="sr-only" checked onchange="renderProfile()">
+                                <div id="toggleBg" class="block bg-sky-500 w-12 h-7 rounded-full transition-colors duration-300"></div>
+                                <div id="toggleDot" class="absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition-transform duration-300 translate-x-5 shadow-md"></div>
+                            </div>
+                        </label>
+                    </div>
                 </div>
             </div>
 

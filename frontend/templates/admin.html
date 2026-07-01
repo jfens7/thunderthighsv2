@@ -53,6 +53,7 @@
 
     <div id="sub-players" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
         <button onclick="window.switchAdminTab('players')" id="tab-btn-players" class="px-4 py-2 text-xs font-bold text-purple-400 bg-purple-900/30 rounded-lg">Player Editor</button>
+        <button onclick="window.switchAdminTab('ratings-central')" id="tab-btn-ratings-central" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"><i class="fa-solid fa-satellite-dish mr-1"></i> Ratings Central</button>
         <button onclick="window.switchAdminTab('schedules')" id="tab-btn-schedules" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"><i class="fa-solid fa-calendar-days mr-1"></i> Schedule Manager</button>
     </div>
 
@@ -84,6 +85,10 @@
         
         <div id="admin-players" class="hidden animate-fade-in w-full max-w-5xl mx-auto">
             {% include 'Components/Admin/view_players.html' ignore missing %}
+        </div>
+
+        <div id="admin-ratings-central" class="hidden animate-fade-in w-full max-w-5xl mx-auto">
+            {% include 'Components/Admin/view_ratings_central.html' ignore missing %}
         </div>
 
         <div id="admin-accounts-wrapper">

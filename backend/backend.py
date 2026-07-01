@@ -299,6 +299,7 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
         try:
             self.db.collection('player_profiles').document(re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()).set({'name': player_name, 'ratings_central_id': ratings_central_id}, merge=True)
             self._log_audit(admin_email, 'UPDATE_PROFILE', f"Updated {player_name} Profile (RC: {ratings_central_id})", {})
+            self.trigger_background_rc_scrape(player_name, ratings_central_id, admin_email)
             return True
         except: return False
 

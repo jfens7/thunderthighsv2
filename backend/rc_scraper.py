@@ -168,8 +168,16 @@ class RatingsCentralScraper:
             info_url = f"https://www.ratingscentral.com/PlayerInfo.php?PlayerID={rc_id}"
             resp_info = requests.get(info_url, headers=self.headers, verify=False, timeout=10)
             if resp_info.status_code == 200:
-                text = BeautifulSoup(resp_info.text, 'html.parser').get_text(separator=' ').replace('\xa0', ' ')
-                match = re.search(r'(\d{3,4})\s*(?:±|\+/-|&plusmn;)\s*(\d{1,3})', text, re.IGNORECASE)
+                html_text = resp_info.text
+                # RC uses <td align="right">1530</td><td>&plusmn;</td><td>46</td>
+                # Or similar structures. We search directly in HTML to be safe
+                match = re.search(r'>\s*(\d{2,4}(?:\.\d+)?)\s*<\s*/\s*td\s*>\s*<\s*td\s*[^>]*>\s*(?:&plusmn;|±|&#177;)\s*<\s*/\s*td\s*>\s*<\s*td\s*[^>]*>\s*(\d{1,3}(?:\.\d+)?)\s*<', html_text, re.IGNORECASE)
+                
+                if not match:
+                    # Fallback to plain text search just in case
+                    text = BeautifulSoup(html_text, 'html.parser').get_text(separator=' ').replace('\xa0', ' ').replace('&plusmn;', '±')
+                    match = re.search(r'(\d{2,4}(?:\.\d+)?)\s*(?:±|\+/-)\s*(\d{1,3}(?:\.\d+)?)', text, re.IGNORECASE)
+                    
                 if match:
                     stats["rc_rating"] = float(match.group(1))
                     stats["rc_sd"] = float(match.group(2))
@@ -179,43 +187,58 @@ class RatingsCentralScraper:
             resp_csv = requests.get(csv_url, headers=self.headers, verify=False, timeout=10)
             
             if resp_csv.status_code == 200:
-                lines = resp_csv.text.splitlines()
+                import csv
+                from io import StringIO
+                reader = csv.DictReader(StringIO(resp_csv.text))
+                
                 wins = 0
                 losses = 0
                 
-                for line in lines[1:]: # Skip header
-                    parts = line.split(',')
-                    if len(parts) >= 6:
-                        date_str = parts[0].strip().replace('"', '')
-                        event_name = parts[1].strip().replace('"', '')
-                        opp_name = parts[2].strip().replace('"', '')
-                        result = parts[3].strip().replace('"', '').upper()
-                        score = parts[4].strip().replace('"', '')
+                for row in reader:
+                    date_str = row.get('EventDate', '').strip()
+                    event_name = f"Event {row.get('EventID', 'Unknown')}" 
+                    opp_name = row.get('OpponentName', '').strip()
+                    result = row.get('WonLost', '').strip().upper()
+                    score = row.get('Score', '').strip()
+                    
+                    try:
+                        point_change = float(row.get('PointChange', 0.0))
+                    except:
+                        point_change = 0.0
+                    
+                    if result in ['W', 'L']:
+                        if result == 'W': wins += 1
+                        if result == 'L': losses += 1
                         
-                        if result in ['W', 'L']:
-                            if result == 'W': wins += 1
-                            if result == 'L': losses += 1
+                        stats["recent_matches"].append({
+                            "date": date_str,
+                            "opponent": opp_name,
+                            "result": "Win" if result == 'W' else "Loss",
+                            "score": score,
+                            "delta": point_change
+                        })
                             
-                            if len(stats["recent_matches"]) < 20:
-                                stats["recent_matches"].append({
-                                    "opponent": opp_name,
-                                    "result": "Win" if result == 'W' else "Loss",
-                                    "score": score
+                        if len(stats["events"]) < 10:
+                            event_exists = False
+                            for e in stats["events"]:
+                                if e["name"] == event_name:
+                                    event_exists = True
+                                    break
+                            if not event_exists:
+                                stats["events"].append({
+                                    "date": date_str,
+                                    "name": event_name,
+                                    "change": point_change
                                 })
                                 
-                            if len(stats["events"]) < 10:
-                                event_exists = False
-                                for e in stats["events"]:
-                                    if e["name"] == event_name:
-                                        event_exists = True
-                                        break
-                                if not event_exists:
-                                    stats["events"].append({
-                                        "date": date_str,
-                                        "name": event_name,
-                                        "change": "See Graph"
-                                    })
-                                    
+                def parse_date(d_str):
+                    try:
+                        # Try parsing common formats just in case
+                        return datetime.datetime.strptime(d_str, '%Y-%m-%d')
+                    except:
+                        return datetime.datetime.min
+
+                stats["recent_matches"] = sorted(stats["recent_matches"], key=lambda x: parse_date(x["date"]), reverse=True)
                 stats["total_wins"] = wins
                 stats["total_losses"] = losses
                 

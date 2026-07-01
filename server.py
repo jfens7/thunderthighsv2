@@ -300,6 +300,18 @@ def admin():
 
 # --- PUBLIC DATA APIS ---
 
+@app.route('/api/clear_rc_cache')
+def clear_rc_cache():
+    if db:
+        docs = db.db.collection('player_profiles').stream()
+        for d in docs:
+            try:
+                d.reference.update({'recent_matches': []})
+            except:
+                pass
+        return "Cleared"
+    return "DB offline"
+
 @app.route('/api/players')
 @wait_for_sync
 def get_players(): return jsonify(list(db.get_all_players().keys())) if db else jsonify([])
@@ -321,6 +333,136 @@ def get_player_stats(player_name):
             if real_name.lower() == player_name.lower(): 
                 player_name = real_name
                 break
+                
+    if request.args.get('source') == 'rc':
+        safe_id = re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()
+        doc = db.db.collection('player_profiles').document(safe_id).get()
+        data = doc.to_dict() if doc.exists else {}
+        rc_id = data.get('ratings_central_id')
+        
+        if rc_id:
+            if 'recent_matches' in data and len(data['recent_matches']) > 0 and 'date' in data['recent_matches'][0]:
+                rc_stats = data
+            else:
+                rc_stats = db.rc_scraper.deep_scrape_profile(rc_id)
+                if rc_stats:
+                    db.db.collection('player_profiles').document(safe_id).set(rc_stats, merge=True)
+            
+            if rc_stats:
+                # Transform to GCTTA format
+                hist = []
+                
+                sweeps = []
+                blowouts = []
+                close_calls = []
+                big_swings = []
+                strong_starts = []
+                merciless = []
+                deciders = []
+                shutouts = []
+
+                for m in rc_stats.get('recent_matches', []):
+                    score_str = m.get('score', '')
+                    result = m.get('result', 'Unknown')
+                    
+                    parsed_sets = []
+                    if score_str:
+                        sets = score_str.split(',')
+                        for s in sets:
+                            s = s.strip()
+                            if '-' in s and not s.startswith('-'):
+                                parsed_sets.append(s)
+                            else:
+                                try:
+                                    val = int(s)
+                                    loser_score = abs(val)
+                                    winner_score = max(11, loser_score + 2)
+                                    
+                                    if result == 'Win':
+                                        if val >= 0:
+                                            p1, p2 = winner_score, loser_score
+                                        else:
+                                            p1, p2 = loser_score, winner_score
+                                    else:
+                                        if val >= 0:
+                                            p1, p2 = loser_score, winner_score
+                                        else:
+                                            p1, p2 = winner_score, loser_score
+                                    parsed_sets.append(f"{p1}-{p2}")
+                                except: pass
+                                
+                    new_score_str = ", ".join(parsed_sets) if parsed_sets else score_str
+
+                    m_dict = {
+                        "date": m.get('date', rc_stats.get('last_synced', '').split(' ')[0]),
+                        "type": "Regular",
+                        "opponent": m.get('opponent', 'Unknown'),
+                        "result": result,
+                        "score": new_score_str,
+                        "delta": m.get('delta', 0.0)
+                    }
+                    hist.append(m_dict)
+                    
+                    if parsed_sets:
+                        # Sweep logic (didn't drop a set)
+                        p1_sets = 0
+                        p2_sets = 0
+                        for s in parsed_sets:
+                            try:
+                                p1, p2 = map(int, s.strip().split('-'))
+                                if p1 > p2: p1_sets += 1
+                                else: p2_sets += 1
+                            except: pass
+                        if result == "Win" and p1_sets > 0 and p2_sets == 0: sweeps.append(m_dict)
+                        
+                        for s in parsed_sets:
+                            try:
+                                p1, p2 = map(int, s.strip().split('-'))
+                                # Blowouts / Merciless
+                                if p1 >= 11 and p2 <= 2 and m_dict not in blowouts: blowouts.append(m_dict)
+                                if p1 >= 11 and p2 <= 4 and m_dict not in merciless: merciless.append(m_dict)
+                                if p1 >= 11 and p2 == 0 and m_dict not in shutouts: shutouts.append(m_dict)
+                                # Close calls
+                                if p1 >= 11 and p2 >= 10 and abs(p1 - p2) <= 2 and m_dict not in close_calls: close_calls.append(m_dict)
+                            except: pass
+                            
+                        # Strong start
+                        try:
+                            p1, p2 = map(int, parsed_sets[0].strip().split('-'))
+                            if p1 > p2: strong_starts.append(m_dict)
+                        except: pass
+                        
+                        # Deciders
+                        if result == "Win" and len(parsed_sets) == 5: deciders.append(m_dict)
+
+                wins = rc_stats.get('total_wins', 0)
+                losses = rc_stats.get('total_losses', 0)
+                total = wins + losses
+                win_rate = f"{round((wins / total) * 100, 1)}%" if total > 0 else "0%"
+                
+                bucket = {
+                    "matches": total,
+                    "wins": wins,
+                    "losses": losses,
+                    "win_rate": win_rate,
+                    "match_history": hist
+                }
+                
+                return jsonify({
+                    "rating": rc_stats.get('rc_rating', 1500.0),
+                    "rd": rc_stats.get('rc_sd', 150.0),
+                    "career_matches": total,
+                    "combined": bucket,
+                    "regular": bucket,
+                    "fillin": {"matches": 0, "wins": 0, "losses": 0, "win_rate": "0%", "match_history": []},
+                    "insights": {
+                        "sweeps": sweeps, "blowouts": blowouts, "close_calls": close_calls, "big_swings": big_swings,
+                        "strong_starts": strong_starts, "merciless": merciless, "deciders": deciders, "shutouts": shutouts
+                    }
+                })
+        
+        return jsonify({"error": "No RC Data Linked"}), 404
+
     stats = db.get_player_stats(player_name, request.args.get('season', 'Career'), request.args.get('division', 'All'))
     if stats: return jsonify(stats)
     return jsonify({"error": "Not found"}), 404
@@ -341,7 +483,82 @@ def get_week_results(season, week): return jsonify(db.get_matches_by_week(season
 
 @app.route('/api/h2h')
 @wait_for_sync
-def get_h2h(): return jsonify(db.get_head_to_head(request.args.get('p1', ''), request.args.get('p2', ''))) if db else jsonify({"error": "Offline"}), 500
+def get_h2h(): 
+    if not db: return jsonify({"error": "Offline"}), 500
+    p1 = request.args.get('p1', '')
+    p2 = request.args.get('p2', '')
+    
+    if request.args.get('source') == 'rc':
+        def get_rc_stats(p_name):
+            safe_id = re.sub(r'[^a-zA-Z0-9]', '_', p_name).lower()
+            doc = db.db.collection('player_profiles').document(safe_id).get()
+            data = doc.to_dict() if doc.exists else {}
+            rc_id = data.get('ratings_central_id')
+            if rc_id:
+                if 'recent_matches' in data and len(data['recent_matches']) > 0 and 'date' in data['recent_matches'][0]:
+                    return data
+                else:
+                    scraped = db.rc_scraper.deep_scrape_profile(rc_id)
+                    if scraped:
+                        db.db.collection('player_profiles').document(safe_id).set(scraped, merge=True)
+                    return scraped
+            return None
+            
+        rc1 = get_rc_stats(p1)
+        rc2 = get_rc_stats(p2)
+        
+        if rc1 and rc2:
+            import math
+            r1 = rc1.get('rc_rating', 1500.0)
+            rd1 = rc1.get('rc_sd', 150.0)
+            r2 = rc2.get('rc_rating', 1500.0)
+            rd2 = rc2.get('rc_sd', 150.0)
+            
+            # Glicko math for win probability
+            q = math.log(10) / 400
+            g_rd2 = 1 / math.sqrt(1 + 3 * (q ** 2) * (rd2 ** 2) / (math.pi ** 2))
+            e1 = 1 / (1 + math.pow(10, (-g_rd2 * (r1 - r2)) / 400))
+            
+            p1_win_prob = round(e1 * 100, 1)
+            p2_win_prob = round((1 - e1) * 100, 1)
+            
+            delta = 16 * (1 - e1)
+            
+            history = []
+            p2_last = p2.split()[-1].lower() if p2.strip() else ""
+            p1_wins_h2h = 0
+            p2_wins_h2h = 0
+            
+            for m in rc1.get('recent_matches', []):
+                opp = m.get('opponent', '').lower()
+                if p2_last and (p2_last in opp or p2.lower() in opp):
+                    is_win = m.get('result') == "Win"
+                    if is_win: p1_wins_h2h += 1
+                    else: p2_wins_h2h += 1
+                    
+                    history.append({
+                        "date": "RC Record",
+                        "p1": p1,
+                        "p2": m.get('opponent', p2),
+                        "s1": 3 if is_win else 0,
+                        "s2": 0 if is_win else 3
+                    })
+                    
+            return jsonify({
+                "p1_wins": p1_wins_h2h,
+                "p2_wins": p2_wins_h2h,
+                "total_matches": p1_wins_h2h + p2_wins_h2h,
+                "p1_win_prob": p1_win_prob,
+                "p2_win_prob": p2_win_prob,
+                "projected_delta": round(delta, 1),
+                "history": history,
+                "p1_stats": {"rating": r1, "rd": rd1},
+                "p2_stats": {"rating": r2, "rd": rd2}
+            })
+        else:
+            return jsonify({"error": "Both players must have a linked Ratings Central profile to compare RC data."}), 404
+            
+    return jsonify(db.get_head_to_head(p1, p2))
 
 @app.route('/api/simulate', methods=['POST'])
 @wait_for_sync
@@ -442,22 +659,9 @@ def get_all_users():
 @login_required
 def search_rc_live():
     if not db: return jsonify({'success': False, 'error': 'Database offline'})
-    player_name = request.json.get('name', '').lower()
+    player_name = request.json.get('name', '')
     try:
-        docs = db.db.collection('rc_directory').stream()
-        results = []
-        for d in docs:
-            data = d.to_dict()
-            if player_name in data.get('search_name', ''):
-                results.append({
-                    "id": data['rc_id'],
-                    "name": data['name'],
-                    "rating": f"{data['rating']}±{data['sd']}",
-                    "location": f"{data.get('state', 'QLD')}, Australia",
-                    "club": data['club'],
-                    "recent_opponents": f"Updated: {data['last_updated']}"
-                })
-                if len(results) >= 10: break
+        results = db.rc_scraper.search_by_name(player_name)
         return jsonify({'success': True, 'results': results})
     except Exception as e: return jsonify({'success': False, 'error': str(e)})
 

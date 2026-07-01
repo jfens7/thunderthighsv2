@@ -1,0 +1,86 @@
+<div class="bg-slate-800/50 p-6 rounded-xl border border-white/10 mb-6">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h3 class="text-xl font-bold text-white mb-1"><i class="fa-solid fa-satellite-dish text-sky-400 mr-2"></i>Ratings Central Database</h3>
+            <p class="text-sm text-slate-400">Search the official Ratings Central database to link players to their GCTTA profile.</p>
+        </div>
+    </div>
+
+    <div class="flex gap-3 mb-6">
+        <input type="text" id="rc-search-input" placeholder="Search by name..." class="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-sky-500 transition-colors text-sm" onkeydown="if(event.key==='Enter') searchRC()">
+        <button onclick="searchRC()" class="px-6 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2">
+            <i class="fa-solid fa-search"></i> Search
+        </button>
+    </div>
+
+    <div id="rc-search-status" class="hidden mb-4 text-sm text-slate-400">
+        <i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Searching Ratings Central live...
+    </div>
+
+    <div id="rc-search-results" class="space-y-2">
+        <!-- Results inject here -->
+        <div class="text-center text-slate-500 py-10 bg-slate-900/30 rounded-lg text-sm">
+            Enter a player name above to search Ratings Central.
+        </div>
+    </div>
+</div>
+
+<script>
+    function searchRC() {
+        const name = document.getElementById('rc-search-input').value;
+        if (!name) return;
+        
+        document.getElementById('rc-search-status').classList.remove('hidden');
+        document.getElementById('rc-search-results').innerHTML = '';
+        
+        fetch('/api/admin/search_rc', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: name})
+        }).then(res => res.json()).then(data => {
+            document.getElementById('rc-search-status').classList.add('hidden');
+            if (data.success && data.results.length > 0) {
+                document.getElementById('rc-search-results').innerHTML = data.results.map(r => `
+                    <div class="bg-slate-900/50 border border-slate-700/50 p-4 rounded-lg flex items-center justify-between">
+                        <div>
+                            <div class="text-white font-bold text-lg">\${r.name}</div>
+                            <div class="text-xs text-slate-400 flex items-center gap-3 mt-1">
+                                <span class="bg-sky-900/30 text-sky-400 px-2 py-0.5 rounded border border-sky-800/30">ID: \${r.id}</span>
+                                <span><i class="fa-solid fa-location-dot mr-1"></i>\${r.location}</span>
+                                <span><i class="fa-solid fa-building mr-1"></i>\${r.club}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <div class="text-right">
+                                <div class="text-2xl font-bold text-sky-400">\${r.rating.split('±')[0]}</div>
+                                <div class="text-[10px] text-slate-500">±\${r.rating.split('±')[1] || '?'}</div>
+                            </div>
+                            <button onclick="linkRCHandler('\${r.name}', '\${r.id}')" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded transition-colors text-xs font-bold border border-slate-600">
+                                Link Profile
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                document.getElementById('rc-search-results').innerHTML = `<div class="text-center text-slate-400 py-6">No players found.</div>`;
+            }
+        });
+    }
+
+    function linkRCHandler(rcName, rcId) {
+        const localName = prompt(`Link RC Account "\${rcName}" (ID: \${rcId}) to which GCTTA Profile Name?`);
+        if (!localName) return;
+        
+        fetch('/api/admin/update_player_profile', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({player_name: localName, ratings_central_id: rcId})
+        }).then(res => res.json()).then(data => {
+            if (data.success) {
+                alert(`Successfully linked!`);
+            } else {
+                alert('Error linking account');
+            }
+        });
+    }
+</script>

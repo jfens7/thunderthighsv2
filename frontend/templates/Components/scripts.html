@@ -135,6 +135,34 @@
     window.currentProfileName = "";
     window.currentProfileData = null;
 
+    window.useRCData = false;
+    
+    window.setDataSource = function(source) {
+        window.useRCData = source === 'rc';
+        
+        const btnFixtures = document.getElementById('source-btn-fixtures');
+        const btnRC = document.getElementById('source-btn-rc');
+        const filtersContainer = document.getElementById('fixtureFiltersContainer');
+        
+        if (window.useRCData) {
+            btnFixtures.classList.remove('bg-sky-600', 'text-white');
+            btnFixtures.classList.add('text-slate-400');
+            btnRC.classList.remove('text-slate-400');
+            btnRC.classList.add('bg-sky-600', 'text-white');
+            if(filtersContainer) filtersContainer.classList.add('hidden');
+        } else {
+            btnRC.classList.remove('bg-sky-600', 'text-white');
+            btnRC.classList.add('text-slate-400');
+            btnFixtures.classList.remove('text-slate-400');
+            btnFixtures.classList.add('bg-sky-600', 'text-white');
+            if(filtersContainer) filtersContainer.classList.remove('hidden');
+        }
+        
+        if (window.currentProfileName) {
+            window.loadStats(window.currentProfileName, false);
+        }
+    };
+
     window.loadStats = async function(playerName, pushHistory = true) {
         window.currentProfileName = playerName;
         if (pushHistory) { history.pushState({ page: 'profile', name: playerName }, "", "#profile/" + encodeURIComponent(playerName)); }
@@ -155,9 +183,10 @@
         
         const season = document.getElementById('seasonSelect')?.value || 'Career';
         const division = document.getElementById('profileDivisionSelect')?.value || 'All';
+        const sourceParam = window.useRCData ? '&source=rc' : '';
         
         try {
-            const res = await fetch(`/api/stats/${encodeURIComponent(playerName)}?season=${encodeURIComponent(season)}&division=${encodeURIComponent(division)}`);
+            const res = await fetch(`/api/stats/${encodeURIComponent(playerName)}?season=${encodeURIComponent(season)}&division=${encodeURIComponent(division)}${sourceParam}`);
             if (!res.ok) throw new Error("Player not found");
             const d = await res.json();
             window.currentProfileData = d;
@@ -321,7 +350,8 @@
         resultsArea.innerHTML = '<div class="text-center py-16 text-sky-500"><i class="fa-solid fa-spinner fa-spin text-3xl mb-3"></i><p class="font-bold text-sm">Simulating match up...</p></div>';
         
         try {
-            const res = await fetch(`/api/h2h?p1=${encodeURIComponent(p1)}&p2=${encodeURIComponent(p2)}`);
+            const sourceParam = window.useRCData ? '&source=rc' : '';
+            const res = await fetch(`/api/h2h?p1=${encodeURIComponent(p1)}&p2=${encodeURIComponent(p2)}${sourceParam}`);
             const data = await res.json();
             
             if (data.error) throw new Error(data.error);
@@ -455,10 +485,11 @@
                 let resClass = m.result.includes('Win') ? 'text-slate-300' : 'text-slate-300';
                 
                 // Add delta string if present
-                if (m.delta) {
+                if (m.delta !== undefined && m.delta !== null) {
                     let deltaStr = '';
                     if (m.delta > 0) deltaStr = `<span class="text-emerald-500 ml-1">(▲${Math.round(m.delta)})</span>`;
                     else if (m.delta < 0) deltaStr = `<span class="text-red-500 ml-1">(▼${Math.abs(Math.round(m.delta))})</span>`;
+                    else deltaStr = `<span class="text-slate-500 ml-1">(0)</span>`;
                     resText += ` ${deltaStr}`;
                 }
                 
@@ -480,7 +511,7 @@
                     <div id="extra-${safeTitle}" class="hidden flex-col">
                         ${extraRowsHtml}
                     </div>
-                    <div class="mt-2 text-xs text-orange-400 cursor-pointer flex items-center justify-between hover:text-orange-300 transition-colors" onclick="document.getElementById('extra-${safeTitle}').classList.toggle('hidden'); this.querySelector('i').classList.toggle('fa-chevron-down'); this.querySelector('i').classList.toggle('fa-chevron-up');">
+                    <div class="mt-2 text-xs text-cyan-400 cursor-pointer flex items-center justify-between hover:text-cyan-300 transition-colors" onclick="document.getElementById('extra-${safeTitle}').classList.toggle('hidden'); this.querySelector('i').classList.toggle('fa-chevron-down'); this.querySelector('i').classList.toggle('fa-chevron-up');">
                         <span>More Matches</span>
                         <i class="fa-solid fa-chevron-down"></i>
                     </div>
@@ -506,7 +537,7 @@
             return `
                 <div class="mb-8">
                     <div class="flex items-center justify-between mb-2">
-                        <h4 class="text-orange-500 font-semibold text-2xl">${title}</h4>
+                        <h4 class="text-cyan-500 font-semibold text-2xl">${title}</h4>
                         <span class="text-white text-2xl font-medium">${count}</span>
                     </div>
                     <p class="text-sm text-slate-400 mb-4 leading-relaxed">${desc}</p>
