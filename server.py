@@ -1,4 +1,3 @@
-# server.py
 import os
 from dotenv import load_dotenv
 
@@ -263,13 +262,11 @@ def auth_bypass_login():
 
         expected_pin = data.get('bypass_pin')
         
-        # Legacy support for hash-based PINs if bypass_pin isn't stored
         if not expected_pin:
             base_seed = int(expires_at.timestamp()) if hasattr(expires_at, 'timestamp') else int(datetime.datetime.utcnow().timestamp())
             expected_pin = str(abs(hash(base_seed)) % 1000000).zfill(6)
 
         if input_code == str(expected_pin):
-            # FIX: Invalidate bypass instantly so it cannot be reused after logout
             doc_ref.update({'role': 'pending', 'expires_at': firestore.DELETE_FIELD, 'bypass_pin': firestore.DELETE_FIELD})
             
             session.permanent = True 
@@ -349,7 +346,6 @@ def get_player_stats(player_name):
                     db.db.collection('player_profiles').document(safe_id).set(rc_stats, merge=True)
             
             if rc_stats:
-                # Transform to GCTTA format
                 hist = []
                 
                 sweeps = []
@@ -404,7 +400,6 @@ def get_player_stats(player_name):
                     hist.append(m_dict)
                     
                     if parsed_sets:
-                        # Sweep logic (didn't drop a set)
                         p1_sets = 0
                         p2_sets = 0
                         for s in parsed_sets:
@@ -418,21 +413,17 @@ def get_player_stats(player_name):
                         for s in parsed_sets:
                             try:
                                 p1, p2 = map(int, s.strip().split('-'))
-                                # Blowouts / Merciless
                                 if p1 >= 11 and p2 <= 2 and m_dict not in blowouts: blowouts.append(m_dict)
                                 if p1 >= 11 and p2 <= 4 and m_dict not in merciless: merciless.append(m_dict)
                                 if p1 >= 11 and p2 == 0 and m_dict not in shutouts: shutouts.append(m_dict)
-                                # Close calls
                                 if p1 >= 11 and p2 >= 10 and abs(p1 - p2) <= 2 and m_dict not in close_calls: close_calls.append(m_dict)
                             except: pass
                             
-                        # Strong start
                         try:
                             p1, p2 = map(int, parsed_sets[0].strip().split('-'))
                             if p1 > p2: strong_starts.append(m_dict)
                         except: pass
                         
-                        # Deciders
                         if result == "Win" and len(parsed_sets) == 5: deciders.append(m_dict)
 
                 wins = rc_stats.get('total_wins', 0)
@@ -448,10 +439,16 @@ def get_player_stats(player_name):
                     "match_history": hist
                 }
                 
+                first_year = hist[-1].get('date', 'Unknown').split('-')[0] if hist else "Unknown"
+                
                 return jsonify({
+                    "name": rc_stats.get('name', player_name),
                     "rating": rc_stats.get('rc_rating', 1500.0),
                     "rd": rc_stats.get('rc_sd', 150.0),
                     "career_matches": total,
+                    "career_wins": wins,
+                    "career_losses": losses,
+                    "first_year": first_year,
                     "combined": bucket,
                     "regular": bucket,
                     "fillin": {"matches": 0, "wins": 0, "losses": 0, "win_rate": "0%", "match_history": []},
@@ -471,6 +468,32 @@ def get_player_stats(player_name):
 def rating_history(player_name):
     if not db: return jsonify([])
     clean_name = db._clean_name(player_name)
+    
+    if request.args.get('source') == 'rc':
+        safe_id = re.sub(r'[^a-zA-Z0-9]', '_', clean_name).lower()
+        doc = db.db.collection('player_profiles').document(safe_id).get()
+        if doc.exists:
+            data = doc.to_dict()
+            history = []
+            matches = data.get('recent_matches', [])
+            current_r = data.get('rc_rating', 1500.0)
+            
+            temp_r = current_r
+            for m in matches:
+                delta = m.get('delta', 0.0)
+                history.append({
+                    "date": m.get('date', ''),
+                    "opponent": m.get('opponent', 'Unknown'),
+                    "result_str": m.get('score', ''),
+                    "rating": round(temp_r, 1),
+                    "rating_change": round(delta, 1),
+                    "sd": "RC",
+                    "sd_change": 0
+                })
+                temp_r -= delta
+            return jsonify(history)
+        return jsonify([])
+
     return jsonify(db.get_rating_history(clean_name))
 
 @app.route('/api/rankings/<season>/<division>')
@@ -514,7 +537,6 @@ def get_h2h():
             r2 = rc2.get('rc_rating', 1500.0)
             rd2 = rc2.get('rc_sd', 150.0)
             
-            # Glicko math for win probability
             q = math.log(10) / 400
             g_rd2 = 1 / math.sqrt(1 + 3 * (q ** 2) * (rd2 ** 2) / (math.pi ** 2))
             e1 = 1 / (1 + math.pow(10, (-g_rd2 * (r1 - r2)) / 400))
@@ -595,8 +617,6 @@ def stripe_config():
 
 @app.route('/.well-known/apple-developer-merchantid-domain-association')
 def apple_pay_domain_association():
-    # Apple Pay requires domain verification. 
-    # Store the contents of the verification file in this environment variable.
     content = os.environ.get('APPLE_PAY_DOMAIN_ASSOCIATION', '')
     if content:
         return content, 200, {'Content-Type': 'text/plain'}

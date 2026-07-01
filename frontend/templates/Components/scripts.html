@@ -58,14 +58,12 @@
     };
 
     document.addEventListener('click', (e) => {
-        // 1. Close dropdown if clicking outside of it
         const container = document.getElementById('authDropdownContainer');
         const menu = document.getElementById('authDropdownMenu');
         if (container && menu && !container.contains(e.target)) {
             menu.classList.add('hidden');
         }
 
-        // 2. Intercept ANY links trying to go to the old portal or login pages
         const targetLink = e.target.closest('a');
         if (targetLink) {
             const href = targetLink.getAttribute('href');
@@ -81,7 +79,6 @@
             }
         }
         
-        // 3. Intercept ANY buttons anywhere that say "PLAYER PORTAL"
         const targetBtn = e.target.closest('button');
         if (targetBtn && targetBtn.innerText && targetBtn.innerText.toUpperCase().includes('PLAYER PORTAL')) {
             e.preventDefault();
@@ -163,6 +160,32 @@
         }
     };
 
+    window.updateBadges = async function(playerName, activeData) {
+        const gBadge = document.getElementById('gcttaRatingBadge');
+        const rBadge = document.getElementById('rcRatingBadge');
+        
+        gBadge.innerHTML = 'GCTTA: <i class="fa-solid fa-spinner fa-spin"></i>';
+        rBadge.innerHTML = 'RC: <i class="fa-solid fa-spinner fa-spin"></i>';
+        
+        if (window.useRCData) {
+            rBadge.innerHTML = `RC: ${activeData.rating} <span class="text-[10px] text-blue-300 font-bold ml-1">±${activeData.rd}</span>`;
+            try {
+                const gRes = await fetch(`/api/stats/${encodeURIComponent(playerName)}`);
+                if (!gRes.ok) throw new Error();
+                const gData = await gRes.json();
+                gBadge.innerHTML = `GCTTA: ${gData.rating} <span class="text-[10px] text-sky-300 font-bold ml-1">±${gData.rd}</span>`;
+            } catch(e) { gBadge.innerHTML = "GCTTA: N/A"; }
+        } else {
+            gBadge.innerHTML = `GCTTA: ${activeData.rating} <span class="text-[10px] text-sky-300 font-bold ml-1">±${activeData.rd}</span>`;
+            try {
+                const rRes = await fetch(`/api/stats/${encodeURIComponent(playerName)}?source=rc`);
+                if (!rRes.ok) throw new Error();
+                const rData = await rRes.json();
+                rBadge.innerHTML = `RC: ${rData.rating} <span class="text-[10px] text-blue-300 font-bold ml-1">±${rData.rd}</span>`;
+            } catch(e) { rBadge.innerHTML = "RC: Unlinked"; }
+        }
+    };
+
     window.loadStats = async function(playerName, pushHistory = true) {
         window.currentProfileName = playerName;
         if (pushHistory) { history.pushState({ page: 'profile', name: playerName }, "", "#profile/" + encodeURIComponent(playerName)); }
@@ -179,7 +202,6 @@
         }
 
         document.getElementById('playerName').innerText = playerName;
-        document.getElementById('playerRatingBadge').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
         
         const season = document.getElementById('seasonSelect')?.value || 'Career';
         const division = document.getElementById('profileDivisionSelect')?.value || 'All';
@@ -191,11 +213,15 @@
             const d = await res.json();
             window.currentProfileData = d;
             
+            // Updates both GCTTA and RC badges side-by-side
+            window.updateBadges(playerName, d);
+            
             window.renderProfile();
             
         } catch(e) {
             window.currentProfileData = null;
-            document.getElementById('playerRatingBadge').innerHTML = "N/A";
+            document.getElementById('gcttaRatingBadge').innerHTML = "GCTTA: N/A";
+            document.getElementById('rcRatingBadge').innerHTML = "RC: N/A";
             document.getElementById('matchHistory').innerHTML = '<div class="text-center py-10 text-red-500">Error loading profile data.</div>';
         }
     };
@@ -224,16 +250,11 @@
         
         const displayStats = isCombined ? d.combined : d.regular; 
         
-        document.getElementById('playerRatingBadge').innerHTML = `
-            ${d.rating} <span class="text-[10px] text-sky-400 font-bold ml-1">±${d.rd}</span>
-        `;
-        
         document.getElementById('matchesPlayed').innerText = displayStats.matches || 0;
         document.getElementById('wins').innerText = displayStats.wins || 0;
         document.getElementById('losses').innerText = displayStats.losses || 0;
         document.getElementById('winRate').innerText = displayStats.win_rate || "0%";
         
-        // Always render insights since data might have changed
         window.renderInsights();
 
         const histContainer = document.getElementById('matchHistory');
@@ -303,7 +324,6 @@
         const h2hSearch = document.getElementById('h2h-search');
         const h2hSugg = document.getElementById('h2h-suggestions');
         
-        // Clone to remove any old listeners
         const newSearch = h2hSearch.cloneNode(true);
         h2hSearch.parentNode.replaceChild(newSearch, h2hSearch);
         
@@ -443,7 +463,6 @@
         if (!window.currentProfileData) return;
         const d = window.currentProfileData;
         
-        // Use insights data from the backend
         const insights = d.insights || {};
         const totalMatches = d.career_matches || 0;
         
@@ -456,8 +475,6 @@
 
         loading.classList.add('hidden');
         content.classList.remove('hidden');
-        
-        // Remove grid classes for stacked layout
         content.className = "flex flex-col gap-6";
 
         function renderInsightSection(title, dataArray, descriptionTemplate) {
@@ -465,7 +482,6 @@
             const count = dataArray.length;
             const percentage = totalMatches > 0 ? ((count / totalMatches) * 100).toFixed(1) + '%' : '0%';
             
-            // Calculate win rate for this specific subset
             let sectionWins = 0;
             dataArray.forEach(m => {
                 if (m.result && m.result.includes('Win')) sectionWins++;
@@ -476,7 +492,6 @@
                 .replace('{percentage}', `<span class="font-bold text-white">${percentage}</span>`)
                 .replace('{winPercentage}', `<span class="font-bold text-emerald-400">${winPercentage}</span>`);
             
-            // Generate rows for the first 3 matches
             const topMatches = dataArray.slice(0, 3);
             const extraMatches = dataArray.slice(3);
             
@@ -484,7 +499,6 @@
                 let resText = m.result;
                 let resClass = m.result.includes('Win') ? 'text-slate-300' : 'text-slate-300';
                 
-                // Add delta string if present
                 if (m.delta !== undefined && m.delta !== null) {
                     let deltaStr = '';
                     if (m.delta > 0) deltaStr = `<span class="text-emerald-500 ml-1">(▲${Math.round(m.delta)})</span>`;
@@ -493,9 +507,11 @@
                     resText += ` ${deltaStr}`;
                 }
                 
+                const matchContext = m.season ? m.season : (m.date ? m.date : 'RC Match');
+                
                 return `
                     <div class="flex justify-between items-center py-2 border-b border-white/5 last:border-0 text-sm">
-                        <div class="font-bold text-white">${m.opponent} <span class="text-xs text-slate-500 font-normal">(${m.season})</span></div>
+                        <div class="font-bold text-white">${m.opponent} <span class="text-xs text-slate-500 font-normal">(${matchContext})</span></div>
                         <div class="${resClass}">${resText}</div>
                     </div>
                 `;
@@ -506,7 +522,7 @@
             
             let moreMatchesHtml = '';
             if (extraMatches.length > 0) {
-                const safeTitle = title.replace(/\s+/g, '-').toLowerCase();
+                const safeTitle = title.replace(/\s+/g, '-').replace(/<[^>]*>?/gm, '').toLowerCase(); 
                 moreMatchesHtml = `
                     <div id="extra-${safeTitle}" class="hidden flex-col">
                         ${extraRowsHtml}
@@ -560,7 +576,7 @@
             </div>
             
             <div class="border-t border-b border-white/10 py-6 mb-8 text-sm text-slate-300 leading-relaxed">
-                With ${wins} wins and ${losses} losses, they've won <span class="text-yellow-500 font-bold">${winRate}%</span> of their ${totalMatches} career matches. They have been competing in GCTTA events since ${firstYear}.
+                With ${wins} wins and ${losses} losses, they've won <span class="text-yellow-500 font-bold">${winRate}%</span> of their ${totalMatches} career matches. They have been competing in events since ${firstYear}.
             </div>
         `;
         
@@ -588,32 +604,34 @@
             "Matches where large gains or losses were made because of the big difference in the opponent's rating. Matches like these happened {percentage} of the time and he won about {winPercentage} of them."
         );
         
+        const warningHtml = window.useRCData ? '' : ' <span class="text-xs text-slate-500 font-normal ml-2 block sm:inline mt-1 sm:mt-0 tracking-normal">(Requires detailed point scoring data, which will take time and resources to fully backfill)</span>';
+        
         html += renderInsightSection(
-            'Nail Biters <span class="text-xs text-slate-500 font-normal ml-2 block sm:inline mt-1 sm:mt-0 tracking-normal">(Requires detailed point scoring data, which will take time and resources to fully backfill)</span>', 
+            'Nail Biters' + warningHtml, 
             insights.nail_biters, 
             "Matches that came down to last 2 points of the last match. Matches like these happened {percentage} of the time and he won about {winPercentage} of them."
         );
         
         html += renderInsightSection(
-            'Strong Starts <span class="text-xs text-slate-500 font-normal ml-2 block sm:inline mt-1 sm:mt-0 tracking-normal">(Requires detailed point scoring data, which will take time and resources to fully backfill)</span>', 
+            'Strong Starts' + warningHtml, 
             insights.strong_starts, 
             "Matches where the player won the first game. Matches like these happened {percentage} of the time and he won about {winPercentage} of them."
         );
         
         html += renderInsightSection(
-            'Comebacks <span class="text-xs text-slate-500 font-normal ml-2 block sm:inline mt-1 sm:mt-0 tracking-normal">(Requires detailed point scoring data, which will take time and resources to fully backfill)</span>', 
+            'Comebacks' + warningHtml, 
             insights.comebacks, 
             "After being 1 set away from losing the match, the player won straight sets to win the match. Matches like these happened {percentage} of the time and, and he won them all."
         );
         
         html += renderInsightSection(
-            'Letdowns <span class="text-xs text-slate-500 font-normal ml-2 block sm:inline mt-1 sm:mt-0 tracking-normal">(Requires detailed point scoring data, which will take time and resources to fully backfill)</span>', 
+            'Letdowns' + warningHtml, 
             insights.letdowns, 
             "After needing 1 set to win, the player ended up losing the match. Matches like these happened {percentage} of the time and, and he lost them all."
         );
         
         html += renderInsightSection(
-            'Merciless <span class="text-xs text-slate-500 font-normal ml-2 block sm:inline mt-1 sm:mt-0 tracking-normal">(Requires detailed point scoring data, which will take time and resources to fully backfill)</span>', 
+            'Merciless' + warningHtml, 
             insights.merciless, 
             "Matches where the player had a game where they won or lost at zero. Matches like these happened {percentage} of the time and he won about {winPercentage} of them."
         );

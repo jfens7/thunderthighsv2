@@ -18,11 +18,18 @@
             <div class="flex-1 text-center md:text-left w-full">
                 <h1 id="playerName" class="text-3xl md:text-5xl font-black text-white mb-2 tracking-tight truncate">Loading...</h1>
                 
-                <button onclick="window.showRatingHistory(document.getElementById('playerName').innerText)" 
-                        id="playerRatingBadge" 
-                        class="inline-block bg-yellow-500/20 text-yellow-400 font-mono font-black px-4 py-1.5 rounded-lg text-sm mb-6 border border-yellow-500/30 shadow-[0_0_15px_rgba(234,179,8,0.2)] hover:bg-yellow-500/30 hover:scale-[1.02] transition-all cursor-pointer">
-                    Rating: ...
-                </button>
+                <div class="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-6">
+                    <button onclick="window.showRatingHistory(document.getElementById('playerName').innerText, 'gctta')" 
+                            id="gcttaRatingBadge" 
+                            class="inline-block bg-sky-500/20 text-sky-400 font-mono font-black px-4 py-1.5 rounded-lg text-sm border border-sky-500/30 shadow-[0_0_15px_rgba(14,165,233,0.2)] hover:bg-sky-500/30 hover:scale-[1.02] transition-all cursor-pointer">
+                        GCTTA: <i class="fa-solid fa-spinner fa-spin"></i>
+                    </button>
+                    <button onclick="window.showRatingHistory(document.getElementById('playerName').innerText, 'rc')" 
+                            id="rcRatingBadge" 
+                            class="inline-block bg-blue-600/20 text-blue-400 font-mono font-black px-4 py-1.5 rounded-lg text-sm border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.2)] hover:bg-blue-600/30 hover:scale-[1.02] transition-all cursor-pointer">
+                        RC: <i class="fa-solid fa-spinner fa-spin"></i>
+                    </button>
+                </div>
                 
                 <div class="w-full space-y-3">
                     <div class="flex bg-black/40 rounded-xl p-1 shadow-inner border border-white/5 w-full mb-1">
@@ -109,8 +116,7 @@
             <span class="text-sm font-bold uppercase tracking-widest">Crunching Numbers...</span>
         </div>
         <div id="insightsContent" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Rendered by JS -->
-        </div>
+            </div>
     </div>
 </div>
 
@@ -123,7 +129,7 @@
                 <h3 class="text-white font-black text-xl flex items-center gap-2">
                     <i class="fa-solid fa-chart-line text-yellow-500"></i> Rating Ledger
                 </h3>
-                <p class="text-xs text-slate-400 mt-1">Track your math + SD over time</p>
+                <p class="text-xs text-slate-400 mt-1" id="ledgerSubtitle">Track your math + SD over time</p>
             </div>
             <button onclick="document.getElementById('ratingHistoryModal').classList.add('hidden')" class="text-slate-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 w-8 h-8 rounded-full flex items-center justify-center">
                 <i class="fa-solid fa-xmark"></i>
@@ -139,14 +145,18 @@
 </div>
 
 <script>
-    window.showRatingHistory = async function(playerName) {
+    window.showRatingHistory = async function(playerName, source = 'gctta') {
         const modal = document.getElementById('ratingHistoryModal');
         const content = document.getElementById('historyContent');
+        const subtitle = document.getElementById('ledgerSubtitle');
+        
         modal.classList.remove('hidden');
         content.innerHTML = '<div class="text-slate-500 text-center py-8"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><br>Loading ledger...</div>';
+        subtitle.innerText = source === 'rc' ? 'Ratings Central History' : 'GCTTA Rating Ledger';
         
         try {
-            const res = await fetch(`/api/rating_history/${encodeURIComponent(playerName)}`);
+            const sourceParam = source === 'rc' ? '?source=rc' : '';
+            const res = await fetch(`/api/rating_history/${encodeURIComponent(playerName)}${sourceParam}`);
             const history = await res.json();
             
             if (history.length === 0) {
@@ -155,11 +165,9 @@
                 content.innerHTML = history.map(h => {
                     const isInactivity = h.is_decay;
                     
-                    // Rating delta logic (Green is up, Red is down)
                     const rDelta = h.rating_change > 0 ? `+${h.rating_change}` : h.rating_change;
                     const rColor = h.rating_change > 0 ? 'text-green-400' : (h.rating_change < 0 ? 'text-red-400' : 'text-slate-500');
                     
-                    // SD delta logic (Red is up/worse, Green is down/better precision)
                     const sdDelta = h.sd_change > 0 ? `+${h.sd_change}` : h.sd_change;
                     const sdColor = h.sd_change > 0 ? 'text-red-400' : (h.sd_change < 0 ? 'text-green-400' : 'text-slate-500');
 
