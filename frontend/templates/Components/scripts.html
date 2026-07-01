@@ -186,6 +186,27 @@
         }
     };
 
+    // New Detailed Score Modal Injector
+    window.showMatchDetails = function(date, opponent, result, score, delta) {
+        const modal = document.getElementById('matchDetailsModal');
+        if(!modal) return;
+        const formattedScore = (score && score !== 'null' && score !== 'undefined') ? score : 'Score Not Recorded';
+        const formattedDelta = (delta && delta !== 0 && delta !== 'null') ? (delta > 0 ? '+' + Number(delta).toFixed(1) : Number(delta).toFixed(1)) : '0.0';
+        const deltaColor = delta > 0 ? 'text-emerald-400' : (delta < 0 ? 'text-red-400' : 'text-slate-500');
+        
+        let html = `
+            <div class="text-sm text-slate-400 mb-2 uppercase tracking-widest font-bold">${date}</div>
+            <div class="text-2xl font-black text-white mb-6">${result} vs <span class="text-sky-400">${opponent}</span></div>
+            <div class="bg-black/40 rounded-xl p-5 border border-white/5 mb-4 shadow-inner">
+                <div class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3">Individual Game Scores</div>
+                <div class="text-2xl md:text-3xl font-mono font-black text-white">${formattedScore}</div>
+            </div>
+            <div class="text-sm font-bold ${deltaColor} bg-black/20 py-2 rounded-lg border border-white/5 inline-block px-4">Rating Change: ${formattedDelta}</div>
+        `;
+        document.getElementById('matchDetailsContent').innerHTML = html;
+        modal.classList.remove('hidden');
+    };
+
     window.loadStats = async function(playerName, pushHistory = true) {
         window.currentProfileName = playerName;
         if (pushHistory) { history.pushState({ page: 'profile', name: playerName }, "", "#profile/" + encodeURIComponent(playerName)); }
@@ -289,8 +310,8 @@
                             ${fillBadge}
                         </div>
                     </div>
-                    <div class="flex items-center">
-                        <span class="font-black text-base md:text-lg ${textColor} font-mono tracking-tighter bg-black/40 px-3 py-0.5 rounded-lg border ${borderColor} shadow-inner">${m.score}</span>
+                    <div class="flex items-center cursor-pointer group" onclick="window.showMatchDetails('${m.date}', '${m.opponent.replace(/'/g, "\\'")}', '${m.result}', '${m.score || ''}', ${m.delta || 0})">
+                        <span class="font-black text-base md:text-lg ${textColor} font-mono tracking-tighter bg-black/40 px-3 py-0.5 rounded-lg border ${borderColor} shadow-inner group-hover:bg-white/10 transition-colors" title="View Score Details">${m.score} <i class="fa-solid fa-expand text-[10px] ml-1 opacity-50 group-hover:opacity-100"></i></span>
                         ${deltaBadge}
                     </div>
                 </div>
@@ -497,22 +518,22 @@
             
             let renderMatchRow = (m) => {
                 let resText = m.result;
-                let resClass = m.result.includes('Win') ? 'text-slate-300' : 'text-slate-300';
+                let resClass = m.result.includes('Win') ? 'text-emerald-400' : 'text-red-400';
                 
                 if (m.delta !== undefined && m.delta !== null) {
                     let deltaStr = '';
-                    if (m.delta > 0) deltaStr = `<span class="text-emerald-500 ml-1">(▲${Math.round(m.delta)})</span>`;
-                    else if (m.delta < 0) deltaStr = `<span class="text-red-500 ml-1">(▼${Math.abs(Math.round(m.delta))})</span>`;
-                    else deltaStr = `<span class="text-slate-500 ml-1">(0)</span>`;
+                    if (m.delta > 0) deltaStr = `<span class="text-emerald-500 ml-1 font-mono text-[10px]">(▲${Math.round(m.delta)})</span>`;
+                    else if (m.delta < 0) deltaStr = `<span class="text-red-500 ml-1 font-mono text-[10px]">(▼${Math.abs(Math.round(m.delta))})</span>`;
+                    else deltaStr = `<span class="text-slate-500 ml-1 font-mono text-[10px]">(0)</span>`;
                     resText += ` ${deltaStr}`;
                 }
                 
                 const matchContext = m.season ? m.season : (m.date ? m.date : 'RC Match');
                 
                 return `
-                    <div class="flex justify-between items-center py-2 border-b border-white/5 last:border-0 text-sm">
-                        <div class="font-bold text-white">${m.opponent} <span class="text-xs text-slate-500 font-normal">(${matchContext})</span></div>
-                        <div class="${resClass}">${resText}</div>
+                    <div class="flex justify-between items-center py-2.5 border-b border-white/5 last:border-0 text-sm cursor-pointer hover:bg-white/5 px-3 -mx-3 rounded-lg transition-colors group" onclick="window.showMatchDetails('${m.date || matchContext}', '${m.opponent.replace(/'/g, "\\'")}', '${m.result}', '${m.score || ''}', ${m.delta || 0})">
+                        <div class="font-bold text-white group-hover:text-sky-400 transition-colors">${m.opponent} <span class="text-xs text-slate-500 font-normal">(${matchContext})</span></div>
+                        <div class="${resClass} font-bold">${resText}</div>
                     </div>
                 `;
             };
@@ -524,11 +545,11 @@
             if (extraMatches.length > 0) {
                 const safeTitle = title.replace(/\s+/g, '-').replace(/<[^>]*>?/gm, '').toLowerCase(); 
                 moreMatchesHtml = `
-                    <div id="extra-${safeTitle}" class="hidden flex-col">
+                    <div id="extra-${safeTitle}" class="hidden flex-col mt-2">
                         ${extraRowsHtml}
                     </div>
-                    <div class="mt-2 text-xs text-cyan-400 cursor-pointer flex items-center justify-between hover:text-cyan-300 transition-colors" onclick="document.getElementById('extra-${safeTitle}').classList.toggle('hidden'); this.querySelector('i').classList.toggle('fa-chevron-down'); this.querySelector('i').classList.toggle('fa-chevron-up');">
-                        <span>More Matches</span>
+                    <div class="mt-2 text-xs text-cyan-400 cursor-pointer flex items-center justify-between hover:text-cyan-300 transition-colors bg-black/20 p-2 rounded-lg" onclick="document.getElementById('extra-${safeTitle}').classList.toggle('hidden'); this.querySelector('i').classList.toggle('fa-chevron-down'); this.querySelector('i').classList.toggle('fa-chevron-up');">
+                        <span class="font-bold uppercase tracking-widest">More Matches</span>
                         <i class="fa-solid fa-chevron-down"></i>
                     </div>
                 `;
@@ -537,8 +558,8 @@
             let matchesTableHtml = '';
             if (count > 0) {
                 matchesTableHtml = `
-                    <div class="w-full">
-                        <div class="flex justify-between items-center text-emerald-500 text-sm font-semibold border-b border-emerald-500/30 pb-2 mb-2">
+                    <div class="w-full bg-black/20 p-4 rounded-xl border border-white/5">
+                        <div class="flex justify-between items-center text-slate-500 text-[10px] uppercase font-bold tracking-widest border-b border-white/10 pb-2 mb-2">
                             <div>Opponent</div>
                             <div>Result</div>
                         </div>

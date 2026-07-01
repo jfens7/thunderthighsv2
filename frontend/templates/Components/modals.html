@@ -105,6 +105,13 @@
     </div>
 </div>
 
+<div id="matchDetailsModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[200] px-4 animate-fade-in">
+    <div class="bg-slate-900 border border-white/10 p-8 rounded-2xl w-full max-w-sm shadow-2xl relative text-center">
+        <button onclick="document.getElementById('matchDetailsModal').classList.add('hidden')" class="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+        <div id="matchDetailsContent"></div>
+    </div>
+</div>
+
 <div id="feedbackModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] px-4 animate-fade-in">
     <div class="bg-slate-900 border border-white/10 p-6 rounded-2xl w-full max-w-md shadow-2xl relative">
         <button onclick="document.getElementById('feedbackModal').classList.add('hidden')" class="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
@@ -115,10 +122,10 @@
             <div>
                 <label class="text-xs font-bold text-slate-500 uppercase block mb-1">Category</label>
                 <select id="fb-type" class="w-full bg-black/40 border border-white/10 text-white text-sm rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer">
-                    <option value="Bug Report">🐛 Report a Bug</option>
+                    <option value="Bug Report">🚨 Report a Bug</option>
                     <option value="Feature Request">💡 Feature Request</option>
-                    <option value="Data Correction">✏️ General Data Issue</option>
-                    <option value="Other">📦 Other</option>
+                    <option value="Data Correction">📝 General Data Issue</option>
+                    <option value="Other">📫 Other</option>
                 </select>
             </div>
             <div>

@@ -574,8 +574,12 @@ def get_h2h():
                 "p2_win_prob": p2_win_prob,
                 "projected_delta": round(delta, 1),
                 "history": history,
-                "p1_stats": {"rating": r1, "rd": rd1},
-                "p2_stats": {"rating": r2, "rd": rd2}
+                "p1_rating": round(r1, 1),
+                "p1_rd": round(rd1, 1),
+                "p2_rating": round(r2, 1),
+                "p2_rd": round(rd2, 1),
+                "p1_odds": round(1 / e1, 2) if e1 > 0 else 99.99,
+                "p2_odds": round(1 / (1 - e1), 2) if (1 - e1) > 0 else 99.99
             })
         else:
             return jsonify({"error": "Both players must have a linked Ratings Central profile to compare RC data."}), 404
