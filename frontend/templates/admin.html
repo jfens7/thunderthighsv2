@@ -34,6 +34,7 @@
         </div>
     </div>
 
+    <!-- MAIN CATEGORY NAV -->
     <div class="bg-slate-900 border-b border-white/5 px-4 flex gap-8 overflow-x-auto hide-scroll shrink-0">
         <button onclick="window.setAdminCategory('ops')" id="cat-ops" class="py-4 border-b-2 border-blue-500 text-blue-400 font-bold uppercase tracking-widest text-xs flex items-center gap-2"><i class="fa-solid fa-table-tennis-paddle-ball"></i> Match Ops</button>
         <button onclick="window.setAdminCategory('players')" id="cat-players" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-users-gear"></i> Players & Maths</button>
@@ -43,26 +44,31 @@
         <button onclick="window.setAdminCategory('diagnostics')" id="cat-diagnostics" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-microchip"></i> Diagnostics</button>
     </div>
 
+    <!-- SUB-TABS: MATCH OPS (Includes Batch Logger) -->
     <div id="sub-ops" class="bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
         <button onclick="window.switchAdminTab('live')" id="tab-btn-live" class="px-4 py-2 text-xs font-bold text-blue-400 bg-blue-900/30 rounded-lg">Live iPads</button>
+        <button onclick="window.switchAdminTab('batch-logger')" id="tab-btn-batch-logger" class="px-4 py-2 text-xs font-bold text-emerald-400 hover:text-white transition-colors flex items-center gap-1.5"><i class="fa-solid fa-list-check"></i> Batch Logger</button>
         <button onclick="window.switchAdminTab('history')" id="tab-btn-history" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Full History</button>
         <button onclick="window.switchAdminTab('manual')" id="tab-btn-manual" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">+ Add Match</button>
         <button onclick="window.switchAdminTab('date-errors')" id="tab-btn-date-errors" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Date Errors <span id="date-badge" class="hidden ml-1 bg-red-500 text-white rounded-full px-1.5 py-0.5 text-[9px]"></span></button>
         <button onclick="window.switchAdminTab('tournaments')" id="tab-btn-tournaments" class="px-4 py-2 text-xs font-bold text-amber-400 bg-amber-900/30 rounded-lg"><i class="fa-solid fa-trophy mr-1"></i> Tournaments</button>
     </div>
 
+    <!-- SUB-TABS: PLAYERS -->
     <div id="sub-players" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
         <button onclick="window.switchAdminTab('players')" id="tab-btn-players" class="px-4 py-2 text-xs font-bold text-purple-400 bg-purple-900/30 rounded-lg">Player Editor</button>
         <button onclick="window.switchAdminTab('ratings-central')" id="tab-btn-ratings-central" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"><i class="fa-solid fa-satellite-dish mr-1"></i> Ratings Central</button>
         <button onclick="window.switchAdminTab('schedules')" id="tab-btn-schedules" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"><i class="fa-solid fa-calendar-days mr-1"></i> Schedule Manager</button>
     </div>
 
+    <!-- SUB-TABS: ACCOUNTS -->
     <div id="sub-accounts" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
         <button onclick="window.switchAdminTab('approvals')" id="tab-btn-approvals" class="px-4 py-2 text-xs font-bold text-green-400 bg-green-900/30 rounded-lg">New Approvals</button>
         <button onclick="window.switchAdminTab('directory')" id="tab-btn-directory" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Account Directory</button>
         <button onclick="window.switchAdminTab('merge-accounts')" id="tab-btn-merge-accounts" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white super-admin-only">Merge Tools</button>
     </div>
 
+    <!-- SUB-TABS: COMMS -->
     <div id="sub-comms" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
         <button onclick="window.switchAdminTab('broadcast')" id="tab-btn-broadcast" class="px-4 py-2 text-xs font-bold text-sky-400 bg-sky-900/30 rounded-lg">SMS Broadcast</button>
         <button onclick="window.switchAdminTab('sms-inbox')" id="tab-btn-sms-inbox" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">SMS Inbox</button>
@@ -72,19 +78,28 @@
         <button onclick="window.switchAdminTab('donations')" id="tab-btn-donations" class="px-4 py-2 text-xs font-bold text-emerald-400 hover:text-white">Donations Ledger</button>
     </div>
 
+    <!-- SUB-TABS: SYSTEM -->
     <div id="sub-system" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
         <button onclick="window.switchAdminTab('audit')" id="tab-btn-audit" class="px-4 py-2 text-xs font-bold text-yellow-400 bg-yellow-900/30 rounded-lg super-admin-only">Audit Logs</button>
         <button onclick="window.switchAdminTab('chat')" id="tab-btn-chat" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Admin Notes</button>
     </div>
 
+    <!-- SUB-TABS: DIAGNOSTICS -->
     <div id="sub-diagnostics" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
         <button onclick="window.switchAdminTab('diagnostics')" id="tab-btn-diagnostics" class="px-4 py-2 text-xs font-bold text-indigo-400 bg-indigo-900/30 rounded-lg">Traffic & Tools</button>
     </div>
 
+    <!-- CONTENT PANELS VIEWPORT -->
     <div class="flex-1 overflow-y-auto p-6 pb-20">
         
+        <!-- Players & Multi-Rating Search View -->
         <div id="admin-players" class="hidden animate-fade-in w-full max-w-5xl mx-auto">
             {% include 'Components/Admin/view_players.html' ignore missing %}
+        </div>
+
+        <!-- Batch Queue Match Logger View -->
+        <div id="admin-batch-logger" class="hidden animate-fade-in w-full max-w-6xl mx-auto">
+            {% include 'Components/Admin/view_batch_logger.html' ignore missing %}
         </div>
 
         <div id="admin-ratings-central" class="hidden animate-fade-in w-full max-w-5xl mx-auto">
@@ -206,7 +221,7 @@
                         </div>
                         <div>
                             <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Event Name</label>
-                            <input type="text" id="e-name" placeholder="e.g., <1500 Singles" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-500">
+                            <input type="text" id="e-name" placeholder="e.g., &lt;1500 Singles" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-500">
                         </div>
                     </div>
 
@@ -506,7 +521,7 @@
                         </div>
                         <div>
                             <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Sets Won</label>
-                            <input type="number" id="diag-s2" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-blue-500 outline-none font-mono" value="0">
+                            <input type="number" id="diag-s2" class="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 outline-none font-mono" value="0">
                         </div>
                     </div>
 

@@ -12,12 +12,33 @@ DEFAULT_VOL_SCORE = 25.0
 RATING_START_DATE = datetime.date(2022, 1, 1)
 
 # Division Brackets: (Floor, Ceiling, Default Starting Seed)
+# Note: 0 represents "All Stars" (0 to 785)
 DIVISION_BRACKETS = {
-    1: (1200.0, 99999.0, 1350.0),
-    2: (900.0, 1199.0, 1050.0),
-    3: (600.0, 899.0, 750.0),
-    4: (300.0, 599.0, 450.0),
-    5: (1.0, 299.0, 150.0)
+    1: (1201.0, 9999.0, 1350.0),
+    2: (901.0, 1200.0, 1050.0),
+    3: (601.0, 900.0, 750.0),
+    4: (301.0, 600.0, 450.0),
+    5: (1.0, 300.0, 150.0),
+    0: (0.0, 785.0, 450.0)
+}
+
+DIVISION_LABELS = {
+    1: "Division 1 (1201–9999)",
+    2: "Division 2 (901–1200)",
+    3: "Division 3 (601–900)",
+    4: "Division 4 (301–600)",
+    5: "Division 5 (1–300)",
+    0: "All Stars (0–785)"
+}
+
+# Strength hierarchy (higher number = higher division priority for multi-division players)
+DIV_STRENGTH_ORDER = {
+    1: 60,  # Division 1 (1201-9999)
+    2: 50,  # Division 2 (901-1200)
+    3: 40,  # Division 3 (601-900)
+    0: 35,  # All Stars (0-785)
+    4: 20,  # Division 4 (301-600)
+    5: 10   # Division 5 (1-300)
 }
 
 VOLATILITY_GUIDE = [
@@ -56,10 +77,24 @@ VOLATILITY_GUIDE = [
 ]
 
 
+def get_volatility_tier(vol_score):
+    v = float(vol_score or DEFAULT_VOL_SCORE)
+    for item in VOLATILITY_GUIDE:
+        if v <= item["max"]:
+            return item
+    return VOLATILITY_GUIDE[-1]
+
+
 def parse_division_number(div_str):
-    if not div_str:
+    if div_str is None:
         return None
+    if isinstance(div_str, int) and div_str in DIVISION_BRACKETS:
+        return div_str
     s = str(div_str).strip().lower()
+    if not s:
+        return None
+    if "all star" in s or "all-star" in s or "allstar" in s:
+        return 0
     if "premier" in s or "open" in s or "super" in s:
         return 1
     m = re.search(r'([1-5])', s)
@@ -68,10 +103,16 @@ def parse_division_number(div_str):
     return None
 
 
+def format_division_label(div_num):
+    if div_num in DIVISION_LABELS:
+        return DIVISION_LABELS[div_num]
+    return "Unassigned Bracket"
+
+
 def clamp_public_rating(true_rating, div_num):
-    r = max(1.0, float(true_rating))
-    if not div_num or div_num not in DIVISION_BRACKETS:
-        return r
+    r = max(0.0, float(true_rating))
+    if div_num is None or div_num not in DIVISION_BRACKETS:
+        return max(1.0, r)
     floor_val, ceil_val, _ = DIVISION_BRACKETS[div_num]
     return max(floor_val, min(ceil_val, r))
 
@@ -91,12 +132,10 @@ def compute_next_rd(current_rd, matches_played_before, anti_riot_bump=0.0):
     if anti_riot_bump > 0:
         return max(MIN_RD, min(MAX_RD, current_rd + anti_riot_bump))
 
-    # Fluid proportional tightening curve toward ~35 SD
     if current_rd > TARGET_RD:
         drop = max(1.5, (current_rd - 30.0) * 0.28)
         new_rd = current_rd - drop
     else:
-        # Gentle tightening between 35 and the 25 floor
         drop = max(0.35, (current_rd - MIN_RD) * 0.12)
         new_rd = current_rd - drop
 
@@ -158,17 +197,17 @@ def calculate_match(w, l, s1, s2, k_win=1.0, k_loss=1.4, anti_riot=True, point_s
     w['vol'] = compute_match_volatility(E_w, w_set_share, float(w.get('vol', DEFAULT_VOL_SCORE)), w_matches)
     l['vol'] = compute_match_volatility(E_l, l_set_share, float(l.get('vol', DEFAULT_VOL_SCORE)), l_matches)
 
-    # Update True Ratings (Floored at 1.0)
+    # Update Unclamped True Ratings
     w['true_rating'] = max(1.0, w_true + w_shift)
     l['true_rating'] = max(1.0, l_true + l_shift)
 
-    # Update Public Ratings (Clamped by active home division)
+    # Update Public Fixture Ratings (Clamped by active permanent division)
     w['public_rating'] = clamp_public_rating(w['true_rating'], w.get('home_div'))
     l['public_rating'] = clamp_public_rating(l['true_rating'], l.get('home_div'))
     w['rating'] = w['public_rating']
     l['rating'] = l['public_rating']
 
-    # Update Standard Deviation (Hard steps for new players, fluid for established)
+    # Update Standard Deviation
     w['rd'] = compute_next_rd(w_rd, w_matches, w_bump)
     l['rd'] = compute_next_rd(l_rd, l_matches, l_bump)
 
@@ -185,7 +224,7 @@ class RatingEngine:
     def get_rating(self, name, div_str=None):
         if name not in self.players:
             div_num = parse_division_number(div_str)
-            if div_num in DIVISION_BRACKETS:
+            if div_num is not None and div_num in DIVISION_BRACKETS:
                 seed_rating = DIVISION_BRACKETS[div_num][2]
             else:
                 seed_rating = DEFAULT_RATING
@@ -197,6 +236,8 @@ class RatingEngine:
                 'rd': DEFAULT_RD,
                 'vol': DEFAULT_VOL_SCORE,
                 'home_div': div_num,
+                'season_divs': {},
+                'active_season': None,
                 'matches_played': 0
             }
         return self.players[name]
@@ -212,7 +253,8 @@ class RatingEngine:
                 vol_val = DEFAULT_VOL_SCORE
 
             existing = self.players.get(name, {})
-            div_num = parse_division_number(div_str) or existing.get('home_div')
+            parsed_div = parse_division_number(div_str)
+            div_num = parsed_div if parsed_div is not None else existing.get('home_div')
             pub_val = clamp_public_rating(r_val, div_num)
 
             self.players[name] = {
@@ -222,64 +264,80 @@ class RatingEngine:
                 'rd': rd_val,
                 'vol': vol_val,
                 'home_div': div_num,
+                'season_divs': existing.get('season_divs', {}),
+                'active_season': existing.get('active_season'),
                 'matches_played': existing.get('matches_played', 3)
             }
         except ValueError:
             pass
 
-    def update_player_division(self, name, div_str, is_fillin=False):
+    def update_player_division(self, name, div_str, is_fillin=False, season_str=None):
         """
-        Tracks a player's regular home division and enforces promotion/demotion rules.
-        Fill-ins are ignored so filling in for a higher/lower division doesn't alter caps.
+        Tracks a player's permanent division(s) per season and enforces promotion/demotion rules.
+        - Fill-ins are strictly ignored so filling in never increases or alters a player's division cap.
+        - Multi-division permanent players (e.g., Jane Lee playing Div 2 and Div 3 permanent in the
+          same season) automatically lock to their HIGHEST permanent division for that season.
+        - If a player moves down a permanent division in a new season (e.g., Div 1 -> Div 2),
+          their rating is pulled below the new division ceiling (1200) and SD increases to recalibrate.
         """
         stats = self.get_rating(name, div_str)
         if is_fillin:
             return None
 
         new_div = parse_division_number(div_str)
-        if not new_div or new_div not in DIVISION_BRACKETS:
+        if new_div is None or new_div not in DIVISION_BRACKETS:
             return None
+
+        s_key = str(season_str or 'Current').strip()
+        season_divs = stats.setdefault('season_divs', {})
+        divs_in_season = season_divs.setdefault(s_key, set())
+        divs_in_season.add(new_div)
+        stats['active_season'] = s_key
+
+        # Determine highest permanent division in the active season
+        effective_new_div = max(divs_in_season, key=lambda d: DIV_STRENGTH_ORDER.get(d, 0))
 
         old_div = stats.get('home_div')
         if old_div is None:
-            stats['home_div'] = new_div
+            stats['home_div'] = effective_new_div
             if stats.get('matches_played', 0) == 0 and stats['true_rating'] == DEFAULT_RATING:
-                stats['true_rating'] = DIVISION_BRACKETS[new_div][2]
-            stats['public_rating'] = clamp_public_rating(stats['true_rating'], new_div)
+                stats['true_rating'] = DIVISION_BRACKETS[effective_new_div][2]
+            stats['public_rating'] = clamp_public_rating(stats['true_rating'], effective_new_div)
             stats['rating'] = stats['public_rating']
             return None
 
-        if new_div == old_div:
+        if effective_new_div == old_div:
+            stats['public_rating'] = clamp_public_rating(stats['true_rating'], effective_new_div)
+            stats['rating'] = stats['public_rating']
             return None
 
         old_pub = stats['public_rating']
         old_true = stats['true_rating']
         old_rd = stats['rd']
-        event_type = None
+        old_strength = DIV_STRENGTH_ORDER.get(old_div, 0)
+        new_strength = DIV_STRENGTH_ORDER.get(effective_new_div, 0)
 
-        # Demotion (e.g. Div 1 -> Div 2 means new_div > old_div)
-        if new_div > old_div:
+        # Demotion to a lower permanent division in a new season
+        if new_strength < old_strength:
             event_type = "DEMOTION"
-            _, new_ceil, _ = DIVISION_BRACKETS[new_div]
-            if stats['true_rating'] > new_ceil:
-                stats['true_rating'] = new_ceil
-            stats['rd'] = min(MAX_RD, max(stats['rd'] + 25.0, 65.0))
+            _, new_ceil, _ = DIVISION_BRACKETS[effective_new_div]
+            # Increase SD to recalibrate rating in the new lower division
+            stats['rd'] = min(MAX_RD, max(stats['rd'] + 30.0, 75.0))
         else:
-            # Promotion (e.g. Div 2 -> Div 1 means new_div < old_div)
+            # Promotion to a higher permanent division
             event_type = "PROMOTION"
-            new_floor, _, _ = DIVISION_BRACKETS[new_div]
-            if stats['true_rating'] < new_floor:
-                stats['true_rating'] = new_floor
-            stats['rd'] = min(MAX_RD, max(stats['rd'] + 12.0, 50.0))
+            new_floor, _, _ = DIVISION_BRACKETS[effective_new_div]
+            # Bump SD slightly so they can climb/settle into the new division
+            stats['rd'] = min(MAX_RD, max(stats['rd'] + 15.0, 55.0))
 
-        stats['home_div'] = new_div
-        stats['public_rating'] = clamp_public_rating(stats['true_rating'], new_div)
+        stats['home_div'] = effective_new_div
+        stats['public_rating'] = clamp_public_rating(stats['true_rating'], effective_new_div)
         stats['rating'] = stats['public_rating']
 
         return {
             'type': event_type,
             'old_div': old_div,
-            'new_div': new_div,
+            'new_div': effective_new_div,
             'old_pub': old_pub,
             'new_pub': stats['public_rating'],
             'old_true': old_true,
@@ -326,10 +384,10 @@ class RatingEngine:
             'new_true': new_true
         }
 
-    def update_match(self, p1_name, p2_name, s1, s2, game_history='', k_win=1.0, k_loss=1.4, anti_riot=True, div_str=None, p1_fill=False, p2_fill=False):
+    def update_match(self, p1_name, p2_name, s1, s2, game_history='', k_win=1.0, k_loss=1.4, anti_riot=True, div_str=None, p1_fill=False, p2_fill=False, season_str=None):
         if div_str:
-            self.update_player_division(p1_name, div_str, is_fillin=p1_fill)
-            self.update_player_division(p2_name, div_str, is_fillin=p2_fill)
+            self.update_player_division(p1_name, div_str, is_fillin=p1_fill, season_str=season_str)
+            self.update_player_division(p2_name, div_str, is_fillin=p2_fill, season_str=season_str)
 
         p1_stats = self.get_rating(p1_name, div_str)
         p2_stats = self.get_rating(p2_name, div_str)
