@@ -1,142 +1,182 @@
-<div id="statsContainer" class="hidden w-full max-w-5xl mx-auto pt-6 md:pt-24 px-4 pb-20 animate-fade-in">
+<div id="statsContainer" class="hidden w-full max-w-5xl mx-auto pt-2 md:pt-8 px-3 md:px-4 pb-20 animate-fade-in">
     
-    <button onclick="closeProfile()" class="mb-6 flex items-center text-slate-400 hover:text-white transition-colors group w-max">
-        <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center mr-3 group-hover:bg-slate-700 shadow-md border border-white/5">
-            <i class="fa-solid fa-arrow-left"></i>
-        </div>
-        <span class="font-bold uppercase tracking-wider text-sm">Back to Search</span>
-    </button>
-
-    <div class="bg-slate-800/80 backdrop-blur-md rounded-2xl p-5 md:p-8 shadow-2xl border border-white/5 relative overflow-hidden mb-8">
-        <div class="absolute top-0 right-0 w-64 h-64 bg-yellow-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-
-        <div class="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8">
-            <div class="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-end justify-center shadow-xl border-4 border-slate-700/50 overflow-hidden shrink-0 mt-2 md:mt-0">
-                <i class="fa-solid fa-user text-5xl md:text-6xl text-slate-500 translate-y-1"></i>
-            </div>
-
-            <div class="flex-1 text-center md:text-left w-full">
-                <h1 id="playerName" class="text-3xl md:text-5xl font-black text-white mb-2 tracking-tight truncate">Loading...</h1>
-                
-                <div class="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-6">
-                    <button onclick="window.showRatingHistory(document.getElementById('playerName').innerText, 'gctta')" 
-                            id="gcttaRatingBadge" 
-                            class="inline-block bg-sky-500/20 text-sky-400 font-mono font-black px-4 py-1.5 rounded-lg text-sm border border-sky-500/30 shadow-[0_0_15px_rgba(14,165,233,0.2)] hover:bg-sky-500/30 hover:scale-[1.02] transition-all cursor-pointer">
-                        GCTTA: <i class="fa-solid fa-spinner fa-spin"></i>
-                    </button>
-                    <button onclick="window.showRatingHistory(document.getElementById('playerName').innerText, 'rc')" 
-                            id="rcRatingBadge" 
-                            class="inline-block bg-blue-600/20 text-blue-400 font-mono font-black px-4 py-1.5 rounded-lg text-sm border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.2)] hover:bg-blue-600/30 hover:scale-[1.02] transition-all cursor-pointer">
-                        RC: <i class="fa-solid fa-spinner fa-spin"></i>
-                    </button>
-                </div>
-                
-                <div class="w-full space-y-3">
-                    <div class="flex bg-black/40 rounded-xl p-1 shadow-inner border border-white/5 w-full mb-1">
-                        <button id="source-btn-fixtures" onclick="setDataSource('fixtures')" class="flex-1 py-2 text-sm md:text-xs font-black uppercase tracking-wider rounded-lg bg-sky-600 text-white shadow transition-all">GCTTA Fixtures</button>
-                        <button id="source-btn-rc" onclick="setDataSource('rc')" class="flex-1 py-2 text-sm md:text-xs font-black uppercase tracking-wider rounded-lg text-slate-400 hover:text-white transition-all">Ratings Central</button>
-                    </div>
-
-                    <div id="fixtureFiltersContainer" class="space-y-3">
-                        <div class="flex flex-col md:flex-row gap-3 w-full">
-                            <div class="relative flex-1">
-                                <i class="fa-solid fa-calendar absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                                <select id="seasonSelect" style="color-scheme: dark;" class="w-full bg-black/40 border border-white/10 text-white text-base md:text-sm rounded-xl pl-11 pr-8 py-3.5 md:py-2.5 focus:ring-2 focus:ring-yellow-500 focus:outline-none appearance-none cursor-pointer hover:bg-black/60 transition-colors shadow-inner font-bold">
-                                    <option value="Career">Career</option>
-                                </select>
-                                <i class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"></i>
-                            </div>
-
-                            <div class="relative flex-1">
-                                <i class="fa-solid fa-layer-group absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                                <select id="profileDivisionSelect" style="color-scheme: dark;" class="w-full bg-black/40 border border-white/10 text-white text-base md:text-sm rounded-xl pl-11 pr-8 py-3.5 md:py-2.5 focus:ring-2 focus:ring-yellow-500 focus:outline-none appearance-none cursor-pointer hover:bg-black/60 transition-colors shadow-inner font-bold">
-                                    <option value="All">All Divisions</option>
-                                </select>
-                                <i class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"></i>
-                            </div>
-                        </div>
-                        
-                        <label class="flex items-center justify-between md:justify-start cursor-pointer bg-black/40 px-5 py-3.5 md:py-2.5 rounded-xl border border-white/10 hover:bg-black/60 transition-colors w-full shadow-inner">
-                            <div class="text-base md:text-sm font-bold text-slate-300">Include Fill-in Matches</div>
-                            <div class="relative md:ml-4 flex-shrink-0">
-                                <input type="checkbox" id="profileFillinToggle" class="sr-only" checked onchange="renderProfile()">
-                                <div id="toggleBg" class="block bg-sky-500 w-12 h-7 rounded-full transition-colors duration-300"></div>
-                                <div id="toggleDot" class="absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition-transform duration-300 translate-x-5 shadow-md"></div>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3 w-full md:w-auto mt-6 md:mt-0 shrink-0">
-                <div class="bg-black/20 p-4 md:p-5 rounded-xl border border-white/5 text-center min-w-[110px] shadow-inner">
-                    <div id="winRate" class="text-3xl md:text-2xl font-black text-green-400 tracking-tighter">0%</div>
-                    <div class="text-[10px] md:text-[11px] uppercase text-slate-500 font-bold tracking-wider mt-1">Win Rate</div>
-                </div>
-                <div class="bg-black/20 p-4 md:p-5 rounded-xl border border-white/5 text-center min-w-[110px] shadow-inner">
-                    <div id="matchesPlayed" class="text-3xl md:text-2xl font-black text-white tracking-tighter">0</div>
-                    <div class="text-[10px] md:text-[11px] uppercase text-slate-500 font-bold tracking-wider mt-1">Matches</div>
-                </div>
-                <div class="bg-black/20 p-4 md:p-5 rounded-xl border border-white/5 text-center min-w-[110px] shadow-inner">
-                    <div id="wins" class="text-3xl md:text-2xl font-black text-blue-400 tracking-tighter">0</div>
-                    <div class="text-[10px] md:text-[11px] uppercase text-slate-500 font-bold tracking-wider mt-1">Wins</div>
-                </div>
-                <div class="bg-black/20 p-4 md:p-5 rounded-xl border border-white/5 text-center min-w-[110px] shadow-inner">
-                    <div id="losses" class="text-3xl md:text-2xl font-black text-red-400 tracking-tighter">0</div>
-                    <div class="text-[10px] md:text-[11px] uppercase text-slate-500 font-bold tracking-wider mt-1">Losses</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="flex flex-wrap border-b border-white/10 mb-4 px-1 gap-6 items-end">
-        <button id="tab-btn-history" onclick="switchProfileTab('history')" class="pb-3 text-lg font-bold text-yellow-500 border-b-2 border-yellow-500 transition-colors flex items-center gap-2">
-            <i class="fa-solid fa-clock-rotate-left"></i> Match History
+    <!-- Top Bar: Back + Quick Compare -->
+    <div class="flex items-center justify-between mb-4">
+        <button onclick="window.closeProfile()" class="flex items-center gap-2 text-slate-300 hover:text-white bg-slate-900/90 border border-white/10 px-3.5 py-2 rounded-xl shadow transition-all">
+            <i class="fa-solid fa-chevron-left text-xs text-sky-400"></i>
+            <span class="font-extrabold uppercase tracking-wider text-xs">Players</span>
         </button>
-        <button id="tab-btn-insights" onclick="switchProfileTab('insights')" class="pb-3 text-lg font-bold text-slate-500 border-b-2 border-transparent hover:text-white transition-colors flex items-center gap-2">
-            <i class="fa-solid fa-brain"></i> Insights
-        </button>
-        <div class="ml-auto pb-3">
-            <button onclick="openCompareModal()" class="bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-transform hover:scale-[1.02] shadow-[0_0_15px_rgba(14,165,233,0.3)] flex items-center gap-2">
-                <i class="fa-solid fa-bolt text-yellow-400"></i> Compare
+
+        <div class="flex items-center gap-2">
+            <button onclick="window.toggleMobileProfileFilters()" class="md:hidden bg-slate-900/90 border border-white/10 text-slate-300 hover:text-white px-3.5 py-2 rounded-xl text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+                <i class="fa-solid fa-sliders text-sky-400"></i> Filters
+            </button>
+            <button onclick="window.openCompareModal()" class="bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-[0_0_15px_rgba(14,165,233,0.3)] flex items-center gap-1.5">
+                <i class="fa-solid fa-bolt text-yellow-300"></i> H2H Compare
             </button>
         </div>
     </div>
 
-    <div id="profile-tab-history" class="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 overflow-hidden min-h-[200px] shadow-xl">
-        <div id="matchHistory" class="p-10 text-center text-slate-500">
-            <i class="fa-solid fa-spinner fa-spin text-3xl mb-3"></i><br>
-            <span class="text-sm font-bold uppercase tracking-widest">Loading history...</span>
+    <!-- MAIN TITANIUM PLAYER CARD -->
+    <div class="glass-panel rounded-2xl p-4 md:p-7 shadow-2xl border border-white/10 relative overflow-hidden mb-5">
+        <div class="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+            
+            <!-- Left: Avatar + Name + Interactive Rating & Volatility Badges -->
+            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full md:w-auto">
+                <div class="w-16 h-16 md:w-24 md:h-24 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-950 flex items-center justify-center shadow-inner border border-white/10 shrink-0">
+                    <i class="fa-solid fa-user-ninja text-3xl md:text-5xl text-slate-500"></i>
+                </div>
+
+                <div class="w-full">
+                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                        <h1 id="playerName" class="text-2xl md:text-4xl font-black text-white tracking-tight leading-none">Loading...</h1>
+                        <span id="playerDivBadge" class="hidden text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md bg-white/5 text-slate-300 border border-white/10">Div 1</span>
+                    </div>
+                    
+                    <!-- Interactive Badges Row -->
+                    <div class="flex flex-wrap items-center gap-2 mt-2.5">
+                        <!-- Public GCTTA Rating Badge (Click for History Ledger) -->
+                        <button onclick="window.showRatingHistory(document.getElementById('playerName').innerText, 'gctta')" 
+                                id="gcttaRatingBadge" 
+                                class="bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 font-mono font-extrabold px-3 py-1.5 rounded-xl text-xs border border-sky-500/30 shadow-sm flex items-center gap-1.5 cursor-pointer"
+                                title="Tap to view Rating & SD History Ledger">
+                            <i class="fa-solid fa-chart-line text-sky-400 text-[10px]"></i>
+                            <span>GCTTA: <i class="fa-solid fa-spinner fa-spin"></i></span>
+                        </button>
+
+                        <!-- Admin-Only Uncapped True Rating Badge -->
+                        <button onclick="window.showRatingHistory(document.getElementById('playerName').innerText, 'gctta')"
+                                id="adminTrueRatingBadge"
+                                class="hidden bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 font-mono font-extrabold px-3 py-1.5 rounded-xl text-xs border border-purple-500/40 shadow-sm items-center gap-1.5 cursor-pointer"
+                                title="Admin Only: Unclamped True Rating">
+                            <i class="fa-solid fa-eye text-purple-400 text-[10px]"></i>
+                            <span id="adminTrueRatingText">TRUE: --</span>
+                        </button>
+
+                        <!-- Volatility Score Badge (Click for Volatility Guide) -->
+                        <button onclick="window.openVolatilityGuideModal()" 
+                                id="volatilityBadge" 
+                                class="bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 font-mono font-extrabold px-3 py-1.5 rounded-xl text-xs border border-emerald-500/30 shadow-sm flex items-center gap-1.5 cursor-pointer"
+                                title="Tap to view Volatility Score Guide">
+                            <i class="fa-solid fa-wave-square text-[10px]"></i>
+                            <span id="volatilityBadgeText">VOL: --</span>
+                        </button>
+
+                        <!-- Ratings Central Badge -->
+                        <button onclick="window.showRatingHistory(document.getElementById('playerName').innerText, 'rc')" 
+                                id="rcRatingBadge" 
+                                class="bg-blue-600/15 hover:bg-blue-600/25 text-blue-300 font-mono font-extrabold px-3 py-1.5 rounded-xl text-xs border border-blue-500/30 shadow-sm flex items-center gap-1.5 cursor-pointer">
+                            <span>RC: <i class="fa-solid fa-spinner fa-spin"></i></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: 4-Box KPI Stat Strip -->
+            <div class="grid grid-cols-4 gap-2 w-full md:w-auto shrink-0 pt-2 md:pt-0 border-t border-white/10 md:border-t-0">
+                <div class="bg-black/40 px-3 py-2.5 rounded-xl border border-white/10 text-center min-w-[72px]">
+                    <div id="winRate" class="text-lg md:text-2xl font-black text-emerald-400 font-mono leading-tight">0%</div>
+                    <div class="text-[9px] uppercase text-slate-400 font-extrabold tracking-wider mt-0.5">Win %</div>
+                </div>
+                <div class="bg-black/40 px-3 py-2.5 rounded-xl border border-white/10 text-center min-w-[72px]">
+                    <div id="matchesPlayed" class="text-lg md:text-2xl font-black text-white font-mono leading-tight">0</div>
+                    <div class="text-[9px] uppercase text-slate-400 font-extrabold tracking-wider mt-0.5">Played</div>
+                </div>
+                <div class="bg-black/40 px-3 py-2.5 rounded-xl border border-white/10 text-center min-w-[72px]">
+                    <div id="wins" class="text-lg md:text-2xl font-black text-sky-400 font-mono leading-tight">0</div>
+                    <div class="text-[9px] uppercase text-slate-400 font-extrabold tracking-wider mt-0.5">Wins</div>
+                </div>
+                <div class="bg-black/40 px-3 py-2.5 rounded-xl border border-white/10 text-center min-w-[72px]">
+                    <div id="losses" class="text-lg md:text-2xl font-black text-rose-400 font-mono leading-tight">0</div>
+                    <div class="text-[9px] uppercase text-slate-400 font-extrabold tracking-wider mt-0.5">Losses</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Collapsible Filters Drawer (Always visible on Desktop, toggleable on Mobile) -->
+        <div id="profileFilterDrawer" class="hidden md:block mt-5 pt-4 border-t border-white/10 space-y-3">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-2.5 items-center">
+                <!-- Data Source Segmented Control -->
+                <div class="flex bg-black/50 rounded-xl p-1 border border-white/10">
+                    <button id="source-btn-fixtures" onclick="window.setDataSource('fixtures')" class="flex-1 py-1.5 text-xs font-extrabold uppercase tracking-wider rounded-lg bg-sky-600 text-white shadow transition-all">GCTTA</button>
+                    <button id="source-btn-rc" onclick="window.setDataSource('rc')" class="flex-1 py-1.5 text-xs font-extrabold uppercase tracking-wider rounded-lg text-slate-400 hover:text-white transition-all">Ratings Central</button>
+                </div>
+
+                <!-- Season Selector -->
+                <div id="fixtureSeasonWrap" class="relative">
+                    <i class="fa-solid fa-calendar absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
+                    <select id="seasonSelect" style="color-scheme: dark;" class="w-full bg-black/50 border border-white/10 text-white text-xs font-bold rounded-xl pl-9 pr-8 py-2.5 focus:border-sky-500 focus:outline-none appearance-none cursor-pointer">
+                        <option value="Career">All-Time Career</option>
+                    </select>
+                    <i class="fa-solid fa-chevron-down absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none"></i>
+                </div>
+
+                <!-- Division Selector -->
+                <div id="fixtureDivWrap" class="relative">
+                    <i class="fa-solid fa-layer-group absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
+                    <select id="profileDivisionSelect" style="color-scheme: dark;" class="w-full bg-black/50 border border-white/10 text-white text-xs font-bold rounded-xl pl-9 pr-8 py-2.5 focus:border-sky-500 focus:outline-none appearance-none cursor-pointer">
+                        <option value="All">All Divisions</option>
+                    </select>
+                    <i class="fa-solid fa-chevron-down absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none"></i>
+                </div>
+
+                <!-- Fill-in Toggle -->
+                <label id="fixtureFillinWrap" class="flex items-center justify-between cursor-pointer bg-black/50 px-3.5 py-2 rounded-xl border border-white/10 hover:border-white/20 transition-colors">
+                    <span class="text-xs font-bold text-slate-300">Include Fill-ins</span>
+                    <div class="relative shrink-0">
+                        <input type="checkbox" id="profileFillinToggle" class="sr-only" checked onchange="window.renderProfile()">
+                        <div id="toggleBg" class="block bg-sky-500 w-10 h-6 rounded-full transition-colors duration-200"></div>
+                        <div id="toggleDot" class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-200 translate-x-4 shadow"></div>
+                    </div>
+                </label>
+            </div>
         </div>
     </div>
 
-    <div id="profile-tab-insights" class="hidden bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-white/5 overflow-hidden min-h-[200px] shadow-xl p-4 md:p-6 space-y-6">
-        <div class="text-center text-slate-500 py-10" id="insightsLoading">
-            <i class="fa-solid fa-spinner fa-spin text-3xl mb-3"></i><br>
-            <span class="text-sm font-bold uppercase tracking-widest">Crunching Numbers...</span>
+    <!-- Segmented View Switcher: Match History vs Career Insights -->
+    <div class="flex bg-slate-900/90 p-1 rounded-xl border border-white/10 mb-4 max-w-md">
+        <button id="tab-btn-history" onclick="window.switchProfileTab('history')" class="flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider bg-sky-600 text-white shadow transition-all flex items-center justify-center gap-2">
+            <i class="fa-solid fa-list-ul"></i> Match History
+        </button>
+        <button id="tab-btn-insights" onclick="window.switchProfileTab('insights')" class="flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider text-slate-400 hover:text-white transition-all flex items-center justify-center gap-2">
+            <i class="fa-solid fa-bolt"></i> Career Insights
+        </button>
+    </div>
+
+    <!-- Match History Container -->
+    <div id="profile-tab-history" class="glass-panel rounded-2xl border border-white/10 overflow-hidden min-h-[200px] shadow-xl">
+        <div id="matchHistory" class="p-10 text-center text-slate-500">
+            <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><br>
+            <span class="text-xs font-bold uppercase tracking-widest">Loading matches...</span>
         </div>
-        <div id="insightsContent" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6">
-            </div>
+    </div>
+
+    <!-- Insights Container -->
+    <div id="profile-tab-insights" class="hidden glass-panel rounded-2xl border border-white/10 overflow-hidden min-h-[200px] shadow-xl p-4 md:p-6">
+        <div class="text-center text-slate-500 py-10" id="insightsLoading">
+            <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><br>
+            <span class="text-xs font-bold uppercase tracking-widest">Crunching Career Insights...</span>
+        </div>
+        <div id="insightsContent" class="hidden"></div>
     </div>
 </div>
 
-<div id="ratingHistoryModal" class="hidden fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-    <div class="bg-slate-900 border border-yellow-500/30 rounded-3xl w-full max-w-md shadow-2xl relative overflow-hidden flex flex-col max-h-[80vh]">
-        <div class="absolute top-0 right-0 w-32 h-32 bg-yellow-500/10 rounded-full blur-2xl pointer-events-none"></div>
-        
-        <div class="p-6 border-b border-white/10 flex justify-between items-center relative z-10 shrink-0">
+<!-- RATING & SD LEDGER MODAL -->
+<div id="ratingHistoryModal" class="hidden fixed inset-0 z-[200] flex items-center justify-center p-3 md:p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+    <div class="bg-slate-900 border border-white/15 rounded-2xl w-full max-w-lg shadow-2xl relative overflow-hidden flex flex-col max-h-[82vh]">
+        <div class="p-4 md:p-5 border-b border-white/10 flex justify-between items-center bg-black/40 shrink-0">
             <div>
-                <h3 class="text-white font-black text-xl flex items-center gap-2">
-                    <i class="fa-solid fa-chart-line text-yellow-500"></i> Rating Ledger
+                <h3 class="text-white font-black text-lg flex items-center gap-2">
+                    <i class="fa-solid fa-chart-line text-sky-400"></i> Rating &amp; SD Ledger
                 </h3>
-                <p class="text-xs text-slate-400 mt-1" id="ledgerSubtitle">Track your math + SD over time</p>
+                <p class="text-[11px] text-slate-400 mt-0.5" id="ledgerSubtitle">Chronological match-by-match rating progression</p>
             </div>
-            <button onclick="document.getElementById('ratingHistoryModal').classList.add('hidden')" class="text-slate-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 w-8 h-8 rounded-full flex items-center justify-center">
+            <button onclick="document.getElementById('ratingHistoryModal').classList.add('hidden')" class="text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 w-8 h-8 rounded-xl flex items-center justify-center">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
         
-        <div id="historyContent" class="p-4 overflow-y-auto space-y-2 relative z-10 flex-grow custom-scrollbar">
+        <div id="historyContent" class="p-3 md:p-4 overflow-y-auto space-y-2 flex-grow">
             <div class="text-slate-500 text-center py-8">
                 <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><br>Loading ledger...
             </div>
@@ -144,56 +184,55 @@
     </div>
 </div>
 
-<script>
-    window.showRatingHistory = async function(playerName, source = 'gctta') {
-        const modal = document.getElementById('ratingHistoryModal');
-        const content = document.getElementById('historyContent');
-        const subtitle = document.getElementById('ledgerSubtitle');
-        
-        modal.classList.remove('hidden');
-        content.innerHTML = '<div class="text-slate-500 text-center py-8"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><br>Loading ledger...</div>';
-        subtitle.innerText = source === 'rc' ? 'Ratings Central History' : 'GCTTA Rating Ledger';
-        
-        try {
-            const sourceParam = source === 'rc' ? '?source=rc' : '';
-            const res = await fetch(`/api/rating_history/${encodeURIComponent(playerName)}${sourceParam}`);
-            const history = await res.json();
-            
-            if (history.length === 0) {
-                content.innerHTML = '<div class="text-slate-500 text-center py-8">No historical data recorded yet.</div>';
-            } else {
-                content.innerHTML = history.map(h => {
-                    const isInactivity = h.is_decay;
-                    
-                    const rDelta = h.rating_change > 0 ? `+${h.rating_change}` : h.rating_change;
-                    const rColor = h.rating_change > 0 ? 'text-green-400' : (h.rating_change < 0 ? 'text-red-400' : 'text-slate-500');
-                    
-                    const sdDelta = h.sd_change > 0 ? `+${h.sd_change}` : h.sd_change;
-                    const sdColor = h.sd_change > 0 ? 'text-red-400' : (h.sd_change < 0 ? 'text-green-400' : 'text-slate-500');
+<!-- VOLATILITY SCORE GUIDE MODAL -->
+<div id="volatilityGuideModal" class="hidden fixed inset-0 z-[210] flex items-center justify-center p-3 md:p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+    <div class="bg-slate-900 border border-white/15 rounded-2xl w-full max-w-lg shadow-2xl relative overflow-hidden flex flex-col max-h-[85vh]">
+        <div class="p-4 md:p-5 border-b border-white/10 flex justify-between items-center bg-black/40 shrink-0">
+            <div>
+                <h3 class="text-white font-black text-lg flex items-center gap-2">
+                    <i class="fa-solid fa-wave-square text-emerald-400"></i> Volatility Score Guide (1–100)
+                </h3>
+                <p class="text-[11px] text-slate-400 mt-0.5">Measures how closely a player performs relative to rating expectations.</p>
+            </div>
+            <button onclick="document.getElementById('volatilityGuideModal').classList.add('hidden')" class="text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 w-8 h-8 rounded-xl flex items-center justify-center">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
 
-                    return `
-                    <div class="p-3 bg-black/40 rounded-xl border ${isInactivity ? 'border-orange-500/20' : 'border-white/5'} flex items-center justify-between group hover:border-yellow-500/30 transition-colors">
-                        <div>
-                            <div class="text-white font-bold text-sm mb-0.5 flex items-center gap-2">
-                                ${isInactivity ? '<i class="fa-solid fa-stopwatch text-orange-400"></i> <span class="text-orange-200 text-xs">Inactivity Decay</span>' : (h.opponent ? `vs ${h.opponent}` : 'System Override')}
-                            </div>
-                            <div class="text-[10px] text-slate-400 uppercase tracking-widest">${h.date} ${h.result_str ? `• ${h.result_str}` : ''}</div>
-                        </div>
-                        <div class="flex items-center gap-4">
-                            <div class="text-right w-16">
-                                <div class="text-yellow-400 font-mono font-bold text-base leading-none">${h.rating}</div>
-                                <div class="text-[10px] ${rColor} font-bold mt-1">${rDelta != 0 ? rDelta : '-'}</div>
-                            </div>
-                            <div class="text-left w-12 border-l border-white/10 pl-3">
-                                <div class="text-slate-300 font-mono text-[11px] leading-none">SD ${h.sd}</div>
-                                <div class="text-[10px] ${sdColor} font-bold mt-1">${sdDelta != 0 ? sdDelta : '-'}</div>
-                            </div>
-                        </div>
-                    </div>
-                `}).join('');
-            }
-        } catch(e) {
-            content.innerHTML = '<div class="text-red-400 text-center py-8">Failed to load history ledger.</div>';
-        }
-    };
-</script>
+        <div class="p-4 overflow-y-auto space-y-3">
+            <div id="playerCurrentVolatilityBanner" class="bg-black/50 border border-white/10 rounded-xl p-3.5 mb-2"></div>
+
+            <div class="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-xs font-black uppercase tracking-wider text-emerald-400">1 – 25 • The Metronome</span>
+                    <span class="text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded">Low Volatility</span>
+                </div>
+                <p class="text-xs text-slate-300 leading-relaxed">Rock-solid consistency. Beats lower-rated players reliably, loses to higher-rated players as expected, and rarely experiences random blowouts.</p>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-sky-500/10 border border-sky-500/30">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-xs font-black uppercase tracking-wider text-sky-400">26 – 55 • Standard Form</span>
+                    <span class="text-[10px] font-mono font-bold bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded">Normal Volatility</span>
+                </div>
+                <p class="text-xs text-slate-300 leading-relaxed">Typical competitive club form. Capable of pulling off a solid upset on a good night or dropping a tight 5-setter on an off night.</p>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-xs font-black uppercase tracking-wider text-amber-400">56 – 80 • Wildcard</span>
+                    <span class="text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded">High Volatility</span>
+                </div>
+                <p class="text-xs text-slate-300 leading-relaxed">Streaky and dangerous. Form fluctuates heavily from match to match—ratings rarely predict which version of this player is showing up at the table.</p>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-xs font-black uppercase tracking-wider text-rose-400">81 – 100 • Pure Chaos</span>
+                    <span class="text-[10px] font-mono font-bold bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded">Extreme Volatility</span>
+                </div>
+                <p class="text-xs text-slate-300 leading-relaxed">Could push Fan Zhendong to 7 sets at 7:30 PM and lose 3-0 to the lowest-rated player in the club at 8:15 PM. Completely immune to expectations.</p>
+            </div>
+        </div>
+    </div>
+</div>

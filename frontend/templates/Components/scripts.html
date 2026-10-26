@@ -27,15 +27,15 @@
             const matches = window.allPlayersRaw.filter(p => p.toLowerCase().includes(query));
             
             if (matches.length === 0) {
-                suggContainer.innerHTML = '<div class="p-4 text-center text-slate-500 italic text-sm">No players found.</div>';
+                suggContainer.innerHTML = '<div class="p-4 text-center text-slate-500 italic text-xs">No players found.</div>';
                 suggContainer.classList.remove('hidden');
                 return;
             }
 
             suggContainer.innerHTML = matches.slice(0, 10).map(p => `
-                <div onclick="window.loadStats('${p.replace(/'/g, "\\'")}')" class="px-4 py-3 hover:bg-sky-900/30 cursor-pointer text-white font-bold border-b border-white/5 transition-colors flex justify-between items-center group">
+                <div onclick="window.loadStats('${p.replace(/'/g, "\\'")}'); document.getElementById('${suggestionsContainerId}').classList.add('hidden');" class="px-4 py-3 hover:bg-sky-500/15 cursor-pointer text-white font-bold text-xs border-b border-white/5 last:border-0 transition-colors flex justify-between items-center group">
                     <span class="group-hover:text-sky-400 transition-colors">${p}</span>
-                    <i class="fa-solid fa-chevron-right text-slate-600 group-hover:text-sky-500 transition-colors text-xs"></i>
+                    <i class="fa-solid fa-chevron-right text-slate-600 group-hover:text-sky-400 transition-colors text-[10px]"></i>
                 </div>
             `).join('');
             
@@ -63,75 +63,22 @@
         if (container && menu && !container.contains(e.target)) {
             menu.classList.add('hidden');
         }
-
-        const targetLink = e.target.closest('a');
-        if (targetLink) {
-            const href = targetLink.getAttribute('href');
-            if (href === '/player_auth' || href === '/dashboard' || href === '#player-portal') {
-                e.preventDefault();
-                const isLoggedIn = !document.querySelector('.auth-logged-in').classList.contains('hidden');
-                if(isLoggedIn) {
-                    window.switchTab('player-hub');
-                } else {
-                    window.switchTab('home'); 
-                    if (menu) menu.classList.remove('hidden'); 
-                }
-            }
-        }
-        
-        const targetBtn = e.target.closest('button');
-        if (targetBtn && targetBtn.innerText && targetBtn.innerText.toUpperCase().includes('PLAYER PORTAL')) {
-            e.preventDefault();
-            const isLoggedIn = !document.querySelector('.auth-logged-in').classList.contains('hidden');
-            if(isLoggedIn) {
-                window.switchTab('player-hub');
-            } else {
-                window.switchTab('home');
-                if (menu) menu.classList.remove('hidden'); 
-            }
-        }
     });
 
-    // ==========================================
-    // UI ENGINE & NAVIGATION
-    // ==========================================
-    window.switchTab = function(tabId) {
-        const tabs = ['home', 'search', 'standings', 'results', 'profile', 'community', 'live', 'player-hub'];
-        tabs.forEach(t => {
-            const el = document.getElementById(t + 'Container');
-            if(el) el.classList.add('hidden');
-            
-            const navBtn = document.getElementById('nav-' + t);
-            if(navBtn) {
-                navBtn.classList.remove('text-yellow-400', 'scale-110');
-                navBtn.classList.add('text-slate-500');
-            }
-        });
-        
-        const targetEl = document.getElementById(tabId + 'Container');
-        if(targetEl) targetEl.classList.remove('hidden');
-        
-        const targetNavBtn = document.getElementById('nav-' + (tabId === 'profile' ? 'search' : tabId));
-        if(targetNavBtn) {
-            targetNavBtn.classList.remove('text-slate-500');
-            targetNavBtn.classList.add('text-yellow-400', 'scale-110');
-        }
-
-        if(tabId === 'results') window.loadResults();
-        if(tabId === 'community') window.loadCommunityFeed();
-    };
-
     window.closeProfile = function() {
-        document.getElementById('statsContainer').classList.add('hidden');
-        document.getElementById('searchContainer').classList.remove('hidden');
+        window.switchTab('search');
+    };
+
+    window.toggleMobileProfileFilters = function() {
+        const drawer = document.getElementById('profileFilterDrawer');
+        if (drawer) drawer.classList.toggle('hidden');
     };
 
     // ==========================================
-    // STATS PROFILES & TOGGLE LOGIC
+    // STATS PROFILES, VOLATILITY & LEDGER LOGIC
     // ==========================================
     window.currentProfileName = "";
     window.currentProfileData = null;
-
     window.useRCData = false;
     
     window.setDataSource = function(source) {
@@ -139,20 +86,26 @@
         
         const btnFixtures = document.getElementById('source-btn-fixtures');
         const btnRC = document.getElementById('source-btn-rc');
-        const filtersContainer = document.getElementById('fixtureFiltersContainer');
+        const sWrap = document.getElementById('fixtureSeasonWrap');
+        const dWrap = document.getElementById('fixtureDivWrap');
+        const fWrap = document.getElementById('fixtureFillinWrap');
         
         if (window.useRCData) {
-            btnFixtures.classList.remove('bg-sky-600', 'text-white');
-            btnFixtures.classList.add('text-slate-400');
-            btnRC.classList.remove('text-slate-400');
-            btnRC.classList.add('bg-sky-600', 'text-white');
-            if(filtersContainer) filtersContainer.classList.add('hidden');
+            btnFixtures?.classList.remove('bg-sky-600', 'text-white');
+            btnFixtures?.classList.add('text-slate-400');
+            btnRC?.classList.remove('text-slate-400');
+            btnRC?.classList.add('bg-sky-600', 'text-white');
+            sWrap?.classList.add('hidden');
+            dWrap?.classList.add('hidden');
+            fWrap?.classList.add('hidden');
         } else {
-            btnRC.classList.remove('bg-sky-600', 'text-white');
-            btnRC.classList.add('text-slate-400');
-            btnFixtures.classList.remove('text-slate-400');
-            btnFixtures.classList.add('bg-sky-600', 'text-white');
-            if(filtersContainer) filtersContainer.classList.remove('hidden');
+            btnRC?.classList.remove('bg-sky-600', 'text-white');
+            btnRC?.classList.add('text-slate-400');
+            btnFixtures?.classList.remove('text-slate-400');
+            btnFixtures?.classList.add('bg-sky-600', 'text-white');
+            sWrap?.classList.remove('hidden');
+            dWrap?.classList.remove('hidden');
+            fWrap?.classList.remove('hidden');
         }
         
         if (window.currentProfileName) {
@@ -163,53 +116,190 @@
     window.updateBadges = async function(playerName, activeData) {
         const gBadge = document.getElementById('gcttaRatingBadge');
         const rBadge = document.getElementById('rcRatingBadge');
-        
-        gBadge.innerHTML = 'GCTTA: <i class="fa-solid fa-spinner fa-spin"></i>';
-        rBadge.innerHTML = 'RC: <i class="fa-solid fa-spinner fa-spin"></i>';
-        
+        const trueBadge = document.getElementById('adminTrueRatingBadge');
+        const trueText = document.getElementById('adminTrueRatingText');
+        const volBadge = document.getElementById('volatilityBadge');
+        const volText = document.getElementById('volatilityBadgeText');
+        const divBadge = document.getElementById('playerDivBadge');
+
+        if (activeData.home_division) {
+            divBadge.innerText = `Division ${activeData.home_division}`;
+            divBadge.classList.remove('hidden');
+        } else if (divBadge) {
+            divBadge.classList.add('hidden');
+        }
+
+        // Update Volatility Badge (1-100)
+        const volVal = activeData.vol !== undefined ? Number(activeData.vol).toFixed(0) : '25';
+        const tierName = activeData.vol_tier?.tier || 'Standard Form';
+        if (volText && volBadge) {
+            volText.innerHTML = `VOL: ${volVal} <span class="hidden sm:inline text-[10px] opacity-80">• ${tierName}</span>`;
+            volBadge.className = "font-mono font-extrabold px-3 py-1.5 rounded-xl text-xs border shadow-sm flex items-center gap-1.5 cursor-pointer ";
+            if (volVal <= 25) {
+                volBadge.className += "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/30";
+            } else if (volVal <= 55) {
+                volBadge.className += "bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border-sky-500/30";
+            } else if (volVal <= 80) {
+                volBadge.className += "bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30";
+            } else {
+                volBadge.className += "bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border-rose-500/30";
+            }
+        }
+
+        // Admin-Only True Rating Visibility
+        if (activeData.is_admin_view && activeData.true_rating !== undefined && trueBadge && trueText) {
+            trueText.innerText = `TRUE: ${activeData.true_rating}`;
+            trueBadge.classList.remove('hidden');
+            trueBadge.classList.add('flex');
+        } else if (trueBadge) {
+            trueBadge.classList.add('hidden');
+            trueBadge.classList.remove('flex');
+        }
+
         if (window.useRCData) {
-            rBadge.innerHTML = `RC: ${activeData.rating} <span class="text-[10px] text-blue-300 font-bold ml-1">±${activeData.rd}</span>`;
+            rBadge.innerHTML = `<i class="fa-solid fa-globe text-blue-400 text-[10px]"></i><span>RC: ${activeData.rating} <span class="text-[10px] text-blue-300 font-bold ml-0.5">±${activeData.rd}</span></span>`;
             try {
                 const gRes = await fetch(`/api/stats/${encodeURIComponent(playerName)}`);
                 if (!gRes.ok) throw new Error();
                 const gData = await gRes.json();
-                gBadge.innerHTML = `GCTTA: ${gData.rating} <span class="text-[10px] text-sky-300 font-bold ml-1">±${gData.rd}</span>`;
-            } catch(e) { gBadge.innerHTML = "GCTTA: N/A"; }
+                gBadge.innerHTML = `<i class="fa-solid fa-chart-line text-sky-400 text-[10px]"></i><span>GCTTA: ${gData.rating} <span class="text-[10px] text-sky-300 font-bold ml-0.5">±${gData.rd}</span></span>`;
+            } catch(e) {
+                gBadge.innerHTML = "GCTTA: N/A";
+            }
         } else {
-            gBadge.innerHTML = `GCTTA: ${activeData.rating} <span class="text-[10px] text-sky-300 font-bold ml-1">±${activeData.rd}</span>`;
+            gBadge.innerHTML = `<i class="fa-solid fa-chart-line text-sky-400 text-[10px]"></i><span>GCTTA: ${activeData.rating} <span class="text-[10px] text-sky-300 font-bold ml-0.5">±${activeData.rd}</span></span>`;
             try {
                 const rRes = await fetch(`/api/stats/${encodeURIComponent(playerName)}?source=rc`);
                 if (!rRes.ok) throw new Error();
                 const rData = await rRes.json();
-                rBadge.innerHTML = `RC: ${rData.rating} <span class="text-[10px] text-blue-300 font-bold ml-1">±${rData.rd}</span>`;
-            } catch(e) { rBadge.innerHTML = "RC: Unlinked"; }
+                rBadge.innerHTML = `<i class="fa-solid fa-globe text-blue-400 text-[10px]"></i><span>RC: ${rData.rating} <span class="text-[10px] text-blue-300 font-bold ml-0.5">±${rData.rd}</span></span>`;
+            } catch(e) {
+                rBadge.innerHTML = `<span class="opacity-60">RC: Unlinked</span>`;
+            }
         }
     };
 
-    // New Detailed Score Modal Injector
+    window.openVolatilityGuideModal = function() {
+        const modal = document.getElementById('volatilityGuideModal');
+        const banner = document.getElementById('playerCurrentVolatilityBanner');
+        if (!modal) return;
+
+        if (window.currentProfileData && banner) {
+            const d = window.currentProfileData;
+            const vol = d.vol !== undefined ? Number(d.vol).toFixed(1) : '25.0';
+            const tier = d.vol_tier || { tier: 'Standard Form', description: 'Typical competitive club form.' };
+            banner.innerHTML = `
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs font-extrabold uppercase tracking-wider text-slate-400">${d.name}'s Volatility</span>
+                    <span class="font-mono font-black text-base text-white">${vol} / 100</span>
+                </div>
+                <div class="text-xs font-bold text-sky-400">${tier.tier}</div>
+                <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">${tier.description}</p>
+            `;
+        }
+        modal.classList.remove('hidden');
+    };
+
+    window.showRatingHistory = async function(playerName, source = 'gctta') {
+        const modal = document.getElementById('ratingHistoryModal');
+        const content = document.getElementById('historyContent');
+        const subtitle = document.getElementById('ledgerSubtitle');
+        
+        modal.classList.remove('hidden');
+        content.innerHTML = '<div class="text-slate-500 text-center py-8"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><br>Loading ledger...</div>';
+        subtitle.innerText = source === 'rc' ? 'Ratings Central Match Ledger' : 'GCTTA Rating, SD & Decay Ledger';
+        
+        try {
+            const sourceParam = source === 'rc' ? '?source=rc' : '';
+            const res = await fetch(`/api/rating_history/${encodeURIComponent(playerName)}${sourceParam}`);
+            const history = await res.json();
+            
+            if (!history || history.length === 0) {
+                content.innerHTML = '<div class="text-slate-500 text-center py-8 text-xs font-bold">No historical ledger entries recorded yet.</div>';
+                return;
+            }
+
+            content.innerHTML = history.map(h => {
+                const isDecay = h.is_decay;
+                const isCheckpoint = h.opponent === 'Admin Calibration';
+                
+                const rDeltaNum = Number(h.rating_change || 0);
+                const rDelta = rDeltaNum > 0 ? `+${rDeltaNum.toFixed(1)}` : rDeltaNum.toFixed(1);
+                const rColor = rDeltaNum > 0 ? 'text-emerald-400' : (rDeltaNum < 0 ? 'text-rose-400' : 'text-slate-500');
+                
+                const sdDeltaNum = Number(h.sd_change || 0);
+                const sdDelta = sdDeltaNum > 0 ? `+${sdDeltaNum.toFixed(1)}` : sdDeltaNum.toFixed(1);
+                const sdColor = sdDeltaNum > 0 ? 'text-amber-400' : (sdDeltaNum < 0 ? 'text-sky-400' : 'text-slate-500');
+
+                const hasTrue = h.true_rating !== undefined;
+                const tDeltaNum = Number(h.true_rating_change || 0);
+                const tDelta = tDeltaNum > 0 ? `+${tDeltaNum.toFixed(1)}` : tDeltaNum.toFixed(1);
+
+                let rowBorder = 'border-white/5';
+                let titleHtml = `<span class="text-white font-bold text-xs">vs ${h.opponent || 'Opponent'}</span>`;
+
+                if (isDecay) {
+                    rowBorder = 'border-amber-500/25 bg-amber-500/5';
+                    titleHtml = `<span class="text-amber-300 font-extrabold text-xs flex items-center gap-1.5"><i class="fa-solid fa-clock-rotate-left text-amber-400"></i> ${h.opponent}</span>`;
+                } else if (isCheckpoint) {
+                    rowBorder = 'border-purple-500/30 bg-purple-500/10';
+                    titleHtml = `<span class="text-purple-300 font-extrabold text-xs flex items-center gap-1.5"><i class="fa-solid fa-lock text-purple-400"></i> Admin Calibration Checkpoint</span>`;
+                }
+
+                return `
+                <div class="p-3 bg-black/40 rounded-xl border ${rowBorder} flex items-center justify-between gap-2 hover:border-white/20 transition-colors">
+                    <div class="min-w-0">
+                        <div class="truncate mb-0.5">${titleHtml}</div>
+                        <div class="text-[10px] text-slate-400 font-mono">${h.date} ${h.result_str ? `• <span class="text-slate-300 font-bold">${h.result_str}</span>` : ''}</div>
+                    </div>
+                    <div class="flex items-center gap-3 shrink-0">
+                        <div class="text-right">
+                            <div class="text-sky-400 font-mono font-black text-sm leading-none">${h.rating}</div>
+                            <div class="text-[10px] ${rColor} font-mono font-bold mt-1">${rDeltaNum !== 0 ? rDelta : '0.0'}</div>
+                        </div>
+                        ${hasTrue ? `
+                        <div class="text-right border-l border-white/10 pl-2.5">
+                            <div class="text-purple-300 font-mono font-black text-xs leading-none" title="True Rating">T: ${h.true_rating}</div>
+                            <div class="text-[10px] text-purple-400 font-mono font-bold mt-1">${tDeltaNum !== 0 ? tDelta : '0.0'}</div>
+                        </div>
+                        ` : ''}
+                        <div class="text-right border-l border-white/10 pl-2.5 w-14">
+                            <div class="text-slate-300 font-mono font-bold text-xs leading-none">±${h.sd}</div>
+                            <div class="text-[10px] ${sdColor} font-mono font-bold mt-1">${sdDeltaNum !== 0 ? sdDelta : '-'}</div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch(e) {
+            content.innerHTML = '<div class="text-rose-400 text-center py-8 text-xs font-bold">Failed to load history ledger.</div>';
+        }
+    };
+
     window.showMatchDetails = function(date, opponent, result, score, delta) {
         const modal = document.getElementById('matchDetailsModal');
         if(!modal) return;
         const formattedScore = (score && score !== 'null' && score !== 'undefined') ? score : 'Score Not Recorded';
         const formattedDelta = (delta && delta !== 0 && delta !== 'null') ? (delta > 0 ? '+' + Number(delta).toFixed(1) : Number(delta).toFixed(1)) : '0.0';
-        const deltaColor = delta > 0 ? 'text-emerald-400' : (delta < 0 ? 'text-red-400' : 'text-slate-500');
+        const deltaColor = delta > 0 ? 'text-emerald-400' : (delta < 0 ? 'text-rose-400' : 'text-slate-400');
         
-        let html = `
-            <div class="text-sm text-slate-400 mb-2 uppercase tracking-widest font-bold">${date}</div>
-            <div class="text-2xl font-black text-white mb-6">${result} vs <span class="text-sky-400">${opponent}</span></div>
-            <div class="bg-black/40 rounded-xl p-5 border border-white/5 mb-4 shadow-inner">
-                <div class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3">Individual Game Scores</div>
-                <div class="text-2xl md:text-3xl font-mono font-black text-white">${formattedScore}</div>
+        document.getElementById('matchDetailsContent').innerHTML = `
+            <div class="text-xs text-slate-400 mb-1 uppercase tracking-widest font-extrabold">${date}</div>
+            <div class="text-xl font-black text-white mb-5">${result} vs <span class="text-sky-400">${opponent}</span></div>
+            <div class="bg-black/50 rounded-xl p-4 border border-white/10 mb-4">
+                <div class="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest mb-2">Set / Game Score</div>
+                <div class="text-2xl font-mono font-black text-white">${formattedScore}</div>
             </div>
-            <div class="text-sm font-bold ${deltaColor} bg-black/20 py-2 rounded-lg border border-white/5 inline-block px-4">Rating Change: ${formattedDelta}</div>
+            <div class="text-xs font-mono font-extrabold ${deltaColor} bg-black/40 py-2 px-4 rounded-xl border border-white/10 inline-block">Rating Shift: ${formattedDelta}</div>
         `;
-        document.getElementById('matchDetailsContent').innerHTML = html;
         modal.classList.remove('hidden');
     };
 
     window.loadStats = async function(playerName, pushHistory = true) {
+        if (!playerName) return;
         window.currentProfileName = playerName;
-        if (pushHistory) { history.pushState({ page: 'profile', name: playerName }, "", "#profile/" + encodeURIComponent(playerName)); }
+        if (pushHistory) {
+            history.pushState({ page: 'profile', name: playerName }, "", "#profile/" + encodeURIComponent(playerName));
+        }
         
         ['home', 'week', 'sheets', 'search', 'notices', 'community', 'live-center', 'rules', 'player-hub'].forEach(t => { 
             const el = document.getElementById(`tab-${t}`); 
@@ -234,16 +324,13 @@
             const d = await res.json();
             window.currentProfileData = d;
             
-            // Updates both GCTTA and RC badges side-by-side
             window.updateBadges(playerName, d);
-            
             window.renderProfile();
-            
         } catch(e) {
             window.currentProfileData = null;
             document.getElementById('gcttaRatingBadge').innerHTML = "GCTTA: N/A";
             document.getElementById('rcRatingBadge').innerHTML = "RC: N/A";
-            document.getElementById('matchHistory').innerHTML = '<div class="text-center py-10 text-red-500">Error loading profile data.</div>';
+            document.getElementById('matchHistory').innerHTML = '<div class="text-center py-10 text-rose-400 text-xs font-bold">Error loading profile data.</div>';
         }
     };
 
@@ -259,13 +346,13 @@
         
         if (toggleBg && toggleDot) {
             if (isCombined) {
-                toggleBg.classList.remove('bg-slate-600');
+                toggleBg.classList.remove('bg-slate-700');
                 toggleBg.classList.add('bg-sky-500');
-                toggleDot.classList.add('translate-x-5');
+                toggleDot.classList.add('translate-x-4');
             } else {
                 toggleBg.classList.remove('bg-sky-500');
-                toggleBg.classList.add('bg-slate-600');
-                toggleDot.classList.remove('translate-x-5');
+                toggleBg.classList.add('bg-slate-700');
+                toggleDot.classList.remove('translate-x-4');
             }
         }
         
@@ -280,59 +367,71 @@
 
         const histContainer = document.getElementById('matchHistory');
         if (!displayStats.match_history || displayStats.match_history.length === 0) {
-            histContainer.innerHTML = '<div class="p-10 text-center text-slate-500 italic border border-white/5 rounded-xl bg-slate-800/30 text-sm">No match history available for this filter.</div>';
+            histContainer.innerHTML = '<div class="p-10 text-center text-slate-500 text-xs font-semibold">No matches found for this filter.</div>';
             return;
         }
 
         histContainer.innerHTML = displayStats.match_history.map(m => {
             const won = m.result === 'Win';
-            const bgColor = won ? 'bg-green-500/10' : 'bg-red-500/10';
-            const borderColor = won ? 'border-green-500/20' : 'border-red-500/20';
-            const textColor = won ? 'text-green-400' : 'text-red-400';
-            const icon = won ? 'fa-check' : 'fa-xmark';
+            const borderLeft = won ? 'border-l-4 border-l-emerald-500' : 'border-l-4 border-l-rose-500';
+            const textColor = won ? 'text-emerald-400' : 'text-rose-400';
             
-            const delta = m.delta || 0;
+            const delta = Number(m.delta || 0);
             const deltaStr = (delta > 0 ? '+' : '') + delta.toFixed(1);
-            const deltaColor = delta > 0 ? 'text-emerald-400' : (delta < 0 ? 'text-red-400' : 'text-slate-500');
-            const deltaBadge = `<span class="${deltaColor} text-[10px] font-mono font-black ml-2 bg-black/40 px-1.5 py-0.5 rounded border border-white/5 shadow-inner">${deltaStr} <i class="fa-solid ${delta > 0 ? 'fa-arrow-trend-up' : (delta < 0 ? 'fa-arrow-trend-down' : 'fa-minus')} ml-1"></i></span>`;
+            const deltaColor = delta > 0 ? 'text-emerald-400' : (delta < 0 ? 'text-rose-400' : 'text-slate-500');
             
-            const fillBadge = m.type === 'Fill-in' ? `<span class="text-[9px] bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 px-2 py-0.5 rounded font-black uppercase tracking-widest ml-2">Fill-in</span>` : '';
-            
-            let detailsHtml = m.details ? `<div class="mt-3 text-xs font-mono text-slate-400 bg-black/20 p-2.5 rounded-lg border border-white/5 tracking-wider">${m.details}</div>` : '';
+            const fillBadge = m.type === 'Fill-in'
+                ? `<span class="text-[9px] bg-amber-500/15 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-md font-extrabold uppercase tracking-wider">Fill-in</span>`
+                : '';
+            const divLabel = m.division && m.division !== 'Unknown'
+                ? `<span class="text-[10px] text-slate-400 font-semibold">${m.division}</span>`
+                : '';
+
+            let detailsHtml = m.details
+                ? `<div class="mt-2 text-[11px] font-mono text-slate-400 bg-black/40 px-2.5 py-1.5 rounded-lg border border-white/5 inline-block">${m.details}</div>`
+                : '';
             
             return `
-            <div class="p-4 md:p-5 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors ${bgColor}">
-                <div class="flex justify-between items-start mb-2">
-                    <div class="flex items-center gap-2 md:gap-3 flex-wrap">
-                        <span class="${textColor} font-black text-sm md:text-base flex items-center"><i class="fa-solid ${icon} mr-1.5 md:mr-2"></i>${m.result}</span>
-                        <div class="flex items-center">
-                            <span class="text-[10px] md:text-xs text-slate-400 font-mono tracking-widest bg-black/40 px-2 py-0.5 rounded border ${borderColor}">${m.date}</span>
+            <div class="p-3.5 md:p-4 border-b border-white/5 last:border-0 hover:bg-white/[0.03] transition-colors ${borderLeft}">
+                <div class="flex justify-between items-center gap-2">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap mb-1">
+                            <span class="text-[10px] text-slate-400 font-mono">${m.date}</span>
+                            ${divLabel}
                             ${fillBadge}
                         </div>
+                        <div class="text-sm md:text-base text-white font-bold truncate">
+                            <span class="text-slate-500 text-xs font-extrabold uppercase mr-1">vs</span>
+                            <span class="hover:text-sky-400 cursor-pointer transition-colors" onclick="window.loadStats('${m.opponent.replace(/'/g, "\\'")}')">${m.opponent}</span>
+                        </div>
+                        ${detailsHtml}
                     </div>
-                    <div class="flex items-center cursor-pointer group" onclick="window.showMatchDetails('${m.date}', '${m.opponent.replace(/'/g, "\\'")}', '${m.result}', '${m.score || ''}', ${m.delta || 0})">
-                        <span class="font-black text-base md:text-lg ${textColor} font-mono tracking-tighter bg-black/40 px-3 py-0.5 rounded-lg border ${borderColor} shadow-inner group-hover:bg-white/10 transition-colors" title="View Score Details">${m.score} <i class="fa-solid fa-expand text-[10px] ml-1 opacity-50 group-hover:opacity-100"></i></span>
-                        ${deltaBadge}
+
+                    <div class="flex items-center gap-2.5 shrink-0 cursor-pointer" onclick="window.showMatchDetails('${m.date}', '${m.opponent.replace(/'/g, "\\'")}', '${m.result}', '${m.details || m.score || ''}', ${delta})">
+                        <div class="text-right">
+                            <div class="font-mono font-black text-base ${textColor} leading-none">${m.score}</div>
+                            <div class="${deltaColor} text-[10px] font-mono font-bold mt-1">${deltaStr}</div>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-[10px] text-slate-600"></i>
                     </div>
                 </div>
-                <div class="text-sm md:text-base text-slate-200"><span class="text-slate-500 text-xs mr-2 uppercase font-bold tracking-widest">vs</span> <span class="font-bold hover:text-sky-400 cursor-pointer transition-colors" onclick="window.loadStats('${m.opponent.replace(/'/g, "\\'")}')">${m.opponent}</span></div>
-                ${detailsHtml}
             </div>`;
         }).join('');
-    }
+    };
 
     window.switchProfileTab = function(tabId) {
         document.getElementById('profile-tab-history').classList.add('hidden');
         document.getElementById('profile-tab-insights').classList.add('hidden');
         
-        document.getElementById('tab-btn-history').classList.remove('text-yellow-500', 'border-yellow-500');
-        document.getElementById('tab-btn-history').classList.add('text-slate-500', 'border-transparent');
-        document.getElementById('tab-btn-insights').classList.remove('text-yellow-500', 'border-yellow-500');
-        document.getElementById('tab-btn-insights').classList.add('text-slate-500', 'border-transparent');
-        
+        const btnHist = document.getElementById('tab-btn-history');
+        const btnIns = document.getElementById('tab-btn-insights');
+
+        btnHist.className = "flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider text-slate-400 hover:text-white transition-all flex items-center justify-center gap-2";
+        btnIns.className = "flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider text-slate-400 hover:text-white transition-all flex items-center justify-center gap-2";
+
         document.getElementById('profile-tab-' + tabId).classList.remove('hidden');
-        document.getElementById('tab-btn-' + tabId).classList.add('text-yellow-500', 'border-yellow-500');
-        document.getElementById('tab-btn-' + tabId).classList.remove('text-slate-500', 'border-transparent');
+        const activeBtn = document.getElementById('tab-btn-' + tabId);
+        activeBtn.className = "flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider bg-sky-600 text-white shadow transition-all flex items-center justify-center gap-2";
 
         if (tabId === 'insights') window.renderInsights();
     };
@@ -349,19 +448,19 @@
         h2hSearch.parentNode.replaceChild(newSearch, h2hSearch);
         
         newSearch.value = '';
-        document.getElementById('h2h-results-area').innerHTML = '<div class="text-center py-16 text-slate-500"><div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/5"><i class="fa-solid fa-magnifying-glass text-2xl"></i></div><p class="font-bold text-sm">Search for an opponent to compare stats.</p></div>';
+        document.getElementById('h2h-results-area').innerHTML = '<div class="text-center py-12 text-slate-500"><i class="fa-solid fa-magnifying-glass text-2xl mb-2"></i><p class="font-bold text-xs">Search for an opponent to compare head-to-head.</p></div>';
         
         newSearch.addEventListener('input', (e) => {
             const v = e.target.value.toLowerCase().trim();
             h2hSugg.innerHTML = '';
             if (v.length < 2) { h2hSugg.classList.add('hidden'); return; }
             
-            const matches = window.allPlayersRaw.filter(p => p.toLowerCase().includes(v) && p !== window.currentProfileName).slice(0, 5);
+            const matches = window.allPlayersRaw.filter(p => p.toLowerCase().includes(v) && p !== window.currentProfileName).slice(0, 6);
             if (matches.length > 0) {
                 h2hSugg.classList.remove('hidden');
                 matches.forEach(m => {
                     let div = document.createElement('div');
-                    div.className = "px-4 py-3 hover:bg-sky-900/30 cursor-pointer text-white font-bold border-b border-white/5 transition-colors";
+                    div.className = "px-4 py-2.5 hover:bg-sky-500/20 cursor-pointer text-white font-bold text-xs border-b border-white/5";
                     div.innerText = m;
                     div.onclick = () => {
                         newSearch.value = m;
@@ -375,12 +474,6 @@
             }
         });
         
-        document.addEventListener('click', (e) => {
-            if (!newSearch.contains(e.target) && !h2hSugg.contains(e.target)) {
-                h2hSugg.classList.add('hidden');
-            }
-        });
-        
         document.getElementById('compareModal').classList.remove('hidden');
         setTimeout(() => newSearch.focus(), 100);
     };
@@ -388,7 +481,7 @@
 
     async function runCompare(p1, p2) {
         const resultsArea = document.getElementById('h2h-results-area');
-        resultsArea.innerHTML = '<div class="text-center py-16 text-sky-500"><i class="fa-solid fa-spinner fa-spin text-3xl mb-3"></i><p class="font-bold text-sm">Simulating match up...</p></div>';
+        resultsArea.innerHTML = '<div class="text-center py-12 text-sky-400"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><p class="font-bold text-xs">Simulating matchup...</p></div>';
         
         try {
             const sourceParam = window.useRCData ? '&source=rc' : '';
@@ -398,8 +491,6 @@
             if (data.error) throw new Error(data.error);
             
             const p1Lower = p1.toLowerCase();
-            const p2Lower = p2.toLowerCase();
-            
             const historyHtml = data.history && data.history.length > 0 
                 ? data.history.map(m => {
                     const p1IsMatchP1 = m.p1.toLowerCase() === p1Lower;
@@ -407,73 +498,49 @@
                     const ourP2Score = p1IsMatchP1 ? m.s2 : m.s1;
                     const isP1Win = ourP1Score > ourP2Score;
                     return `
-                    <div class="bg-black/30 p-3 rounded-xl border ${isP1Win ? 'border-sky-500/20' : 'border-red-500/20'} mb-2 flex justify-between items-center">
+                    <div class="bg-black/40 p-3 rounded-xl border ${isP1Win ? 'border-sky-500/25' : 'border-rose-500/25'} mb-2 flex justify-between items-center">
                         <div>
-                            <div class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">${m.date}</div>
-                            <div class="text-white font-bold text-sm mt-0.5">${isP1Win ? `<span class="text-sky-400">${p1}</span> won` : `<span class="text-red-400">${p2}</span> won`}</div>
+                            <div class="text-[10px] text-slate-400 font-mono">${m.date}</div>
+                            <div class="text-white font-bold text-xs mt-0.5">${isP1Win ? `<span class="text-sky-400">${p1}</span> won` : `<span class="text-rose-400">${p2}</span> won`}</div>
                         </div>
-                        <div class="font-mono font-black ${isP1Win ? 'text-sky-400' : 'text-red-400'} text-lg bg-black/50 px-2 py-0.5 rounded shadow-inner border border-white/5">${ourP1Score}-${ourP2Score}</div>
-                    </div>`
+                        <div class="font-mono font-black ${isP1Win ? 'text-sky-400' : 'text-rose-400'} text-sm bg-black/50 px-2.5 py-1 rounded-lg border border-white/5">${ourP1Score}-${ourP2Score}</div>
+                    </div>`;
                 }).join('')
-                : '<div class="text-center py-6 text-slate-500 italic text-sm border border-white/5 bg-black/20 rounded-xl">No previous matches recorded between these two players.</div>';
+                : '<div class="text-center py-6 text-slate-500 text-xs border border-white/5 bg-black/20 rounded-xl">No previous encounters recorded.</div>';
 
             resultsArea.innerHTML = `
-                <div class="grid grid-cols-2 gap-4 mb-4">
-                    <div class="bg-black/40 border border-white/5 rounded-2xl p-4 text-center">
-                        <div class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">${p1} Wins</div>
-                        <div class="text-4xl font-black text-sky-400">${data.p1_wins}</div>
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <div class="bg-black/40 border border-white/10 rounded-xl p-3.5 text-center">
+                        <div class="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider mb-1 truncate">${p1} Wins</div>
+                        <div class="text-3xl font-black text-sky-400 font-mono">${data.p1_wins}</div>
                     </div>
-                    <div class="bg-black/40 border border-white/5 rounded-2xl p-4 text-center">
-                        <div class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">${p2} Wins</div>
-                        <div class="text-4xl font-black text-red-400">${data.p2_wins}</div>
-                    </div>
-                </div>
-                
-                <div class="bg-slate-800/80 rounded-2xl border border-white/10 p-4 mb-6">
-                    <div class="text-xs text-center text-slate-400 font-bold uppercase tracking-widest mb-4">Matchup Analysis & Simulated Odds</div>
-                    <div class="flex justify-between items-center mb-4">
-                        <div class="text-center w-1/3">
-                            <div class="text-white font-bold">${data.p1_rating} <span class="text-xs text-slate-400 font-normal">±${data.p1_rd}</span></div>
-                            <div class="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">Current Rating</div>
-                        </div>
-                        <div class="w-1/3 flex justify-center">
-                            <div class="bg-slate-900 px-3 py-1 rounded-full border border-white/10 text-[10px] font-bold text-slate-300 tracking-widest">VS</div>
-                        </div>
-                        <div class="text-center w-1/3">
-                            <div class="text-white font-bold">${data.p2_rating} <span class="text-xs text-slate-400 font-normal">±${data.p2_rd}</span></div>
-                            <div class="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">Current Rating</div>
-                        </div>
-                    </div>
-                    
-                    <div class="bg-black/40 rounded-xl p-3 border border-white/5">
-                        <div class="flex justify-between text-xs font-bold mb-2 uppercase tracking-wide">
-                            <span class="text-sky-400">${data.p1_prob}% Win Prob</span>
-                            <span class="text-red-400">${data.p2_prob}% Win Prob</span>
-                        </div>
-                        <div class="w-full bg-slate-700 h-2 rounded-full overflow-hidden flex">
-                            <div class="bg-sky-500 h-full transition-all duration-1000" style="width: ${data.p1_prob}%"></div>
-                            <div class="bg-red-500 h-full transition-all duration-1000" style="width: ${data.p2_prob}%"></div>
-                        </div>
-                        <div class="flex justify-between mt-3">
-                            <div class="bg-slate-900 px-3 py-1.5 rounded-lg border border-white/10 flex flex-col items-start">
-                                <span class="text-slate-500 uppercase font-bold tracking-widest text-[8px] block mb-0.5">Simulated Odds</span>
-                                <span class="text-sky-300 font-mono font-bold text-sm">$${data.p1_odds}</span>
-                            </div>
-                            <div class="bg-slate-900 px-3 py-1.5 rounded-lg border border-white/10 flex flex-col items-end">
-                                <span class="text-slate-500 uppercase font-bold tracking-widest text-[8px] block mb-0.5">Simulated Odds</span>
-                                <span class="text-red-300 font-mono font-bold text-sm">$${data.p2_odds}</span>
-                            </div>
-                        </div>
+                    <div class="bg-black/40 border border-white/10 rounded-xl p-3.5 text-center">
+                        <div class="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider mb-1 truncate">${p2} Wins</div>
+                        <div class="text-3xl font-black text-rose-400 font-mono">${data.p2_wins}</div>
                     </div>
                 </div>
                 
-                <h3 class="text-white font-black text-sm uppercase tracking-widest mb-3 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left text-slate-500"></i> Match History</h3>
-                <div class="space-y-1">
-                    ${historyHtml}
+                <div class="bg-black/40 rounded-xl border border-white/10 p-4 mb-5">
+                    <div class="flex justify-between items-center mb-3 text-xs font-mono font-bold">
+                        <span class="text-white">${data.p1_rating} <span class="text-slate-500">±${data.p1_rd}</span></span>
+                        <span class="text-[10px] text-slate-400 uppercase font-sans font-extrabold tracking-widest">Win Probability</span>
+                        <span class="text-white">${data.p2_rating} <span class="text-slate-500">±${data.p2_rd}</span></span>
+                    </div>
+                    <div class="flex justify-between text-xs font-black mb-1.5 font-mono">
+                        <span class="text-sky-400">${data.p1_prob}% ($${data.p1_odds})</span>
+                        <span class="text-rose-400">${data.p2_prob}% ($${data.p2_odds})</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden flex">
+                        <div class="bg-sky-500 h-full" style="width: ${data.p1_prob}%"></div>
+                        <div class="bg-rose-500 h-full" style="width: ${data.p2_prob}%"></div>
+                    </div>
                 </div>
+                
+                <h3 class="text-slate-400 font-extrabold text-[11px] uppercase tracking-wider mb-2">Previous Encounters</h3>
+                <div class="space-y-1.5">${historyHtml}</div>
             `;
         } catch(e) {
-            resultsArea.innerHTML = `<div class="text-center py-16 text-red-500"><i class="fa-solid fa-circle-exclamation text-3xl mb-3"></i><p class="font-bold text-sm">Could not load comparison data.</p></div>`;
+            resultsArea.innerHTML = `<div class="text-center py-12 text-rose-400 text-xs font-bold">Could not load comparison data.</div>`;
         }
     }
 
@@ -483,189 +550,53 @@
         
         if (!window.currentProfileData) return;
         const d = window.currentProfileData;
-        
         const insights = d.insights || {};
         const totalMatches = d.career_matches || 0;
         
+        loading.classList.add('hidden');
+        content.classList.remove('hidden');
+
         if (totalMatches === 0) {
-            loading.classList.add('hidden');
-            content.classList.remove('hidden');
-            content.innerHTML = '<div class="col-span-1 text-center text-slate-500 italic py-10 bg-slate-800/30 rounded-xl">Not enough matches for insights.</div>';
+            content.innerHTML = '<div class="text-center text-slate-500 text-xs py-10">Not enough matches for insights.</div>';
             return;
         }
 
-        loading.classList.add('hidden');
-        content.classList.remove('hidden');
-        content.className = "flex flex-col gap-6";
-
-        function renderInsightSection(title, dataArray, descriptionTemplate) {
+        function renderInsightCard(title, icon, dataArray, desc) {
             dataArray = dataArray || [];
             const count = dataArray.length;
-            const percentage = totalMatches > 0 ? ((count / totalMatches) * 100).toFixed(1) + '%' : '0%';
-            
-            let sectionWins = 0;
-            dataArray.forEach(m => {
-                if (m.result && m.result.includes('Win')) sectionWins++;
-            });
-            let winPercentage = count > 0 ? Math.round((sectionWins / count) * 100) + '%' : '0%';
-            
-            let desc = descriptionTemplate
-                .replace('{percentage}', `<span class="font-bold text-white">${percentage}</span>`)
-                .replace('{winPercentage}', `<span class="font-bold text-emerald-400">${winPercentage}</span>`);
-            
-            const topMatches = dataArray.slice(0, 3);
-            const extraMatches = dataArray.slice(3);
-            
-            let renderMatchRow = (m) => {
-                let resText = m.result;
-                let resClass = m.result.includes('Win') ? 'text-emerald-400' : 'text-red-400';
-                
-                if (m.delta !== undefined && m.delta !== null) {
-                    let deltaStr = '';
-                    if (m.delta > 0) deltaStr = `<span class="text-emerald-500 ml-1 font-mono text-[10px]">(▲${Math.round(m.delta)})</span>`;
-                    else if (m.delta < 0) deltaStr = `<span class="text-red-500 ml-1 font-mono text-[10px]">(▼${Math.abs(Math.round(m.delta))})</span>`;
-                    else deltaStr = `<span class="text-slate-500 ml-1 font-mono text-[10px]">(0)</span>`;
-                    resText += ` ${deltaStr}`;
-                }
-                
-                const matchContext = m.season ? m.season : (m.date ? m.date : 'RC Match');
-                
-                return `
-                    <div class="flex justify-between items-center py-2.5 border-b border-white/5 last:border-0 text-sm cursor-pointer hover:bg-white/5 px-3 -mx-3 rounded-lg transition-colors group" onclick="window.showMatchDetails('${m.date || matchContext}', '${m.opponent.replace(/'/g, "\\'")}', '${m.result}', '${m.score || ''}', ${m.delta || 0})">
-                        <div class="font-bold text-white group-hover:text-sky-400 transition-colors">${m.opponent} <span class="text-xs text-slate-500 font-normal">(${matchContext})</span></div>
-                        <div class="${resClass} font-bold">${resText}</div>
-                    </div>
-                `;
-            };
-            
-            let topRowsHtml = topMatches.map(renderMatchRow).join('');
-            let extraRowsHtml = extraMatches.map(renderMatchRow).join('');
-            
-            let moreMatchesHtml = '';
-            if (extraMatches.length > 0) {
-                const safeTitle = title.replace(/\s+/g, '-').replace(/<[^>]*>?/gm, '').toLowerCase(); 
-                moreMatchesHtml = `
-                    <div id="extra-${safeTitle}" class="hidden flex-col mt-2">
-                        ${extraRowsHtml}
-                    </div>
-                    <div class="mt-2 text-xs text-cyan-400 cursor-pointer flex items-center justify-between hover:text-cyan-300 transition-colors bg-black/20 p-2 rounded-lg" onclick="document.getElementById('extra-${safeTitle}').classList.toggle('hidden'); this.querySelector('i').classList.toggle('fa-chevron-down'); this.querySelector('i').classList.toggle('fa-chevron-up');">
-                        <span class="font-bold uppercase tracking-widest">More Matches</span>
-                        <i class="fa-solid fa-chevron-down"></i>
-                    </div>
-                `;
-            }
-            
-            let matchesTableHtml = '';
-            if (count > 0) {
-                matchesTableHtml = `
-                    <div class="w-full bg-black/20 p-4 rounded-xl border border-white/5">
-                        <div class="flex justify-between items-center text-slate-500 text-[10px] uppercase font-bold tracking-widest border-b border-white/10 pb-2 mb-2">
-                            <div>Opponent</div>
-                            <div>Result</div>
-                        </div>
-                        <div class="flex flex-col">
-                            ${topRowsHtml}
-                        </div>
-                        ${moreMatchesHtml}
-                    </div>
-                `;
-            }
+            const pct = totalMatches > 0 ? ((count / totalMatches) * 100).toFixed(1) + '%' : '0%';
+            const preview = dataArray.slice(0, 3).map(m => `
+                <div class="flex justify-between items-center py-1.5 border-b border-white/5 last:border-0 text-xs">
+                    <span class="text-slate-300 font-semibold truncate pr-2">${m.opponent}</span>
+                    <span class="${m.result.includes('Win') ? 'text-emerald-400' : 'text-rose-400'} font-mono font-bold shrink-0">${m.result}</span>
+                </div>
+            `).join('');
 
             return `
-                <div class="mb-8">
-                    <div class="flex items-center justify-between mb-2">
-                        <h4 class="text-cyan-500 font-semibold text-2xl">${title}</h4>
-                        <span class="text-white text-2xl font-medium">${count}</span>
+            <div class="bg-black/40 border border-white/10 rounded-xl p-4 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-xs font-black uppercase tracking-wider text-sky-400 flex items-center gap-1.5"><i class="fa-solid ${icon}"></i> ${title}</span>
+                        <span class="font-mono font-black text-lg text-white">${count} <span class="text-[10px] text-slate-500 font-normal">(${pct})</span></span>
                     </div>
-                    <p class="text-sm text-slate-400 mb-4 leading-relaxed">${desc}</p>
-                    ${matchesTableHtml}
+                    <p class="text-[11px] text-slate-400 mb-3">${desc}</p>
                 </div>
-            `;
+                ${count > 0 ? `<div class="bg-black/40 rounded-lg p-2.5 border border-white/5">${preview}</div>` : '<div class="text-[11px] text-slate-600 italic">None recorded yet</div>'}
+            </div>`;
         }
-        
-        let wins = d.career_wins || 0;
-        let losses = d.career_losses || 0;
-        let winRate = totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0;
-        let rating = d.rating || 1500;
-        let name = d.name || 'Player';
-        let firstYear = d.first_year || "unknown";
-        
-        let html = `
-            <div class="mb-8 text-center pt-2">
-                <h3 class="text-3xl text-white font-bold tracking-tight">${name}</h3>
-                <p class="text-slate-400 mt-1">Rated ${rating}</p>
-            </div>
-            
-            <div class="border-t border-b border-white/10 py-6 mb-8 text-sm text-slate-300 leading-relaxed">
-                With ${wins} wins and ${losses} losses, they've won <span class="text-yellow-500 font-bold">${winRate}%</span> of their ${totalMatches} career matches. They have been competing in events since ${firstYear}.
+
+        content.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                ${renderInsightCard('Clean Sweeps', 'fa-broom', insights.sweeps, 'Matches won without dropping a single set.')}
+                ${renderInsightCard('Clutch Close Calls', 'fa-fire', insights.close_calls, 'Matches decided in the final possible set.')}
+                ${renderInsightCard('Heavy Swings', 'fa-bolt', insights.big_swings, 'Matches with major rating shifts (±45+ pts).')}
+                ${renderInsightCard('Blowouts', 'fa-wind', insights.blowouts, 'Matches lost in straight sets.')}
             </div>
         `;
-        
-        html += renderInsightSection(
-            'Sweeps', 
-            insights.sweeps, 
-            "Matches where the player never lost a game. Matches like these happened {percentage} of the time and, and he won them all."
-        );
-        
-        html += renderInsightSection(
-            'Blowouts', 
-            insights.blowouts, 
-            "Matches where the player never won a game. Matches like these happened {percentage} of the time and, and he lost them all."
-        );
-        
-        html += renderInsightSection(
-            'Close Calls', 
-            insights.close_calls, 
-            "Matches that came down to the final game. Matches like these happened {percentage} of the time and he won about {winPercentage} of them."
-        );
-        
-        html += renderInsightSection(
-            'Big Swings', 
-            insights.big_swings, 
-            "Matches where large gains or losses were made because of the big difference in the opponent's rating. Matches like these happened {percentage} of the time and he won about {winPercentage} of them."
-        );
-        
-        const warningHtml = window.useRCData ? '' : ' <span class="text-xs text-slate-500 font-normal ml-2 block sm:inline mt-1 sm:mt-0 tracking-normal">(Requires detailed point scoring data, which will take time and resources to fully backfill)</span>';
-        
-        html += renderInsightSection(
-            'Nail Biters' + warningHtml, 
-            insights.nail_biters, 
-            "Matches that came down to last 2 points of the last match. Matches like these happened {percentage} of the time and he won about {winPercentage} of them."
-        );
-        
-        html += renderInsightSection(
-            'Strong Starts' + warningHtml, 
-            insights.strong_starts, 
-            "Matches where the player won the first game. Matches like these happened {percentage} of the time and he won about {winPercentage} of them."
-        );
-        
-        html += renderInsightSection(
-            'Comebacks' + warningHtml, 
-            insights.comebacks, 
-            "After being 1 set away from losing the match, the player won straight sets to win the match. Matches like these happened {percentage} of the time and, and he won them all."
-        );
-        
-        html += renderInsightSection(
-            'Letdowns' + warningHtml, 
-            insights.letdowns, 
-            "After needing 1 set to win, the player ended up losing the match. Matches like these happened {percentage} of the time and, and he lost them all."
-        );
-        
-        html += renderInsightSection(
-            'Merciless' + warningHtml, 
-            insights.merciless, 
-            "Matches where the player had a game where they won or lost at zero. Matches like these happened {percentage} of the time and he won about {winPercentage} of them."
-        );
-
-        if (!html) {
-            html = '<div class="text-center text-slate-500 italic py-10 bg-slate-800/30 rounded-xl">Insights will appear here as more match data is collected.</div>';
-        }
-
-        content.innerHTML = html;
     };
 
     // ==========================================
-    // STANDINGS / LEADERBOARDS
+    // STANDINGS / LEADERBOARDS (FIXED SORTING)
     // ==========================================
     window.loadDivisionLeaderboard = async function() {
         const season = document.getElementById('boardSeason')?.value;
@@ -674,7 +605,7 @@
         
         if (!list || !season || !division) return;
         
-        list.innerHTML = '<div class="text-center py-20 text-sky-500"><i class="fa-solid fa-spinner fa-spin text-4xl mb-4"></i><p class="text-slate-500 animate-pulse">Loading standings...</p></div>';
+        list.innerHTML = '<div class="text-center py-16 text-sky-400"><i class="fa-solid fa-spinner fa-spin text-3xl mb-3"></i><p class="text-slate-400 text-xs font-bold uppercase tracking-widest">Loading standings...</p></div>';
         
         try {
             const res = await fetch(`/api/rankings/${encodeURIComponent(season)}/${encodeURIComponent(division)}`);
@@ -690,7 +621,7 @@
             });
             
             if (rankings.length === 0) {
-                list.innerHTML = '<div class="text-center text-slate-500 italic mt-8 bg-slate-800/30 p-8 rounded-xl border border-white/5 text-sm">No regular season data available.</div>';
+                list.innerHTML = '<div class="text-center text-slate-500 mt-6 bg-black/30 p-8 rounded-xl border border-white/10 text-xs font-bold">No regular season matches recorded for this division yet.</div>';
                 return;
             }
             
@@ -698,36 +629,39 @@
                 const winRate = Math.round((r.regular.wins / r.regular.matches) * 100);
                 const isTop3 = index < 3;
                 
-                let rankBadge = `<div class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center font-black text-sm border border-white/10 shrink-0 shadow-inner">${index + 1}</div>`;
-                if(index === 0) rankBadge = `<div class="w-9 h-9 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-600 text-black flex items-center justify-center font-black text-lg shrink-0 shadow-[0_0_15px_rgba(250,204,21,0.5)] border border-yellow-200"><i class="fa-solid fa-trophy"></i></div>`;
-                if(index === 1) rankBadge = `<div class="w-8 h-8 rounded-full bg-gradient-to-br from-slate-300 to-slate-500 text-black flex items-center justify-center font-black text-base shrink-0 shadow-[0_0_15px_rgba(148,163,184,0.4)] border border-slate-200">2</div>`;
-                if(index === 2) rankBadge = `<div class="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-orange-700 text-black flex items-center justify-center font-black text-base shrink-0 shadow-[0_0_15px_rgba(249,115,22,0.4)] border border-orange-300">3</div>`;
+                let rankBadge = `<div class="w-7 h-7 rounded-lg bg-black/50 text-slate-400 flex items-center justify-center font-mono font-black text-xs border border-white/10 shrink-0">${index + 1}</div>`;
+                if(index === 0) rankBadge = `<div class="w-7 h-7 rounded-lg bg-yellow-500 text-black flex items-center justify-center font-black text-xs shrink-0 shadow-[0_0_12px_rgba(234,179,8,0.4)]"><i class="fa-solid fa-trophy"></i></div>`;
+                if(index === 1) rankBadge = `<div class="w-7 h-7 rounded-lg bg-slate-300 text-black flex items-center justify-center font-mono font-black text-xs shrink-0">2</div>`;
+                if(index === 2) rankBadge = `<div class="w-7 h-7 rounded-lg bg-amber-600 text-white flex items-center justify-center font-mono font-black text-xs shrink-0">3</div>`;
                 
+                const trueBadge = r.true_rating !== undefined
+                    ? `<span class="text-purple-400 ml-1.5">• T:${r.true_rating}</span>`
+                    : '';
+
                 return `
-                <div onclick="window.loadStats('${r.name.replace(/'/g, "\\'")}')" class="bg-slate-800/80 p-3 md:p-4 rounded-xl border ${isTop3 ? 'border-sky-500/30' : 'border-white/5'} mb-2 md:mb-3 flex items-center justify-between cursor-pointer hover:bg-slate-700 transition shadow-lg group">
-                    <div class="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+                <div onclick="window.loadStats('${r.name.replace(/'/g, "\\'")}')" class="glass-panel p-3 md:p-3.5 rounded-xl border ${isTop3 ? 'border-sky-500/30' : 'border-white/10'} mb-2 flex items-center justify-between cursor-pointer hover:border-sky-500/50 transition group">
+                    <div class="flex items-center gap-3 flex-1 min-w-0">
                         ${rankBadge}
-                        <div class="min-w-0 pr-3">
-                            <div class="font-black text-white text-sm md:text-base group-hover:text-sky-400 transition-colors truncate">${r.name}</div>
-                            <div class="text-[10px] md:text-xs text-slate-500 font-mono mt-0.5 flex items-center gap-2">
-                                <span>R: ${r.rating_val} <span class="text-slate-600">±${r.sigma}</span></span>
+                        <div class="min-w-0 pr-2">
+                            <div class="font-extrabold text-white text-sm group-hover:text-sky-400 transition-colors truncate">${r.name}</div>
+                            <div class="text-[11px] text-slate-400 font-mono mt-0.5 flex items-center gap-1.5">
+                                <span class="text-sky-400 font-bold">${r.rating_val}</span>
+                                <span class="text-slate-500">±${r.sigma}</span>
+                                ${trueBadge}
                             </div>
                         </div>
                     </div>
-                    <div class="flex items-center gap-4 md:gap-6 shrink-0">
-                        <div class="text-center hidden sm:block">
-                            <div class="text-white font-black text-sm">${r.regular.wins}-${r.regular.losses}</div>
-                            <div class="text-[9px] uppercase tracking-widest text-slate-500 font-bold">W-L</div>
+                    <div class="flex items-center gap-4 shrink-0">
+                        <div class="text-right">
+                            <div class="text-white font-mono font-bold text-xs">${r.regular.wins}W - ${r.regular.losses}L</div>
+                            <div class="text-[10px] font-mono ${winRate >= 50 ? 'text-emerald-400' : 'text-rose-400'} font-extrabold">${winRate}%</div>
                         </div>
-                        <div class="text-right w-16">
-                            <div class="text-lg md:text-xl font-black ${winRate >= 50 ? 'text-green-400' : 'text-red-400'} font-mono">${winRate}%</div>
-                        </div>
-                        <i class="fa-solid fa-chevron-right text-slate-600 text-xs hidden md:block"></i>
+                        <i class="fa-solid fa-chevron-right text-slate-600 text-[10px]"></i>
                     </div>
                 </div>`;
             }).join('');
         } catch(e) {
-            list.innerHTML = '<div class="text-center py-10 text-red-500 text-sm border border-red-500/20 bg-red-900/10 rounded-xl">Error loading standings.</div>';
+            list.innerHTML = '<div class="text-center py-10 text-rose-400 text-xs font-bold">Error loading standings.</div>';
         }
     };
 
@@ -741,64 +675,57 @@
         
         if (!list || !season) return;
         
-        list.innerHTML = '<div class="col-span-1 md:col-span-2 text-center py-20 text-sky-500"><i class="fa-solid fa-spinner fa-spin text-4xl mb-4"></i><p class="text-slate-500 animate-pulse">Loading match data...</p></div>';
+        list.innerHTML = '<div class="col-span-1 md:col-span-2 text-center py-16 text-sky-400"><i class="fa-solid fa-spinner fa-spin text-3xl mb-3"></i><p class="text-slate-400 text-xs font-bold uppercase tracking-widest">Loading matches...</p></div>';
         
         try {
             const res = await fetch(`/api/week/${encodeURIComponent(season)}/${encodeURIComponent(week)}`);
             const matches = await res.json();
             
             if (matches.length === 0) {
-                list.innerHTML = `<div class="col-span-1 md:col-span-2 text-center text-slate-500 italic mt-8 bg-slate-800/30 p-8 rounded-xl border border-white/5 text-sm">No matches found for Week ${week}.</div>`;
+                list.innerHTML = `<div class="col-span-1 md:col-span-2 text-center text-slate-500 mt-4 bg-black/30 p-8 rounded-xl border border-white/10 text-xs font-bold">No matches recorded for Week ${week}.</div>`;
                 return;
             }
             
-            let html = '';
-            matches.forEach(m => {
+            list.innerHTML = matches.map(m => {
                 let s1 = 0, s2 = 0;
                 if (m.score && m.score.includes('-')) {
                     const parts = m.score.split('-');
                     s1 = parseInt(parts[0]) || 0;
                     s2 = parseInt(parts[1]) || 0;
                 }
-                
                 const p1Won = s1 > s2;
                 const p2Won = s2 > s1;
+                const p1Fill = m.p1_fill ? `<span class="text-[8px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded ml-1 uppercase font-extrabold">Sub</span>` : '';
+                const p2Fill = m.p2_fill ? `<span class="text-[8px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded mr-1 uppercase font-extrabold">Sub</span>` : '';
                 
-                const p1FillBadge = m.p1_fill ? `<span class="text-[8px] bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 px-1.5 py-0.5 rounded ml-2 uppercase font-black tracking-widest align-middle shadow-inner">Fill-in</span>` : '';
-                const p2FillBadge = m.p2_fill ? `<span class="text-[8px] bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 px-1.5 py-0.5 rounded mr-2 uppercase font-black tracking-widest align-middle shadow-inner">Fill-in</span>` : '';
-                
-                html += `
-                <div class="bg-slate-800 p-4 rounded-xl border border-white/5 mb-3 shadow-lg hover:border-white/10 transition-colors">
-                    <div class="flex justify-between items-center mb-3 border-b border-white/5 pb-2">
-                        <span class="text-[10px] font-bold uppercase tracking-widest text-sky-400 bg-sky-900/20 px-2 py-0.5 rounded border border-sky-500/20">${m.division || 'Unknown Div'}</span>
-                        <span class="text-[10px] font-mono text-slate-500">${m.date || 'No Date'}</span>
+                return `
+                <div class="glass-panel p-3.5 rounded-xl border border-white/10 hover:border-white/20 transition-colors">
+                    <div class="flex justify-between items-center mb-2.5 pb-2 border-b border-white/5">
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">${m.division || 'Fixtures'}</span>
+                        <span class="text-[10px] font-mono text-slate-400">${m.date || ''}</span>
                     </div>
-                    
-                    <div class="grid grid-cols-[1fr,auto,1fr] gap-4 items-center">
-                        <div class="text-right cursor-pointer group" onclick="window.loadStats('${m.p1.replace(/'/g, "\\'")}')">
-                            <div class="text-sm md:text-base font-black ${p1Won ? 'text-white' : 'text-slate-400'} group-hover:text-sky-400 transition-colors">${m.p1}${p1FillBadge}</div>
+                    <div class="grid grid-cols-[1fr,auto,1fr] gap-3 items-center">
+                        <div class="text-right cursor-pointer truncate" onclick="window.loadStats('${m.p1.replace(/'/g, "\\'")}')">
+                            <span class="text-xs md:text-sm font-extrabold ${p1Won ? 'text-white' : 'text-slate-400'} hover:text-sky-400 transition-colors">${m.p1}</span>${p1Fill}
                         </div>
-                        
-                        <div class="flex items-center justify-center bg-black/40 px-3 py-1.5 rounded-lg border border-white/5">
-                            <span class="font-mono font-black text-lg ${p1Won ? 'text-green-400' : 'text-white'}">${s1}</span>
-                            <span class="text-slate-600 mx-2">-</span>
-                            <span class="font-mono font-black text-lg ${p2Won ? 'text-green-400' : 'text-white'}">${s2}</span>
+                        <div class="flex items-center justify-center bg-black/50 px-2.5 py-1 rounded-lg border border-white/10 font-mono font-black text-sm">
+                            <span class="${p1Won ? 'text-emerald-400' : 'text-slate-300'}">${s1}</span>
+                            <span class="text-slate-600 mx-1.5">-</span>
+                            <span class="${p2Won ? 'text-emerald-400' : 'text-slate-300'}">${s2}</span>
                         </div>
-                        
-                        <div class="text-left cursor-pointer group" onclick="window.loadStats('${m.p2.replace(/'/g, "\\'")}')">
-                            <div class="text-sm md:text-base font-black ${p2Won ? 'text-white' : 'text-slate-400'} group-hover:text-sky-400 transition-colors">${p2FillBadge}${m.p2}</div>
+                        <div class="text-left cursor-pointer truncate" onclick="window.loadStats('${m.p2.replace(/'/g, "\\'")}')">
+                            ${p2Fill}<span class="text-xs md:text-sm font-extrabold ${p2Won ? 'text-white' : 'text-slate-400'} hover:text-sky-400 transition-colors">${m.p2}</span>
                         </div>
                     </div>
                 </div>`;
-            });
-            list.innerHTML = html;
+            }).join('');
         } catch(e) {
-            list.innerHTML = '<div class="col-span-1 md:col-span-2 text-center py-10 text-red-500 text-sm border border-red-500/20 bg-red-900/10 rounded-xl">Error loading match results.</div>';
+            list.innerHTML = '<div class="col-span-1 md:col-span-2 text-center py-10 text-rose-400 text-xs font-bold">Error loading match results.</div>';
         }
     };
 
     // ==========================================
-    // NOTICES & COMMUNITY
+    // NOTICES, FORUM & DONORS
     // ==========================================
     window.loadNotices = async function() {
         const list = document.getElementById('noticesFeed');
@@ -806,20 +733,22 @@
         try {
             const res = await fetch('/api/notices');
             const notices = await res.json();
-            if(notices.length === 0) { list.innerHTML = '<div class="text-slate-500 text-center py-10 italic">No recent notices.</div>'; return; }
-            
+            if(notices.length === 0) {
+                list.innerHTML = '<div class="text-slate-500 text-center py-8 text-xs">No recent notices.</div>';
+                return;
+            }
             list.innerHTML = notices.map(n => {
-                let colorClass = 'border-slate-500/30 text-slate-300';
-                if(n.type === 'Update') colorClass = 'border-sky-500/30 text-sky-400 bg-sky-900/10';
-                if(n.type === 'Event') colorClass = 'border-yellow-500/30 text-yellow-400 bg-yellow-900/10';
-                if(n.type === 'Alert') colorClass = 'border-red-500/30 text-red-400 bg-red-900/10';
+                let badgeClass = 'border-white/10 bg-black/30';
+                if(n.type === 'Update') badgeClass = 'border-sky-500/30 bg-sky-950/20';
+                if(n.type === 'Event') badgeClass = 'border-yellow-500/30 bg-yellow-950/20';
+                if(n.type === 'Alert') badgeClass = 'border-rose-500/30 bg-rose-950/20';
                 return `
-                <div class="p-5 rounded-xl border ${colorClass} mb-4 shadow-lg">
-                    <div class="flex justify-between items-start mb-3">
-                        <h4 class="font-black text-lg leading-tight text-white">${n.title}</h4>
-                        <span class="text-[10px] font-mono opacity-70 shrink-0 ml-3 bg-black/40 px-2 py-1 rounded">${n.date_str}</span>
+                <div class="p-4 rounded-xl border ${badgeClass} mb-3 shadow">
+                    <div class="flex justify-between items-start mb-2">
+                        <h4 class="font-black text-sm text-white">${n.title}</h4>
+                        <span class="text-[10px] font-mono text-slate-400 shrink-0 ml-2">${n.date_str}</span>
                     </div>
-                    <p class="text-sm opacity-90 leading-relaxed whitespace-pre-wrap">${n.message}</p>
+                    <p class="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">${n.message}</p>
                 </div>`;
             }).join('');
         } catch(e) {}
@@ -828,28 +757,32 @@
     window.loadCommunityFeed = async function() {
         const feed = document.getElementById('communityFeed');
         if(!feed) return;
-        feed.innerHTML = '<div class="text-center py-10 text-sky-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
+        feed.innerHTML = '<div class="text-center py-10 text-sky-400"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
         try {
             const res = await fetch('/api/hub/forum');
             const posts = await res.json();
-            if(posts.length === 0) { feed.innerHTML = '<div class="text-center text-slate-500 py-10 italic border border-white/5 rounded-xl bg-slate-800/30 text-sm">No posts yet. Be the first!</div>'; return; }
-            
+            if(posts.length === 0) {
+                feed.innerHTML = '<div class="text-center text-slate-500 py-10 text-xs">No posts yet.</div>';
+                return;
+            }
             feed.innerHTML = posts.map(p => `
-                <div class="bg-slate-800 p-5 rounded-xl border border-white/5 shadow-xl mb-4 relative">
-                    <div class="flex items-center justify-between mb-3 border-b border-white/5 pb-3">
-                        <div class="flex items-center gap-3 cursor-pointer group" onclick="window.loadStats('${p.author_name.replace(/'/g, "\\'")}')">
-                            <div class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-400 border border-white/10 shrink-0 group-hover:bg-sky-900/50 group-hover:text-sky-400 transition-colors"><i class="fa-solid fa-user"></i></div>
+                <div class="glass-panel p-4 rounded-xl border border-white/10 mb-3">
+                    <div class="flex items-center justify-between mb-2.5 pb-2 border-b border-white/5">
+                        <div class="flex items-center gap-2.5 cursor-pointer" onclick="window.loadStats('${p.author_name.replace(/'/g, "\\'")}')">
+                            <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-sky-400 border border-white/10 text-xs"><i class="fa-solid fa-user"></i></div>
                             <div>
-                                <div class="font-bold text-white text-sm leading-tight group-hover:text-sky-400 transition-colors">${p.author_name}</div>
-                                <div class="text-[10px] text-slate-500 font-mono tracking-widest">${p.time_str}</div>
+                                <div class="font-bold text-white text-xs hover:text-sky-400">${p.author_name}</div>
+                                <div class="text-[10px] text-slate-500 font-mono">${p.time_str}</div>
                             </div>
                         </div>
                     </div>
-                    <div class="text-sm md:text-base text-slate-200 mb-4 whitespace-pre-wrap leading-relaxed">${p.content}</div>
-                    ${p.image_url ? `<img src="${p.image_url}" class="w-full rounded-xl mb-4 max-h-96 object-cover border border-white/10 shadow-lg">` : ''}
+                    <div class="text-xs md:text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">${p.content}</div>
+                    ${p.image_url ? `<img src="${p.image_url}" class="w-full rounded-xl mt-3 max-h-80 object-cover border border-white/10">` : ''}
                 </div>
             `).join('');
-        } catch(e) { feed.innerHTML = '<div class="text-red-500 text-center py-10 text-sm">Failed to load feed.</div>'; }
+        } catch(e) {
+            feed.innerHTML = '<div class="text-rose-400 text-center py-10 text-xs">Failed to load feed.</div>';
+        }
     };
     
     window.loadTopDonors = async function() {
@@ -859,42 +792,16 @@
             const res = await fetch('/api/top_donors');
             const donors = await res.json();
             if (donors.length === 0) return;
-            
             list.innerHTML = donors.map((d, i) => `
-                <div class="flex justify-between items-center bg-black/20 p-3 rounded-lg border border-white/5 mb-2">
-                    <div class="flex items-center gap-3">
-                        <span class="text-xs font-black ${i===0 ? 'text-yellow-400' : 'text-slate-500'}">#${i+1}</span>
-                        <span class="text-sm font-bold text-white truncate">${d.name}</span>
+                <div class="flex justify-between items-center bg-black/30 px-3 py-2 rounded-xl border border-white/5 mb-1.5">
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-xs font-mono font-black ${i === 0 ? 'text-yellow-400' : 'text-slate-500'}">#${i + 1}</span>
+                        <span class="text-xs font-bold text-white truncate">${d.name}</span>
                     </div>
-                    <span class="text-emerald-400 font-mono font-bold">$${Math.round(d.amount)}</span>
+                    <span class="text-emerald-400 font-mono text-xs font-extrabold">$${Math.round(d.amount)}</span>
                 </div>
             `).join('');
         } catch(e) {}
-    };
-
-    window.gcttaData = { players: [], seasons: [], divisions: [], cache: {} };
-
-    window.initApp = async function() {
-        try {
-            const [playersRes, seasonsRes, divisionsRes] = await Promise.all([
-                fetch('/api/players'), fetch('/api/seasons'), fetch('/api/divisions')
-            ]);
-            window.allPlayersRaw = await playersRes.json();
-            window.gcttaData.players = window.allPlayersRaw;
-            window.gcttaData.seasons = await seasonsRes.json();
-            window.gcttaData.divisions = await divisionsRes.json();
-            
-            const seasonSelect = document.getElementById('standingSeason');
-            const divSelect = document.getElementById('standingDivision');
-            if(seasonSelect) seasonSelect.innerHTML = window.gcttaData.seasons.map(s => `<option value="${s}" ${s === window.gcttaData.seasons[0] ? 'selected' : ''}>${s}</option>`).join('');
-            if(divSelect) divSelect.innerHTML = window.gcttaData.divisions.map(d => `<option value="${d}" ${d === 'Division 1' ? 'selected' : ''}>${d}</option>`).join('');
-
-            const resultsSeason = document.getElementById('resultsSeason');
-            if(resultsSeason) resultsSeason.innerHTML = window.gcttaData.seasons.map(s => `<option value="${s}" ${s === window.gcttaData.seasons[0] ? 'selected' : ''}>${s}</option>`).join('');
-
-        } catch (e) {
-            console.error("Initialization Failed", e);
-        }
     };
 
     // ==========================================
@@ -913,8 +820,7 @@
     };
 
     window.closeDonateModal = function() {
-        const modal = document.getElementById('donateModal');
-        if (modal) modal.classList.add('hidden');
+        document.getElementById('donateModal')?.classList.add('hidden');
     };
 
     window.setDonationAmount = function(amt) {
@@ -924,10 +830,7 @@
 
     window.proceedToPayment = async function() {
         const amt = document.getElementById('custom-donate-amount').value;
-        if (!amt || amt < 5) {
-            alert("Minimum donation is $5. Thank you for your support!");
-            return;
-        }
+        if (!amt || amt < 5) return alert("Minimum donation is $5.");
 
         const btn = document.getElementById('proceed-pay-btn');
         const origText = btn.innerHTML;
@@ -952,20 +855,15 @@
                         const configData = await configRes.json();
                         stripeInstance = Stripe(configData.publicKey);
                     }
-                    stripeElements = stripeInstance.elements({ 
-                        clientSecret: data.clientSecret, 
-                        appearance: { theme: 'night' } 
-                    });
+                    stripeElements = stripeInstance.elements({ clientSecret: data.clientSecret, appearance: { theme: 'night' } });
                     const paymentElement = stripeElements.create('payment');
                     paymentElement.mount('#payment-element');
-                } else {
-                    alert("Stripe library failed to load. Please refresh the page.");
                 }
             } else {
-                alert("Error setting up payment: " + (data.error || 'Unknown Error'));
+                alert("Error: " + (data.error || 'Unknown Error'));
             }
         } catch (e) {
-            alert("Network Error while connecting to Stripe.");
+            alert("Network Error connecting to Stripe.");
         } finally {
             btn.innerHTML = origText;
             btn.disabled = false;
@@ -974,7 +872,6 @@
 
     window.submitStripePayment = async function() {
         if (!stripeInstance || !stripeElements) return;
-        
         const btn = document.getElementById('final-pay-btn');
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
         btn.disabled = true;
@@ -984,10 +881,8 @@
 
         const { error, paymentIntent } = await stripeInstance.confirmPayment({
             elements: stripeElements,
-            confirmParams: {
-                return_url: window.location.href, 
-            },
-            redirect: 'if_required' 
+            confirmParams: { return_url: window.location.href },
+            redirect: 'if_required'
         });
 
         if (error) {
@@ -1000,116 +895,14 @@
             await fetch('/api/record_donation', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    intent_id: paymentIntent.id, 
-                    name: donorName, 
-                    amount: donationAmount 
-                })
+                body: JSON.stringify({ intent_id: paymentIntent.id, name: donorName, amount: donationAmount })
             });
-            
             document.getElementById('donate-step-2').innerHTML = `
-                <div class="text-center py-10">
-                    <div class="text-emerald-500 text-5xl mb-4"><i class="fa-solid fa-circle-check"></i></div>
-                    <h3 class="text-2xl font-black text-white mb-2">Thank You!</h3>
-                    <p class="text-slate-400">Your support means the world to us.</p>
-                    <button onclick="window.location.reload()" class="mt-6 bg-slate-800 hover:bg-slate-700 text-white font-bold py-2 px-6 rounded-lg">Close & Refresh</button>
-                </div>
-            `;
-        }
-    };
-
-    // ==========================================
-    // HYPOTHETICAL SANDBOX SIMULATOR LOGIC
-    // ==========================================
-    window.openSandboxModal = function() {
-        const modal = document.getElementById('sandboxModal');
-        if (!modal) return;
-        
-        document.getElementById('sim-p1').value = window.currentProfileName;
-        document.getElementById('sim-results').classList.add('hidden');
-        document.getElementById('sim-results').innerHTML = '';
-        
-        const p2Input = document.getElementById('sim-p2-search');
-        const p2Sugg = document.getElementById('sim-p2-sugg');
-        
-        const newP2Input = p2Input.cloneNode(true);
-        p2Input.parentNode.replaceChild(newP2Input, p2Input);
-        
-        newP2Input.addEventListener('input', (e) => {
-            const q = e.target.value.toLowerCase().trim();
-            if (q.length < 2) { p2Sugg.classList.add('hidden'); return; }
-            const matches = window.allPlayersRaw.filter(p => p.toLowerCase().includes(q) && p !== window.currentProfileName);
-            
-            p2Sugg.innerHTML = matches.slice(0, 5).map(p => `
-                <div class="px-3 py-2 hover:bg-indigo-600/30 cursor-pointer text-xs text-white font-bold border-b border-white/5 transition" 
-                     onclick="document.getElementById('sim-p2-search').value = '${p.replace(/'/g, "\\'")}'; document.getElementById('sim-p2-sugg').classList.add('hidden');">
-                    ${p}
-                </div>`).join('');
-            p2Sugg.classList.remove('hidden');
-        });
-        
-        modal.classList.remove('hidden');
-    };
-
-    window.runSandboxSimulation = async function() {
-        const p1 = document.getElementById('sim-p1').value;
-        const p2 = document.getElementById('sim-p2-search').value;
-        const s1 = document.getElementById('sim-s1').value;
-        const s2 = document.getElementById('sim-s2').value;
-        const kw = document.getElementById('sim-k-win').value;
-        const kl = document.getElementById('sim-k-loss').value;
-
-        if (!p1 || !p2) return alert("Select two valid players.");
-        
-        const btn = document.getElementById('sim-run-btn');
-        const origText = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Calculating...';
-        btn.disabled = true;
-
-        try {
-            const res = await fetch('/api/simulate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ p1: p1, p2: p2, s1: s1, s2: s2, k_win: kw, k_loss: kl })
-            });
-            const data = await res.json();
-            
-            const resultsBox = document.getElementById('sim-results');
-            resultsBox.classList.remove('hidden');
-
-            if (!data.success) {
-                resultsBox.innerHTML = `<div class="text-red-500 text-center font-bold">${data.error}</div>`;
-                return;
-            }
-
-            const r = data.data;
-            const p1Col = r.p1.delta > 0 ? 'text-emerald-400' : 'text-red-400';
-            const p1Sign = r.p1.delta > 0 ? '+' : '';
-            const p2Col = r.p2.delta > 0 ? 'text-emerald-400' : 'text-red-400';
-            const p2Sign = r.p2.delta > 0 ? '+' : '';
-
-            resultsBox.innerHTML = `
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-black/30 p-4 rounded-xl border border-white/5 text-center">
-                        <div class="text-xs text-slate-400 font-bold mb-1 truncate">${r.p1.name}</div>
-                        <div class="text-3xl font-black text-white font-mono">${Math.round(r.p1.new_rating)}</div>
-                        <div class="${p1Col} font-black text-sm mt-1">${p1Sign}${r.p1.delta.toFixed(1)} pts</div>
-                        <div class="text-[9px] text-slate-500 mt-2">SD: ±${r.p1.new_rd.toFixed(1)}</div>
-                    </div>
-                    <div class="bg-black/30 p-4 rounded-xl border border-white/5 text-center">
-                        <div class="text-xs text-slate-400 font-bold mb-1 truncate">${r.p2.name}</div>
-                        <div class="text-3xl font-black text-white font-mono">${Math.round(r.p2.new_rating)}</div>
-                        <div class="${p2Col} font-black text-sm mt-1">${p2Sign}${r.p2.delta.toFixed(1)} pts</div>
-                        <div class="text-[9px] text-slate-500 mt-2">SD: ±${r.p2.new_rd.toFixed(1)}</div>
-                    </div>
-                </div>
-            `;
-
-        } catch (e) {
-            alert("Error running simulation.");
-        } finally {
-            btn.innerHTML = origText;
-            btn.disabled = false;
+                <div class="text-center py-8">
+                    <div class="text-emerald-400 text-4xl mb-3"><i class="fa-solid fa-circle-check"></i></div>
+                    <h3 class="text-xl font-black text-white mb-1">Thank You!</h3>
+                    <button onclick="window.location.reload()" class="mt-4 bg-slate-800 text-white font-bold py-2 px-5 rounded-xl text-xs">Close</button>
+                </div>`;
         }
     };
 </script>

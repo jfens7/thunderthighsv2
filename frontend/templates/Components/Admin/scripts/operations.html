@@ -1,6 +1,92 @@
 <script>
     console.log("✅ Admin Operations Module Loaded");
 
+    // Native Zero-Dependency WebAuthn Passkey Registration Helper
+    function _adminB64urlToUint8Array(base64url) {
+        const padding = '='.repeat((4 - (base64url.length % 4)) % 4);
+        const base64 = (base64url + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+    }
+
+    function _adminBufferToB64url(buffer) {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    window.registerAdminPasskey = async function() {
+        if (window.location.hostname === '127.0.0.1') {
+            if (confirm("Apple Passkeys require 'localhost' instead of '127.0.0.1' when testing locally. Switch to localhost now?")) {
+                window.location.href = window.location.href.replace('127.0.0.1', 'localhost');
+            }
+            return;
+        }
+
+        try {
+            const optRes = await fetch('/api/auth/passkey/register-options', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+            const options = await optRes.json();
+            if (options.error) throw new Error(options.error);
+
+            const publicKey = {
+                challenge: _adminB64urlToUint8Array(options.challenge),
+                rp: { name: options.rp.name },
+                user: {
+                    id: _adminB64urlToUint8Array(options.user.id),
+                    name: options.user.name,
+                    displayName: options.user.displayName
+                },
+                pubKeyCredParams: options.pubKeyCredParams,
+                timeout: options.timeout || 60000,
+                attestation: options.attestation || 'none',
+                authenticatorSelection: options.authenticatorSelection
+            };
+
+            if (options.rp.id && options.rp.id !== '127.0.0.1') {
+                publicKey.rp.id = options.rp.id;
+            }
+
+            const cred = await navigator.credentials.create({ publicKey });
+            if (!cred) throw new Error("Passkey creation was cancelled.");
+
+            const regResponse = {
+                id: cred.id,
+                rawId: _adminBufferToB64url(cred.rawId),
+                type: cred.type,
+                response: {
+                    attestationObject: _adminBufferToB64url(cred.response.attestationObject),
+                    clientDataJSON: _adminBufferToB64url(cred.response.clientDataJSON),
+                    transports: cred.response.getTransports ? cred.response.getTransports() : ['internal', 'hybrid']
+                }
+            };
+
+            const verifyRes = await fetch('/api/auth/passkey/register-verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reg_response: regResponse })
+            });
+            const resData = await verifyRes.json();
+            if (resData.success) {
+                alert("✅ " + (resData.message || "Synced Passkey registered! You can now log in using Face ID / Touch ID across your Apple devices."));
+            } else {
+                throw new Error(resData.error || "Failed to verify passkey.");
+            }
+        } catch (err) {
+            alert("Passkey Setup: " + (err.message || "Cancelled or failed."));
+        }
+    };
+
     window.applyRoleBasedUI = function() {
         const userRole = '{{ role }}'; 
         if (userRole === 'moderator' || userRole === 'admin') {
@@ -28,7 +114,6 @@
             if (hBox) hBox.innerText = data.humans || 0;
             if (bBox) bBox.innerText = data.bots || 0;
             
-            // THE FIX: Populate the Live Traffic Table!
             if (logTable) {
                 if (!data.logs || data.logs.length === 0) {
                     logTable.innerHTML = '<div class="text-center py-6 text-slate-500 text-xs italic">No traffic logged yet today.</div>';
@@ -179,8 +264,8 @@
             box.innerHTML = errors.map(e => `
                 <div class="bg-red-900/10 border border-red-500/20 p-3 rounded-lg mb-2 flex justify-between items-center">
                     <div>
-                        <div class="text-red-400 font-black text-sm">${e.season} • ${e.division}</div>
-                        <div class="text-xs text-slate-400 mt-1">${e.match_summary}</div>
+                        <div class="text-red-400 font-black text-sm">${e.season} - ${e.division}</div>
+                        <div class="text-xs text-slate-400 mt-1">${e.match_summary || ''}</div>
                     </div>
                     <div class="bg-red-950 px-2 py-1 rounded text-[10px] text-red-500 border border-red-900 font-mono">
                         Week ${e.week}
@@ -193,9 +278,6 @@
         }
     };
 
-    // ==========================================
-    // EXISTING OPERATIONS LOGIC
-    // ==========================================
     window.upcomingSchedules = [];
     window.loadSchedules = async function() {
         const listEl = document.getElementById('schedules-list'); if(!listEl) return;
@@ -218,7 +300,7 @@
         if(document.getElementById('schedule-year-filter')) document.getElementById('schedule-year-filter').innerHTML = buildOptions(years, "All Years");
         if(document.getElementById('schedule-season-filter')) document.getElementById('schedule-season-filter').innerHTML = buildOptions(seasons, "All Seasons");
         if(document.getElementById('schedule-div-filter')) document.getElementById('schedule-div-filter').innerHTML = buildOptions(divs, "All Divisions");
-    }
+    };
 
     window.renderSchedules = function() {
         const list = document.getElementById('schedules-list'); if (!list) return;
@@ -310,9 +392,20 @@
     };
 
     window.submitRatingOverride = async function() {
-        const id = document.getElementById('override-id').value; const rating = document.getElementById('override-score').value; const sd = document.getElementById('override-sd').value; const isRetro = document.getElementById('override-retro').checked;
+        const id = document.getElementById('override-id').value;
+        const rating = document.getElementById('override-score').value;
+        const sd = document.getElementById('override-sd').value;
+        const isRetro = document.getElementById('override-retro') ? document.getElementById('override-retro').checked : true;
+        const effectiveDate = document.getElementById('override-effective-date') ? document.getElementById('override-effective-date').value : '';
         if (!id || !rating) return alert("Select player and rating.");
-        try { const res = await fetch('/api/admin/override_rating', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ player_id: id, rating: rating, sd: sd, retroactive: isRetro }) }); if ((await res.json()).success) alert("✅ Applied!"); } catch(e) {}
+        try {
+            const res = await fetch('/api/admin/override_rating', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ player_id: id, rating: rating, sd: sd, retroactive: isRetro, effective_date: effectiveDate })
+            });
+            if ((await res.json()).success) alert("✅ Rating checkpoint lock applied!");
+        } catch(e) {}
     };
 
     window.submitPlayerMerge = async function() {
@@ -408,7 +501,6 @@
 
     window.manageUser = async function(email, action) { try { const res = await fetch('/api/admin/approve_user', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({email: email, action: action}) }); if ((await res.json()).success) window.loadAdminUsers(); } catch(e) {} };
 
-    // Fire automatically when loaded
     document.addEventListener('DOMContentLoaded', () => {
         window.loadSystemDiagnostics();
     });

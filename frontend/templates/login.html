@@ -15,27 +15,39 @@
     </a>
 
     <div class="bg-slate-900 border border-white/10 p-8 rounded-2xl w-full max-w-md shadow-2xl text-center mt-10">
-        <div class="bg-blue-600/20 text-blue-500 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(37,99,235,0.4)]">
-            <i class="fa-solid fa-lock text-4xl"></i>
+        <div id="iconContainer" class="bg-blue-600/20 text-blue-500 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(37,99,235,0.4)] transition-all">
+            <i id="mainIcon" class="fa-solid fa-lock text-4xl"></i>
         </div>
         <h1 class="text-2xl font-black mb-2 tracking-tight">Admin Control Tower</h1>
-        <p class="text-sm text-slate-400 mb-8">Enter your authorized credentials or use an emergency bypass code.</p>
+        <p class="text-sm text-slate-400 mb-8">Enter your authorized credentials or use a secure login method.</p>
         
-        <div class="flex rounded-xl bg-black/40 p-1 mb-6 border border-white/5">
-            <button id="tabNormal" onclick="switchMode('normal')" class="flex-1 rounded-lg py-2.5 text-xs font-black uppercase tracking-wider bg-white/5 text-slate-400 transition-all">Credentials</button>
-            <button id="tabBypass" onclick="switchMode('bypass')" class="flex-1 rounded-lg py-2.5 text-xs font-black uppercase tracking-wider text-slate-400 transition-all">Bypass Code</button>
+        <div class="flex rounded-xl bg-black/40 p-1 mb-6 border border-white/5 overflow-hidden gap-1">
+            <button id="tabNormal" type="button" onclick="switchMode('normal')" class="flex-1 rounded-lg py-2.5 text-xs font-black uppercase tracking-wider bg-white/5 text-white transition-all">Credentials</button>
+            <button id="tabPasskey" type="button" onclick="switchMode('passkey')" class="flex-1 rounded-lg py-2.5 text-xs font-black uppercase tracking-wider text-slate-400 transition-all">Passkey</button>
+            <button id="tabBypass" type="button" onclick="switchMode('bypass')" class="flex-1 rounded-lg py-2.5 text-xs font-black uppercase tracking-wider text-slate-400 transition-all">Bypass Code</button>
         </div>
 
         <div class="space-y-4 text-left">
             <div id="normalForm" class="space-y-4">
                 <div>
                     <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Email Address</label>
-                    <input type="email" id="adminEmail" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-blue-500 outline-none text-sm transition-colors" autocomplete="email">
+                    <input type="email" id="adminEmail" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-blue-500 outline-none text-sm transition-colors" autocomplete="email" onkeypress="if(event.key === 'Enter') document.getElementById('loginBtn').click()">
                 </div>
                 <div>
-                    <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Password</label>
-                    <input type="password" id="adminPassword" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-blue-500 outline-none text-sm transition-colors" autocomplete="current-password">
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest">Password</label>
+                        <button onclick="handleForgotPassword()" type="button" class="text-[10px] text-sky-400 hover:underline font-bold">Forgot Password?</button>
+                    </div>
+                    <input type="password" id="adminPassword" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-blue-500 outline-none text-sm transition-colors" autocomplete="current-password" onkeypress="if(event.key === 'Enter') document.getElementById('loginBtn').click()">
                 </div>
+            </div>
+
+            <div id="passkeyForm" class="space-y-4 hidden animate-fade-in">
+                <div>
+                    <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Admin Email</label>
+                    <input type="email" id="passkeyEmail" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-purple-500 outline-none text-sm transition-colors" placeholder="registered-admin@example.com" onkeypress="if(event.key === 'Enter') document.getElementById('loginBtn').click()">
+                </div>
+                <p class="text-xs text-slate-500 text-center mt-2">Supports iCloud Keychain synced passkeys across all your Apple devices.</p>
             </div>
 
             <div id="bypassForm" class="space-y-4 hidden animate-fade-in">
@@ -45,66 +57,160 @@
                 </div>
                 <div>
                     <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">6-Digit Bypass Code</label>
-                    <input type="text" id="bypassCodeInput" maxlength="6" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-yellow-500 outline-none text-sm font-mono tracking-widest text-center text-xl" placeholder="••••••">
+                    <input type="text" id="bypassCodeInput" maxlength="6" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-yellow-500 outline-none text-sm font-mono tracking-widest text-center text-xl" placeholder="••••••" onkeypress="if(event.key === 'Enter') document.getElementById('loginBtn').click()">
                 </div>
             </div>
             
-            <button id="loginBtn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3.5 px-4 rounded-xl transition shadow-[0_0_15px_rgba(37,99,235,0.4)] hover:shadow-[0_0_25px_rgba(37,99,235,0.6)] uppercase tracking-widest mt-4 flex items-center justify-center gap-2">
-                <i class="fa-solid fa-right-to-bracket"></i> Authenticate
+            <button id="loginBtn" type="button" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3.5 px-4 rounded-xl transition shadow-[0_0_15px_rgba(37,99,235,0.4)] hover:shadow-[0_0_25px_rgba(37,99,235,0.6)] uppercase tracking-widest mt-4 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-right-to-bracket"></i> AUTHENTICATE
             </button>
         </div>
 
         <div id="error-msg" class="hidden mt-6 text-red-400 text-sm font-bold bg-red-900/30 border border-red-500/20 py-3 px-4 rounded-lg"></div>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-
+    <script>
         let loginMode = 'normal';
+
+        // Native Zero-Dependency WebAuthn Base64URL Converters (Never blocked by CORS)
+        function b64urlToUint8Array(base64url) {
+            const padding = '='.repeat((4 - (base64url.length % 4)) % 4);
+            const base64 = (base64url + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        function bufferToB64url(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+
+        async function nativeStartAuthentication(options) {
+            // WebAuthn spec requires domain name (localhost or gctta-stats.com.au), not raw IP 127.0.0.1
+            if (window.location.hostname === '127.0.0.1') {
+                window.location.href = window.location.href.replace('127.0.0.1', 'localhost');
+                throw new Error("Redirecting to localhost for Apple Passkey compatibility...");
+            }
+
+            const publicKey = {
+                challenge: b64urlToUint8Array(options.challenge),
+                timeout: options.timeout || 60000,
+                userVerification: options.userVerification || 'preferred'
+            };
+
+            if (options.rpId && options.rpId !== '127.0.0.1') {
+                publicKey.rpId = options.rpId;
+            }
+
+            if (options.allowCredentials && options.allowCredentials.length > 0) {
+                publicKey.allowCredentials = options.allowCredentials.map(c => ({
+                    id: b64urlToUint8Array(c.id),
+                    type: c.type || 'public-key',
+                    transports: c.transports || ['internal', 'hybrid']
+                }));
+            }
+
+            const cred = await navigator.credentials.get({ publicKey });
+            if (!cred) throw new Error("Passkey authentication was cancelled.");
+
+            return {
+                id: cred.id,
+                rawId: bufferToB64url(cred.rawId),
+                type: cred.type,
+                response: {
+                    authenticatorData: bufferToB64url(cred.response.authenticatorData),
+                    clientDataJSON: bufferToB64url(cred.response.clientDataJSON),
+                    signature: bufferToB64url(cred.response.signature),
+                    userHandle: cred.response.userHandle ? bufferToB64url(cred.response.userHandle) : null
+                }
+            };
+        }
 
         window.switchMode = function(mode) {
             loginMode = mode;
             const normalTab = document.getElementById('tabNormal');
+            const passkeyTab = document.getElementById('tabPasskey');
             const bypassTab = document.getElementById('tabBypass');
+            
             const normalForm = document.getElementById('normalForm');
+            const passkeyForm = document.getElementById('passkeyForm');
             const bypassForm = document.getElementById('bypassForm');
+            
             const btn = document.getElementById('loginBtn');
-            const iconDiv = document.querySelector('.fa-lock').parentNode;
+            const iconContainer = document.getElementById('iconContainer');
+            const mainIcon = document.getElementById('mainIcon');
+
+            [normalTab, passkeyTab, bypassTab].forEach(t => t.className = "flex-1 rounded-lg py-2.5 text-xs font-black uppercase tracking-wider text-slate-400 transition-all");
+            [normalForm, passkeyForm, bypassForm].forEach(f => f.classList.add('hidden'));
 
             if (mode === 'bypass') {
                 bypassTab.className = "flex-1 rounded-lg py-2.5 text-xs font-black uppercase tracking-wider bg-yellow-600/20 text-yellow-400 transition-all border border-yellow-500/30";
-                normalTab.className = "flex-1 rounded-lg py-2.5 text-xs font-black uppercase tracking-wider text-slate-400 transition-all";
-                normalForm.classList.add('hidden');
                 bypassForm.classList.remove('hidden');
                 btn.className = "w-full bg-yellow-600 hover:bg-yellow-500 text-slate-900 font-black py-3.5 px-4 rounded-xl transition shadow-[0_0_15px_rgba(234,179,8,0.4)] hover:shadow-[0_0_25px_rgba(234,179,8,0.6)] uppercase tracking-widest mt-4 flex items-center justify-center gap-2";
                 btn.innerHTML = '<i class="fa-solid fa-bolt"></i> APPLY BYPASS';
-                iconDiv.className = "bg-yellow-600/20 text-yellow-500 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(234,179,8,0.4)]";
+                iconContainer.className = "bg-yellow-600/20 text-yellow-500 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all";
+                mainIcon.className = "fa-solid fa-bolt text-4xl";
+            } else if (mode === 'passkey') {
+                passkeyTab.className = "flex-1 rounded-lg py-2.5 text-xs font-black uppercase tracking-wider bg-purple-600/20 text-purple-400 transition-all border border-purple-500/30";
+                passkeyForm.classList.remove('hidden');
+                btn.className = "w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-3.5 px-4 rounded-xl transition shadow-[0_0_15px_rgba(147,51,234,0.4)] hover:shadow-[0_0_25px_rgba(147,51,234,0.6)] uppercase tracking-widest mt-4 flex items-center justify-center gap-2";
+                btn.innerHTML = '<i class="fa-solid fa-fingerprint"></i> USE PASSKEY';
+                iconContainer.className = "bg-purple-600/20 text-purple-500 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(147,51,234,0.4)] transition-all";
+                mainIcon.className = "fa-solid fa-fingerprint text-4xl";
             } else {
                 normalTab.className = "flex-1 rounded-lg py-2.5 text-xs font-black uppercase tracking-wider bg-white/5 text-white transition-all";
-                bypassTab.className = "flex-1 rounded-lg py-2.5 text-xs font-black uppercase tracking-wider text-slate-400 transition-all";
                 normalForm.classList.remove('hidden');
-                bypassForm.classList.add('hidden');
                 btn.className = "w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3.5 px-4 rounded-xl transition shadow-[0_0_15px_rgba(37,99,235,0.4)] hover:shadow-[0_0_25px_rgba(37,99,235,0.6)] uppercase tracking-widest mt-4 flex items-center justify-center gap-2";
                 btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> AUTHENTICATE';
-                iconDiv.className = "bg-blue-600/20 text-blue-500 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(37,99,235,0.4)]";
+                iconContainer.className = "bg-blue-600/20 text-blue-500 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(37,99,235,0.4)] transition-all";
+                mainIcon.className = "fa-solid fa-lock text-4xl";
             }
-        }
-        // Default orientation on load
+        };
+        
         window.switchMode('normal');
+    </script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signInWithCustomToken, sendPasswordResetEmail, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        let globalAuthInstance = null;
+
+        window.handleForgotPassword = async function() {
+            const email = document.getElementById('adminEmail').value.trim();
+            if (!email) {
+                alert("Please enter your admin email address first.");
+                document.getElementById('adminEmail').focus();
+                return;
+            }
+            if (!globalAuthInstance) {
+                alert("Firebase is still initializing. Please try again in a second.");
+                return;
+            }
+            try {
+                await sendPasswordResetEmail(globalAuthInstance, email);
+                alert(`Password reset email successfully sent to ${email}. Check your inbox.`);
+            } catch (err) {
+                alert("Failed to send reset email: " + err.message);
+            }
+        };
 
         fetch('/api/firebase-config').then(res => res.json()).then(config => {
             const app = initializeApp(config);
             const auth = getAuth(app);
+            globalAuthInstance = auth;
 
             const btn = document.getElementById('loginBtn');
             const errorMsg = document.getElementById('error-msg');
-            const emailInput = document.getElementById('adminEmail');
-            const passInput = document.getElementById('adminPassword');
             
-            const bypassEmailInput = document.getElementById('bypassEmail');
-            const bypassCodeInput = document.getElementById('bypassCodeInput');
-
             function setBtnLoading(loading, text = 'VERIFYING...') {
                 if (loading) {
                     btn.disabled = true;
@@ -112,34 +218,42 @@
                     btn.classList.add('opacity-75', 'cursor-wait');
                 } else {
                     btn.disabled = false;
-                    btn.innerHTML = loginMode === 'bypass' ? '<i class="fa-solid fa-bolt"></i> APPLY BYPASS' : '<i class="fa-solid fa-right-to-bracket"></i> AUTHENTICATE';
+                    if (loginMode === 'bypass') btn.innerHTML = '<i class="fa-solid fa-bolt"></i> APPLY BYPASS';
+                    else if (loginMode === 'passkey') btn.innerHTML = '<i class="fa-solid fa-fingerprint"></i> USE PASSKEY';
+                    else btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> AUTHENTICATE';
                     btn.classList.remove('opacity-75', 'cursor-wait');
                 }
             }
 
-            onAuthStateChanged(auth, async (user) => {
-                if (user && loginMode === 'normal') {
-                    setBtnLoading(true);
-                    try {
-                        const token = await user.getIdToken(true);
-                        const response = await fetch('/api/auth/admin_login', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({token: token})
-                        });
-                        const data = await response.json();
-                        
-                        if (data.success) {
-                            window.location.href = '/admin';
-                        } else {
-                            errorMsg.innerText = data.error || "Access Denied. Account lacks Admin clearance.";
-                            errorMsg.classList.remove('hidden');
-                            await signOut(auth);
-                            setBtnLoading(false);
-                        }
-                    } catch (e) {
+            async function verifyAdminTokenWithBackend(user) {
+                setBtnLoading(true, 'AUTHORIZING...');
+                try {
+                    const token = await user.getIdToken(true);
+                    const response = await fetch('/api/auth/admin_login', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({token: token})
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        window.location.href = '/admin';
+                    } else {
+                        errorMsg.innerText = data.error || "Access Denied. Account lacks Admin clearance.";
+                        errorMsg.classList.remove('hidden');
+                        await signOut(auth);
                         setBtnLoading(false);
                     }
+                } catch (e) {
+                    errorMsg.innerText = "Error communicating with backend server.";
+                    errorMsg.classList.remove('hidden');
+                    setBtnLoading(false);
+                }
+            }
+
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    await verifyAdminTokenWithBackend(user);
                 }
             });
 
@@ -147,8 +261,8 @@
                 errorMsg.classList.add('hidden');
 
                 if (loginMode === 'bypass') {
-                    const email = bypassEmailInput.value.trim();
-                    const code = bypassCodeInput.value.trim();
+                    const email = document.getElementById('bypassEmail').value.trim();
+                    const code = document.getElementById('bypassCodeInput').value.trim();
 
                     if (!email || !code) {
                         errorMsg.innerText = "Please enter your admin email and 6 digit bypass code.";
@@ -176,9 +290,51 @@
                         errorMsg.classList.remove('hidden');
                         setBtnLoading(false);
                     }
+                } else if (loginMode === 'passkey') {
+                    const email = document.getElementById('passkeyEmail').value.trim();
+                    if (!email) {
+                        errorMsg.innerText = "Please enter your admin email to locate your passkey.";
+                        errorMsg.classList.remove('hidden');
+                        return;
+                    }
+
+                    setBtnLoading(true, 'WAITING FOR PASSKEY...');
+                    try {
+                        const optRes = await fetch('/api/auth/passkey/generate-options', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({email: email})
+                        });
+                        const options = await optRes.json();
+                        if (options.error) throw new Error(options.error);
+
+                        const authResponse = await nativeStartAuthentication(options);
+
+                        const verifyRes = await fetch('/api/auth/passkey/verify', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ email: email, auth_response: authResponse })
+                        });
+                        const verification = await verifyRes.json();
+
+                        if (verification.success) {
+                            if (verification.token) {
+                                try {
+                                    await signInWithCustomToken(auth, verification.token);
+                                } catch (_) {}
+                            }
+                            window.location.href = verification.redirect || '/admin';
+                        } else {
+                            throw new Error(verification.error || "Passkey verification failed.");
+                        }
+                    } catch(e) {
+                        errorMsg.innerText = e.message || "Passkey authentication failed or was cancelled.";
+                        errorMsg.classList.remove('hidden');
+                        setBtnLoading(false);
+                    }
                 } else {
-                    const email = emailInput.value.trim();
-                    const pass = passInput.value;
+                    const email = document.getElementById('adminEmail').value.trim();
+                    const pass = document.getElementById('adminPassword').value;
                     
                     if(!email || !pass) {
                         errorMsg.innerText = "Please enter both email and password.";
@@ -188,7 +344,8 @@
 
                     setBtnLoading(true);
                     try {
-                        await signInWithEmailAndPassword(auth, email, pass);
+                        const cred = await signInWithEmailAndPassword(auth, email, pass);
+                        await verifyAdminTokenWithBackend(cred.user);
                     } catch (error) {
                         errorMsg.innerText = "Incorrect email or password.";
                         errorMsg.classList.remove('hidden');

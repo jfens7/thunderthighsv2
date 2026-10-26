@@ -1,6 +1,92 @@
 <script>
     console.log("✅ Admin UI Script Loaded Successfully!");
 
+    // Native Zero-Dependency WebAuthn Passkey Registration Helper
+    function _adminB64urlToUint8Array(base64url) {
+        const padding = '='.repeat((4 - (base64url.length % 4)) % 4);
+        const base64 = (base64url + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+    }
+
+    function _adminBufferToB64url(buffer) {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    window.registerAdminPasskey = async function() {
+        if (window.location.hostname === '127.0.0.1') {
+            if (confirm("Apple Passkeys require 'localhost' instead of '127.0.0.1' when testing locally. Switch to localhost now?")) {
+                window.location.href = window.location.href.replace('127.0.0.1', 'localhost');
+            }
+            return;
+        }
+
+        try {
+            const optRes = await fetch('/api/auth/passkey/register-options', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+            const options = await optRes.json();
+            if (options.error) throw new Error(options.error);
+
+            const publicKey = {
+                challenge: _adminB64urlToUint8Array(options.challenge),
+                rp: { name: options.rp.name },
+                user: {
+                    id: _adminB64urlToUint8Array(options.user.id),
+                    name: options.user.name,
+                    displayName: options.user.displayName
+                },
+                pubKeyCredParams: options.pubKeyCredParams,
+                timeout: options.timeout || 60000,
+                attestation: options.attestation || 'none',
+                authenticatorSelection: options.authenticatorSelection
+            };
+
+            if (options.rp.id && options.rp.id !== '127.0.0.1') {
+                publicKey.rp.id = options.rp.id;
+            }
+
+            const cred = await navigator.credentials.create({ publicKey });
+            if (!cred) throw new Error("Passkey creation was cancelled.");
+
+            const regResponse = {
+                id: cred.id,
+                rawId: _adminBufferToB64url(cred.rawId),
+                type: cred.type,
+                response: {
+                    attestationObject: _adminBufferToB64url(cred.response.attestationObject),
+                    clientDataJSON: _adminBufferToB64url(cred.response.clientDataJSON),
+                    transports: cred.response.getTransports ? cred.response.getTransports() : ['internal', 'hybrid']
+                }
+            };
+
+            const verifyRes = await fetch('/api/auth/passkey/register-verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reg_response: regResponse })
+            });
+            const resData = await verifyRes.json();
+            if (resData.success) {
+                alert("✅ " + (resData.message || "Synced Passkey registered! You can now log in using Face ID / Touch ID across your Apple devices."));
+            } else {
+                throw new Error(resData.error || "Failed to verify passkey.");
+            }
+        } catch (err) {
+            alert("Passkey Setup: " + (err.message || "Cancelled or failed."));
+        }
+    };
+
     window.submitChangePassword = async function() {
         const newPass = document.getElementById('newAdminPassword').value;
         const confirmPass = document.getElementById('confirmAdminPassword').value;
@@ -93,7 +179,6 @@
         const targetBtn = document.getElementById(`tab-btn-${tabId}`);
         if (targetBtn) targetBtn.className = "px-4 py-2 text-xs font-bold text-white bg-white/10 rounded-lg cursor-pointer whitespace-nowrap transition-colors";
 
-        // Auto-Load Data for the selected tab
         if (tabId === 'inbox-feedback') window.loadPendingReports();
         if (tabId === 'date-errors') window.loadDateErrors();
         if (tabId === 'notices') window.loadAdminNotices();
@@ -197,17 +282,22 @@
                 return; 
             }
             
-            sugg.innerHTML = matches.slice(0, 8).map(p => `
-                <div class="px-4 py-2 hover:bg-blue-600/30 cursor-pointer text-sm text-white font-bold border-b border-white/5" 
+            sugg.innerHTML = matches.slice(0, 8).map(p => {
+                const ratingInfo = p.true_rating !== undefined
+                    ? `Pub: ${p.rating} | True: ${p.true_rating} (±${p.rd || 35})`
+                    : `${p.id}`;
+                return `
+                <div class="px-4 py-2 hover:bg-blue-600/30 cursor-pointer text-sm text-white font-bold border-b border-white/5 flex justify-between items-center" 
                      onclick="
                      document.getElementById('${inputId}').value = '${p.name.replace(/'/g, "\\'")}'; 
                      ${hiddenId ? `document.getElementById('${hiddenId}').value = '${p.id}';` : ''} 
                      document.getElementById('${suggId}').classList.add('hidden');
                      ${hiddenId === 'override-id' ? `window.fetchRatingContext('${p.id}');` : ''}
                      ">
-                    ${p.name} <span class="text-[10px] text-slate-500 font-mono ml-2">${p.id}</span>
-                </div>
-            `).join('');
+                    <span>${p.name}</span>
+                    <span class="text-[10px] text-purple-300 font-mono ml-2">${ratingInfo}</span>
+                </div>`;
+            }).join('');
             
             sugg.classList.remove('hidden');
         });
@@ -228,7 +318,7 @@
         attachPlayerSearch('diag-p2-search', 'diag-p2-suggestions');
         attachPlayerSearch('manual-p1', 'sugg-p1');
         attachPlayerSearch('manual-p2', 'sugg-p2');
-        attachPlayerSearch('unlink-search', 'unlink-suggestions'); // Hooked up the new unlink search bar!
+        attachPlayerSearch('unlink-search', 'unlink-suggestions');
     });
 
     // ==========================================
@@ -243,7 +333,8 @@
 
         try {
             const res = await fetch('/api/admin/pending_accounts');
-            const data = await res.json();
+            const rawData = await res.json();
+            const data = Array.isArray(rawData) ? rawData : (rawData.pending_users || []);
 
             if (data.length === 0) {
                 list.innerHTML = '<div class="text-slate-500 text-center py-10 italic border border-white/5 bg-slate-800/30 rounded-xl">Awesome! No pending accounts to approve.</div>';
@@ -252,25 +343,29 @@
 
             let html = '';
             data.forEach(a => {
+                const uid = a.uid || a.id;
                 html += `
                 <div class="bg-slate-800 p-4 rounded-xl border border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 shadow-lg mb-3">
                     <div>
                         <div class="font-bold text-white text-lg">${a.name}</div>
-                        <div class="text-xs text-slate-400 font-mono">${a.email} • DOB: ${a.dob}</div>
-                        <div class="text-[10px] text-slate-500 font-mono mt-1">UID: ${a.uid}</div>
+                        <div class="text-xs text-slate-400 font-mono">${a.email} • DOB: ${a.dob || 'N/A'}</div>
+                        <div class="text-[10px] text-slate-500 font-mono mt-1">UID: ${uid}</div>
                     </div>
                     <div class="flex items-center gap-2 bg-black/30 p-3 rounded-xl border border-white/5 w-full md:w-auto">
                         <div class="relative w-full md:w-64">
-                            <input type="text" id="link-search-${a.uid}" placeholder="Link to official player..." class="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-indigo-500" autocomplete="off" value="${a.name}">
-                            <div id="link-sugg-${a.uid}" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 rounded shadow-xl hidden border border-white/10 max-h-32 overflow-y-auto custom-scrollbar"></div>
+                            <input type="text" id="link-search-${uid}" placeholder="Link to official player..." class="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-indigo-500" autocomplete="off" value="${a.name}">
+                            <div id="link-sugg-${uid}" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 rounded shadow-xl hidden border border-white/10 max-h-32 overflow-y-auto custom-scrollbar"></div>
                         </div>
-                        <button onclick="window.linkAccount('${a.uid}')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-4 rounded-lg text-xs transition shadow-lg whitespace-nowrap"><i class="fa-solid fa-link mr-1"></i> Approve</button>
+                        <button onclick="window.linkAccount('${uid}')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-4 rounded-lg text-xs transition shadow-lg whitespace-nowrap"><i class="fa-solid fa-link mr-1"></i> Approve</button>
                     </div>
                 </div>`;
             });
             list.innerHTML = html;
 
-            data.forEach(a => { attachPlayerSearch(`link-search-${a.uid}`, `link-sugg-${a.uid}`); });
+            data.forEach(a => {
+                const uid = a.uid || a.id;
+                attachPlayerSearch(`link-search-${uid}`, `link-sugg-${uid}`);
+            });
         } catch(e) {
             list.innerHTML = '<div class="text-red-400 text-center py-10">Error loading pending accounts.</div>';
         }
@@ -282,10 +377,10 @@
         if (!confirm(`Are you sure you want to officially link UID ${uid} to the Glicko profile for ${playerName}?`)) return;
 
         try {
-            const res = await fetch('/api/admin/link_account', {
+            const res = await fetch('/api/admin/approve_account', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ uid: uid, player_name: playerName })
+                body: JSON.stringify({ user_id: uid, player_name: playerName })
             });
             const data = await res.json();
             if (data.success) {
@@ -711,7 +806,8 @@
             
             let html = '<div class="font-bold text-white mb-2 pb-1 border-b border-white/10"><i class="fa-solid fa-clock-rotate-left mr-2"></i>Last 6 Match Ratings:</div>';
             data.forEach(m => {
-                html += `<div class="flex justify-between items-center py-1 border-b border-white/5 last:border-0"><span class="text-[10px] uppercase font-bold tracking-widest">${m.date} vs ${m.opponent}</span> <span class="text-emerald-400 font-mono font-bold">${m.rating}</span></div>`;
+                const trueTag = m.true_rating !== undefined ? ` <span class="text-purple-400">(T: ${m.true_rating})</span>` : '';
+                html += `<div class="flex justify-between items-center py-1 border-b border-white/5 last:border-0"><span class="text-[10px] uppercase font-bold tracking-widest">${m.date} vs ${m.opponent}</span> <span class="text-emerald-400 font-mono font-bold">${m.rating}${trueTag}</span></div>`;
             });
             
             contextDiv.innerHTML = `<div class="bg-black/30 p-3 rounded border border-white/5 shadow-inner">${html}</div>`;
@@ -724,7 +820,8 @@
         const id = document.getElementById('override-id').value; 
         const rating = document.getElementById('override-score').value; 
         const sd = document.getElementById('override-sd').value;
-        const isRetro = document.getElementById('override-retro').checked;
+        const isRetro = document.getElementById('override-retro') ? document.getElementById('override-retro').checked : true;
+        const effectiveDate = document.getElementById('override-effective-date') ? document.getElementById('override-effective-date').value : '';
         
         if (!id || !rating) return alert("Please select a player and provide a rating.");
         
@@ -732,17 +829,25 @@
             const res = await fetch('/api/admin/override_rating', { 
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ player_id: id, rating: rating, sd: sd, retroactive: isRetro }) 
+                body: JSON.stringify({
+                    player_id: id,
+                    rating: rating,
+                    sd: sd,
+                    retroactive: isRetro,
+                    effective_date: effectiveDate
+                }) 
             });
             const data = await res.json();
             
             if (data.success) { 
-                alert(`✅ Successfully applied rating override.`); 
+                alert(`✅ Successfully applied rating checkpoint override!`); 
                 document.getElementById('override-id').value = ''; 
                 document.getElementById('override-search').value = ''; 
                 document.getElementById('override-score').value = ''; 
-                document.getElementById('override-sd').value = ''; 
+                document.getElementById('override-sd').value = '';
+                if (document.getElementById('override-effective-date')) document.getElementById('override-effective-date').value = '';
                 if (document.getElementById('override-context')) document.getElementById('override-context').innerHTML = '';
+                window.loadPlayerDirectory();
             } else {
                 alert("❌ Error applying rating override.");
             }
@@ -815,7 +920,6 @@
         }
     };
 
-    // --- NEW: UNLINK APP LOGIN (RESET ACCOUNT) ---
     window.unlinkPlayerAccount = async function() {
         const pName = document.getElementById('unlink-search').value;
         if (!pName) return alert("Please select a player to unlink.");
@@ -1297,7 +1401,6 @@
         } catch(e) {}
     };
 
-    // --- UPGRADED DATE/TIME HTML AND FILTER LOGIC INTACT ---
     window.loadAuditLogs = async function() {
         const list = document.getElementById('auditLogList'); 
         if (!list) return;
@@ -1415,7 +1518,7 @@
             });
             list.innerHTML = html;
         } catch(e) {}
-    }
+    };
 
     window.manageUser = async function(email, action) {
         if (!confirm(`Are you sure you want to apply this access rule for ${email}?`)) return;
@@ -1428,12 +1531,12 @@
             const data = await res.json();
             if (data.success) window.loadAdminUsers();
         } catch(e) {}
-    }
+    };
 </script>
 
 <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, query, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, query, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     const firebaseConfig = { 
         apiKey: "AIzaSyDq05wFsKLHtt8G0Z5yLOG9pIk9UX24S4o", 
@@ -1461,7 +1564,6 @@
         onSnapshot(query(collection(db, "fixture_schedule")), (snapshot) => {
             const liveList = document.getElementById("live-list"); 
             const scheduledList = document.getElementById("scheduled-list");
-            let liveCount = 0; 
             let liveHtml = ""; 
             let schedHtml = "";
             
@@ -1472,7 +1574,6 @@
                 const p2 = (m.away_players && m.away_players.length > 0) ? m.away_players[0] : m.away_team;
                 
                 if (m.match_status === "Live" || m.match_status === "Paused" || m.live_home_score > 0 || m.live_away_score > 0) {
-                    liveCount++; 
                     const s1 = m.live_home_sets || 0; 
                     const s2 = m.live_away_sets || 0;
                     

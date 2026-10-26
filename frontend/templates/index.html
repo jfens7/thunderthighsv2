@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>GCTTA Stats</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -10,14 +10,14 @@
     
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-      import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+      import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
       
       fetch('/api/firebase-config').then(r => r.json()).then(config => {
           const app = initializeApp(config);
           const auth = getAuth(app);
 
           window.handleEmailLogin = function() {
-              const email = document.getElementById('login-email').value;
+              const email = document.getElementById('login-email').value.trim();
               const pass = document.getElementById('login-password').value;
               if(!email || !pass) return alert("Please enter both email and password.");
               
@@ -45,6 +45,19 @@
               });
           };
 
+          window.handleForgotPassword = function() {
+              const emailInput = document.getElementById('login-email');
+              const email = emailInput ? emailInput.value.trim() : '';
+              const targetEmail = email || prompt("Enter your account email address to receive a password reset link:");
+              if (!targetEmail) return;
+
+              sendPasswordResetEmail(auth, targetEmail.trim()).then(() => {
+                  alert(`Password reset link sent to ${targetEmail}! Check your inbox (and spam folder).`);
+              }).catch((err) => {
+                  alert("Reset Error: " + err.message);
+              });
+          };
+
           window.openRegisterModal = function() {
               const modal = document.getElementById('registerModal');
               if(modal) modal.classList.remove('hidden');
@@ -59,16 +72,15 @@
               const noRc = document.getElementById('reg-no-rc').checked;
               const rcGroup = document.getElementById('rc-fields-group');
               if(noRc) {
-                  rcGroup.classList.add('opacity-50', 'pointer-events-none');
+                  rcGroup.classList.add('opacity-40', 'pointer-events-none');
                   document.getElementById('reg-rc-id').value = '';
                   document.getElementById('reg-rc-rating').value = '';
               } else {
-                  rcGroup.classList.remove('opacity-50', 'pointer-events-none');
+                  rcGroup.classList.remove('opacity-40', 'pointer-events-none');
               }
           };
 
           window.handleRegistration = function() {
-              // Gather all the specific fields you requested
               const first = document.getElementById('reg-first').value.trim();
               const middle = document.getElementById('reg-middle').value.trim();
               const last = document.getElementById('reg-last').value.trim();
@@ -87,9 +99,8 @@
               if(pass1.length < 6) return alert("Password must be at least 6 characters.");
               if(!noRc && (!rcId || !rcRating)) return alert("Please provide your Ratings Central details or check the 'I don't have one' box.");
 
-              // Combine the name and decide the payload rating
               const fullName = middle ? `${first} ${middle} ${last}` : `${first} ${last}`;
-              const finalRating = noRc ? 1500 : (rcId ? rcId : rcRating);
+              const finalRating = noRc ? 1050 : (rcId ? rcId : rcRating);
 
               const btn = document.getElementById('reg-btn');
               const orig = btn.innerHTML;
@@ -144,118 +155,200 @@
       });
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap');
         
-        :root { --p-primary: #eab308; --p-secondary: #0ea5e9; --p-bg: #0f172a; --p-panel: #1e293b; }
+        :root {
+            --p-primary: #eab308;
+            --p-secondary: #0ea5e9;
+            --p-bg: #090d16;
+            --p-panel: #111827;
+        }
         
-        body { font-family: 'Inter', sans-serif; background-color: var(--p-bg); color: #f8fafc; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--p-bg);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.08) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(234, 179, 8, 0.05) 0px, transparent 50%);
+            color: #f8fafc;
+            -webkit-tap-highlight-color: transparent;
+            overflow-x: hidden;
+        }
+
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
         
-        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); }
-        .nav-item.active { color: var(--p-secondary); }
-        .nav-item.active i { transform: translateY(-2px); color: var(--p-secondary); text-shadow: 0 0 10px rgba(14, 165, 233, 0.5); }
-        .input-premium { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; transition: all 0.2s; }
-        .input-premium:focus { border-color: var(--p-primary); box-shadow: 0 0 0 2px rgba(234,179,8,0.2); }
+        /* Boxy iPhone 15 Pro Titanium Glass Panel */
+        .glass-panel {
+            background: rgba(17, 24, 39, 0.78);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
+        }
+
+        /* Tactile Mobile Button Press */
+        button, a {
+            transition: transform 0.12s cubic-bezier(0.2, 0, 0, 1), background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+        }
+        button:active:not(:disabled) {
+            transform: scale(0.96);
+        }
+
+        /* Desktop Top Nav Active Pill */
+        .top-nav-btn.active {
+            background: rgba(14, 165, 233, 0.15);
+            color: #38bdf8;
+            border-color: rgba(56, 189, 248, 0.3);
+            box-shadow: 0 0 15px rgba(14, 165, 233, 0.15);
+        }
+
+        /* Mobile Bottom Bar Active Pill */
+        .nav-item {
+            position: relative;
+            border-radius: 12px;
+        }
+        .nav-item.active {
+            color: #38bdf8;
+            background: rgba(14, 165, 233, 0.12);
+        }
+        .nav-item.active i {
+            transform: translateY(-1px);
+            color: #38bdf8;
+            filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.6));
+        }
+
+        .input-premium {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            transition: all 0.2s;
+        }
+        .input-premium:focus {
+            border-color: var(--p-secondary);
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
+        }
         
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
 
         #starContainer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
         .cross-star { position: absolute; background: white; clip-path: polygon(50% 0%, 55% 45%, 100% 50%, 55% 55%, 50% 100%, 45% 55%, 0% 50%, 45% 45%); opacity: 0; }
-        @keyframes sporadic-twinkle { 0%, 20% { opacity: 0; transform: scale(0.3) rotate(0deg); } 50% { opacity: 1; transform: scale(1.2) rotate(45deg); box-shadow: 0 0 8px rgba(255,255,255,0.8); } 80%, 100% { opacity: 0; transform: scale(0.3) rotate(90deg); } }
+        @keyframes sporadic-twinkle {
+            0%, 20% { opacity: 0; transform: scale(0.3) rotate(0deg); }
+            50% { opacity: 0.85; transform: scale(1.1) rotate(45deg); box-shadow: 0 0 8px rgba(255,255,255,0.7); }
+            80%, 100% { opacity: 0; transform: scale(0.3) rotate(90deg); }
+        }
+
+        /* iOS Safe Area Bottom Padding */
+        .pb-safe {
+            padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+        }
     </style>
 </head>
-<body class="min-h-screen pb-24 lg:pb-6 relative flex flex-col">
+<body class="min-h-screen pb-28 lg:pb-8 relative flex flex-col selection:bg-sky-500 selection:text-white">
     <div id="starContainer"></div>
 
-    <nav class="glass-panel sticky top-0 z-50 mt-2 mx-2 rounded-2xl border border-white/5">
-        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+    <!-- TOP NAVIGATION BAR -->
+    <nav class="glass-panel sticky top-0 z-50 mx-2 mt-2 rounded-xl border border-white/10">
+        <div class="max-w-7xl mx-auto px-3 md:px-5 py-2.5 flex items-center justify-between gap-2">
             
-            <div class="flex items-center gap-3 cursor-pointer group shrink-0" onclick="window.switchTab('home')">
-                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="w-10 h-10 md:w-12 h-12 drop-shadow-[0_0_12px_rgba(56,189,248,0.3)] group-hover:drop-shadow-[0_0_16px_rgba(52,211,153,0.5)] group-hover:scale-105 transition-all duration-300">
-                <div class="flex flex-col justify-center mt-0.5">
-                    <span class="text-[8px] md:text-[10px] font-bold text-slate-400 uppercase tracking-[0.25em] leading-none mb-1 group-hover:text-slate-300 transition-colors">Gold Coast Table Tennis</span>
-                    <span class="text-xl md:text-2xl font-black uppercase tracking-tight leading-none text-white drop-shadow-md">
+            <!-- Brand Header -->
+            <div class="flex items-center gap-2.5 cursor-pointer group shrink-0" onclick="window.switchTab('home')">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="w-9 h-9 md:w-11 md:h-11 drop-shadow-[0_0_10px_rgba(56,189,248,0.3)] group-hover:scale-105 transition-transform duration-200">
+                <div class="flex flex-col justify-center">
+                    <span class="text-[8px] md:text-[9px] font-extrabold text-slate-400 uppercase tracking-[0.22em] leading-none mb-0.5">Gold Coast Table Tennis</span>
+                    <span class="text-lg md:text-2xl font-black uppercase tracking-tight leading-none text-white">
                         <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-sky-400">GCTTA</span> STATS
                     </span>
                 </div>
             </div>
             
-            <div class="flex gap-1 bg-black/20 p-1 rounded-lg border border-white/5 items-center hidden lg:flex">
-                <button id="nav-home" onclick="window.switchTab('home')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all active">Dashboard</button>
-                <button id="nav-live-center" onclick="window.switchTab('live-center')" class="hidden px-5 py-2 rounded-md text-sm font-bold text-white bg-red-600 hover:bg-red-500 transition-all shadow-[0_0_15px_rgba(220,38,38,0.5)] animate-pulse border border-red-400">
-                    <i class="fa-solid fa-circle text-[8px] align-middle mr-2 animate-ping"></i>LIVE MATCHES
+            <!-- Desktop Segmented Navigation -->
+            <div class="hidden lg:flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
+                <button id="nav-home" onclick="window.switchTab('home')" class="top-nav-btn active px-4 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-400 hover:text-white border border-transparent transition-all">Dashboard</button>
+                <button id="nav-live-center" onclick="window.switchTab('live-center')" class="hidden px-4 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider text-white bg-red-600 hover:bg-red-500 transition-all shadow-[0_0_15px_rgba(220,38,38,0.5)] animate-pulse border border-red-400">
+                    <i class="fa-solid fa-circle text-[7px] align-middle mr-1.5 animate-ping"></i>LIVE
                 </button>
-                <button id="nav-week" onclick="window.switchTab('week')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Standings</button>
-                <button id="nav-sheets" onclick="window.switchTab('sheets')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Match Centre</button>
-                <button id="nav-search" onclick="window.switchTab('search')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Player Search</button>
-                <button id="nav-notices" onclick="window.switchTab('notices')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Notices</button>
-                <button id="nav-community" onclick="window.switchTab('community')" class="px-5 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all">Community</button>
+                <button id="nav-week" onclick="window.switchTab('week')" class="top-nav-btn px-4 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-400 hover:text-white border border-transparent transition-all">Standings</button>
+                <button id="nav-sheets" onclick="window.switchTab('sheets')" class="top-nav-btn px-4 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-400 hover:text-white border border-transparent transition-all">Matches</button>
+                <button id="nav-search" onclick="window.switchTab('search')" class="top-nav-btn px-4 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-400 hover:text-white border border-transparent transition-all">Players</button>
+                <button id="nav-notices" onclick="window.switchTab('notices')" class="top-nav-btn px-4 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-400 hover:text-white border border-transparent transition-all">Notices</button>
+                <button id="nav-community" onclick="window.switchTab('community')" class="top-nav-btn px-4 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-400 hover:text-white border border-transparent transition-all">Forum</button>
             </div>
 
-            <div class="flex items-center gap-3 shrink-0">
-                
-                <a href="/login" class="bg-slate-800 hover:bg-slate-700 border border-white/10 text-slate-300 hover:text-white text-[11px] md:text-xs tracking-widest font-bold px-3 md:px-4 py-2.5 rounded-xl transition-all shadow-lg flex items-center gap-2">
-                    <i class="fa-solid fa-shield-halved text-blue-500"></i> <span class="hidden md:inline">ADMIN</span>
+            <!-- Action Controls -->
+            <div class="flex items-center gap-2 shrink-0">
+                <!-- Quick Search (Desktop) -->
+                <div class="relative w-44 xl:w-56 group hidden md:block">
+                    <input type="text" id="playerSearch" placeholder="Find player..." class="w-full bg-black/40 border border-white/10 text-white text-xs font-semibold rounded-xl px-3.5 py-2 pl-9 focus:outline-none focus:border-sky-500 transition-all placeholder-slate-500" autocomplete="off">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 group-hover:text-sky-400 transition-colors"></i>
+                    <div id="suggestions-list" class="absolute border border-white/10 z-[99] top-full mt-1 left-0 right-0 rounded-xl bg-slate-900/95 backdrop-blur-xl max-h-[50vh] overflow-y-auto shadow-2xl hidden"></div>
+                </div>
+
+                <!-- Admin Button -->
+                <a href="/login" class="bg-slate-800/90 hover:bg-slate-700 border border-white/10 text-slate-300 hover:text-white text-[11px] tracking-wider font-extrabold px-3 py-2 rounded-xl transition-all shadow flex items-center gap-1.5" title="Admin Control Tower">
+                    <i class="fa-solid fa-shield-halved text-sky-400"></i>
+                    <span class="hidden sm:inline">ADMIN</span>
                 </a>
 
-                <div class="relative group" id="authDropdownContainer">
-                    <button onclick="window.toggleAuthDropdown()" class="auth-logged-out bg-slate-800 hover:bg-slate-700 border border-white/10 text-white text-[11px] md:text-xs uppercase tracking-widest font-bold px-4 py-2.5 rounded-xl transition-all shadow-lg flex items-center gap-2">
-                        <i class="fa-solid fa-right-to-bracket text-sky-500"></i> LOGIN / SIGNUP
+                <!-- Auth Portal Dropdown -->
+                <div class="relative" id="authDropdownContainer">
+                    <button onclick="window.toggleAuthDropdown()" class="auth-logged-out bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/30 text-sky-300 text-[11px] uppercase tracking-wider font-extrabold px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5">
+                        <i class="fa-solid fa-user-check text-sky-400"></i>
+                        <span>LOGIN</span>
                     </button>
                     
-                    <button onclick="window.toggleAuthDropdown()" class="auth-logged-in hidden bg-gradient-to-r from-yellow-600 to-amber-500 hover:from-yellow-500 hover:to-amber-400 text-black border border-yellow-400/50 text-[11px] md:text-xs uppercase tracking-widest font-black px-4 py-2.5 rounded-xl transition-all shadow-[0_0_15px_rgba(234,179,8,0.4)] flex items-center gap-2 hover:scale-[1.02]">
-                        <i class="fa-solid fa-user-astronaut"></i> MY HUB
+                    <button onclick="window.toggleAuthDropdown()" class="auth-logged-in hidden bg-gradient-to-r from-amber-500 to-yellow-500 text-black border border-yellow-300/50 text-[11px] uppercase tracking-wider font-black px-3.5 py-2 rounded-xl transition-all shadow-[0_0_15px_rgba(234,179,8,0.3)] flex items-center gap-1.5">
+                        <i class="fa-solid fa-user-astronaut"></i>
+                        <span>HUB</span>
                     </button>
 
-                    <div id="authDropdownMenu" class="hidden absolute right-0 mt-3 w-72 bg-slate-800 border border-white/10 rounded-2xl shadow-2xl z-[100] overflow-hidden origin-top-right transition-all">
-                        
+                    <div id="authDropdownMenu" class="hidden absolute right-0 mt-2.5 w-72 bg-slate-900/95 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-2xl z-[100] overflow-hidden origin-top-right">
                         <div class="auth-logged-out">
-                            <div class="p-4 border-b border-white/5 bg-slate-900/80">
-                                <p class="text-xs font-black text-white uppercase tracking-widest mb-1">Player Portal</p>
-                                <p class="text-[10px] text-slate-400 leading-tight">Sign in to view your personalized dashboard and register for events.</p>
+                            <div class="p-4 border-b border-white/10 bg-black/30">
+                                <p class="text-xs font-black text-white uppercase tracking-wider">Player Portal</p>
+                                <p class="text-[11px] text-slate-400 mt-0.5 leading-snug">Sign in to view your hub and register for events.</p>
                             </div>
-                            <div class="p-4 flex flex-col gap-3">
-                                <input type="email" id="login-email" placeholder="Email Address" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2.5 text-white text-sm focus:border-sky-500 outline-none transition-colors">
-                                <input type="password" id="login-password" placeholder="Password" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2.5 text-white text-sm focus:border-sky-500 outline-none transition-colors" onkeypress="if(event.key === 'Enter') window.handleEmailLogin()">
-                                <button id="login-btn" onclick="window.handleEmailLogin()" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 rounded-lg transition text-sm shadow">Sign In</button>
+                            <div class="p-4 flex flex-col gap-2.5">
+                                <input type="email" id="login-email" placeholder="Email Address" class="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2.5 text-white text-xs font-medium focus:border-sky-500 outline-none transition-colors">
+                                <input type="password" id="login-password" placeholder="Password" class="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2.5 text-white text-xs font-medium focus:border-sky-500 outline-none transition-colors" onkeypress="if(event.key === 'Enter') window.handleEmailLogin()">
+                                <button id="login-btn" onclick="window.handleEmailLogin()" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-black py-2.5 rounded-xl transition text-xs uppercase tracking-wider shadow-lg">Sign In</button>
+                                <button onclick="window.handleForgotPassword()" class="text-[11px] text-slate-400 hover:text-sky-400 font-semibold text-center mt-1 transition-colors">Forgot Password?</button>
                             </div>
-                            <div class="border-t border-white/5 p-4 bg-slate-900/50">
-                                <p class="text-[10px] text-slate-400 mb-2 text-center">New to the portal?</p>
-                                <button onclick="window.openRegisterModal(); window.toggleAuthDropdown();" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg transition text-xs uppercase tracking-widest shadow">Create Account</button>
+                            <div class="border-t border-white/10 p-3.5 bg-black/40">
+                                <button onclick="window.openRegisterModal(); window.toggleAuthDropdown();" class="w-full bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 font-extrabold py-2 rounded-xl transition text-xs uppercase tracking-wider">Create Player Account</button>
                             </div>
                         </div>
                         
                         <div class="auth-logged-in hidden">
-                            <div class="p-5 border-b border-white/5 bg-slate-900/80">
-                                <p class="text-xs font-black text-white uppercase tracking-widest mb-1">Signed In As</p>
-                                <p class="text-[10px] text-sky-400 font-mono truncate" id="dropdown-email">Loading...</p>
+                            <div class="p-4 border-b border-white/10 bg-black/30">
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Signed In As</p>
+                                <p class="text-xs text-sky-400 font-mono font-bold truncate mt-0.5" id="dropdown-email">Loading...</p>
                             </div>
-                            <button onclick="window.switchTab('player-hub'); window.toggleAuthDropdown();" class="w-full text-left px-5 py-4 text-sm text-white hover:bg-yellow-500/20 hover:text-yellow-400 transition-colors flex items-center gap-3 font-bold">
-                                <i class="fa-solid fa-user-astronaut text-lg"></i> Open Player Hub
+                            <button onclick="window.switchTab('player-hub'); window.toggleAuthDropdown();" class="w-full text-left px-4 py-3.5 text-xs text-white hover:bg-white/5 transition-colors flex items-center gap-3 font-extrabold uppercase tracking-wider">
+                                <i class="fa-solid fa-user-astronaut text-yellow-400 text-base"></i> Open Player Hub
                             </button>
-                            <div class="border-t border-white/5"></div>
-                            <button onclick="window.handlePlayerLogout()" class="w-full text-left px-5 py-4 text-sm text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors flex items-center gap-3 font-bold">
-                                <i class="fa-solid fa-right-from-bracket text-lg"></i> Sign Out
+                            <div class="border-t border-white/10"></div>
+                            <button onclick="window.handlePlayerLogout()" class="w-full text-left px-4 py-3.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-3 font-extrabold uppercase tracking-wider">
+                                <i class="fa-solid fa-right-from-bracket text-base"></i> Sign Out
                             </button>
                         </div>
                     </div>
-                </div>
-
-                <div class="relative w-48 md:w-64 group hidden md:block">
-                    <input type="text" id="playerSearch" placeholder="Search for a player..." class="w-full bg-black/40 border border-white/10 text-white text-sm rounded-xl px-5 py-2 pl-11 focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all group-hover:bg-black/60 shadow-inner placeholder-slate-500" autocomplete="off">
-                    <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-hover:text-sky-500 transition-colors"></i>
-                    <div id="suggestions-list" class="absolute border border-white/10 border-top-none z-[99] top-full left-0 right-0 rounded-b-lg bg-slate-800 max-h-[50vh] overflow-y-auto shadow-2xl hidden"></div>
                 </div>
             </div>
         </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto py-6 flex flex-col items-center relative z-10 w-full flex-grow">
+    <!-- MAIN VIEWPORT -->
+    <main class="max-w-7xl mx-auto py-4 md:py-6 flex flex-col items-center relative z-10 w-full flex-grow">
         {% include 'Components/home.html' %}
         {% include 'Components/live.html' %}
         {% include 'Components/standings.html' %}
@@ -266,160 +359,176 @@
         {% include 'Components/profile.html' %}
 
         <div id="tab-player-hub" class="hidden w-full max-w-4xl px-4 animate-fade-in relative z-10">
-            <div class="glass-panel rounded-3xl p-6 md:p-10 shadow-2xl border border-yellow-500/30 relative overflow-hidden">
-                <div class="absolute -right-20 -top-20 w-64 h-64 bg-yellow-500/10 rounded-full blur-3xl pointer-events-none"></div>
-                
-                <div class="flex justify-between items-start mb-8 relative z-10">
+            <div class="glass-panel rounded-2xl p-6 md:p-8 shadow-2xl border border-yellow-500/30 relative overflow-hidden">
+                <div class="flex justify-between items-start mb-6 relative z-10">
                     <div>
-                        <h2 class="text-3xl md:text-4xl font-black text-white flex items-center gap-3 mb-2"><i class="fa-solid fa-user-astronaut text-yellow-500"></i> Player Hub</h2>
-                        <p class="text-sm text-slate-400 font-mono" id="hub-email">Loading...</p>
+                        <h2 class="text-2xl md:text-3xl font-black text-white flex items-center gap-2.5 mb-1">
+                            <i class="fa-solid fa-user-astronaut text-yellow-400"></i> Player Hub
+                        </h2>
+                        <p class="text-xs text-slate-400 font-mono" id="hub-email">Loading...</p>
                     </div>
-                    <button onclick="window.handlePlayerLogout()" class="bg-red-900/30 hover:bg-red-600 text-red-500 hover:text-white border border-red-500/30 font-bold py-2 px-4 rounded-xl text-xs uppercase tracking-widest shadow transition flex items-center gap-2">
+                    <button onclick="window.handlePlayerLogout()" class="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-extrabold py-2 px-3.5 rounded-xl text-xs uppercase tracking-wider transition flex items-center gap-1.5">
                         <i class="fa-solid fa-right-from-bracket"></i> Logout
                     </button>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                    <div class="bg-slate-800/80 p-6 rounded-2xl border border-white/5 shadow-lg flex flex-col items-center justify-center text-center group hover:border-sky-500/50 transition-colors cursor-pointer" onclick="window.switchTab('search')">
-                        <div class="w-16 h-16 bg-sky-500/20 text-sky-400 rounded-full flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform"><i class="fa-solid fa-chart-pie"></i></div>
-                        <h3 class="text-white font-black text-lg mb-1">View My Stats</h3>
-                        <p class="text-xs text-slate-400">Jump to your public profile to see your match history and ratings.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
+                    <div class="bg-black/40 p-5 rounded-xl border border-white/10 flex items-center gap-4 group hover:border-sky-500/40 transition-all cursor-pointer" onclick="window.switchTab('search')">
+                        <div class="w-12 h-12 bg-sky-500/15 text-sky-400 rounded-xl flex items-center justify-center text-2xl shrink-0 border border-sky-500/20">
+                            <i class="fa-solid fa-chart-line"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-white font-black text-base">My Rating & Stats</h3>
+                            <p class="text-xs text-slate-400 mt-0.5">View your live GCTTA rating, SD, and match insights.</p>
+                        </div>
                     </div>
                     
-                    <div class="bg-slate-800/80 p-6 rounded-2xl border border-white/5 shadow-lg flex flex-col items-center justify-center text-center group hover:border-emerald-500/50 transition-colors cursor-pointer">
-                        <div class="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform"><i class="fa-solid fa-calendar-check"></i></div>
-                        <h3 class="text-white font-black text-lg mb-1">Tournament Registration</h3>
-                        <p class="text-xs text-slate-400">Sign up for upcoming club events. (Coming Soon!)</p>
+                    <div class="bg-black/40 p-5 rounded-xl border border-white/10 flex items-center gap-4 group hover:border-emerald-500/40 transition-all cursor-pointer">
+                        <div class="w-12 h-12 bg-emerald-500/15 text-emerald-400 rounded-xl flex items-center justify-center text-2xl shrink-0 border border-emerald-500/20">
+                            <i class="fa-solid fa-calendar-check"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-white font-black text-base">Tournament Entries</h3>
+                            <p class="text-xs text-slate-400 mt-0.5">Sign up for upcoming GCTTA events and fixtures.</p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </main>
 
-    <footer class="w-full max-w-4xl mx-auto px-4 pt-8 pb-12 text-center relative z-10">
-        <div class="border-t border-white/10 pt-6 flex flex-col items-center gap-3">
-            <p class="text-xs text-slate-500 font-medium">
-                &copy; 2026 Gold Coast Table Tennis Stats. <br class="md:hidden">
-                Created by Jakob Fensom and Jesse Wilson.
+    <!-- FOOTER -->
+    <footer class="w-full max-w-4xl mx-auto px-4 pt-6 pb-8 text-center relative z-10">
+        <div class="border-t border-white/10 pt-5 flex flex-col items-center gap-2">
+            <p class="text-[11px] text-slate-500 font-semibold">
+                &copy; 2026 Gold Coast Table Tennis Association. Created by Jakob Fensom &amp; Jesse Wilson.
             </p>
         </div>
     </footer>
 
-    <div class="lg:hidden fixed bottom-0 left-0 right-0 z-50 px-2 pb-2">
-        <div class="glass-panel rounded-2xl flex justify-around items-center p-1 border border-white/10 shadow-2xl bg-slate-900/95">
-            <button id="b-nav-home" onclick="window.switchTab('home')" class="nav-item active flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 text-slate-400">
-                <i class="fa-solid fa-house text-lg"></i>
-                <span class="text-[9px] font-medium tracking-tight">Home</span>
+    <!-- IPHONE 15 PRO STYLE MOBILE BOTTOM NAVIGATION DOCK -->
+    <div class="lg:hidden fixed bottom-0 left-0 right-0 z-50 px-2.5 pb-safe pt-1 pointer-events-none">
+        <div class="glass-panel rounded-2xl flex justify-between items-center p-1.5 border border-white/15 shadow-[0_10px_30px_rgba(0,0,0,0.8)] bg-slate-950/90 pointer-events-auto">
+            <button id="b-nav-home" onclick="window.switchTab('home')" class="nav-item active flex flex-col items-center justify-center gap-1 py-1.5 px-1 flex-1 transition-all text-slate-400">
+                <i class="fa-solid fa-house text-base"></i>
+                <span class="text-[10px] font-bold tracking-tight">Home</span>
             </button>
-            <button id="b-nav-week" onclick="window.switchTab('week')" class="nav-item flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 text-slate-400">
-                <i class="fa-solid fa-trophy text-lg"></i>
-                <span class="text-[9px] font-medium tracking-tight">Ranks</span>
+            <button id="b-nav-week" onclick="window.switchTab('week')" class="nav-item flex flex-col items-center justify-center gap-1 py-1.5 px-1 flex-1 transition-all text-slate-400">
+                <i class="fa-solid fa-trophy text-base"></i>
+                <span class="text-[10px] font-bold tracking-tight">Standings</span>
             </button>
-            <button id="b-nav-notices" onclick="window.switchTab('notices')" class="nav-item flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 text-slate-400">
-                <i class="fa-solid fa-bullhorn text-lg"></i>
-                <span class="text-[9px] font-medium tracking-tight">Notices</span>
+            <button id="b-nav-sheets" onclick="window.switchTab('sheets')" class="nav-item flex flex-col items-center justify-center gap-1 py-1.5 px-1 flex-1 transition-all text-slate-400">
+                <i class="fa-solid fa-table-tennis-paddle-ball text-base"></i>
+                <span class="text-[10px] font-bold tracking-tight">Matches</span>
             </button>
-            <button id="b-nav-search" onclick="window.switchTab('search')" class="nav-item flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 text-slate-400">
-                <i class="fa-solid fa-magnifying-glass text-lg"></i>
-                <span class="text-[9px] font-medium tracking-tight">Search</span>
+            <button id="b-nav-search" onclick="window.switchTab('search')" class="nav-item flex flex-col items-center justify-center gap-1 py-1.5 px-1 flex-1 transition-all text-slate-400">
+                <i class="fa-solid fa-magnifying-glass text-base"></i>
+                <span class="text-[10px] font-bold tracking-tight">Players</span>
             </button>
-            
-            <button id="b-nav-player-hub" onclick="window.switchTab('player-hub')" class="auth-logged-in hidden nav-item flex flex-col items-center gap-1 p-1 flex-1 transition-all duration-300 text-yellow-500">
-                <i class="fa-solid fa-user-astronaut text-lg drop-shadow-[0_0_5px_rgba(234,179,8,0.5)]"></i>
-                <span class="text-[9px] font-black tracking-tight uppercase">Hub</span>
+            <button id="b-nav-notices" onclick="window.switchTab('notices')" class="nav-item flex flex-col items-center justify-center gap-1 py-1.5 px-1 flex-1 transition-all text-slate-400">
+                <i class="fa-solid fa-bullhorn text-base"></i>
+                <span class="text-[10px] font-bold tracking-tight">Notices</span>
+            </button>
+            <button id="b-nav-player-hub" onclick="window.switchTab('player-hub')" class="auth-logged-in hidden nav-item flex flex-col items-center justify-center gap-1 py-1.5 px-1 flex-1 transition-all text-yellow-400">
+                <i class="fa-solid fa-user-astronaut text-base"></i>
+                <span class="text-[10px] font-black tracking-tight">Hub</span>
             </button>
         </div>
     </div>
 
-    <div id="registerModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-sm z-[150] flex items-center justify-center p-4 animate-fade-in overflow-y-auto">
-        <div class="bg-slate-900 rounded-3xl border border-emerald-500/30 w-full max-w-2xl shadow-2xl flex flex-col my-8 relative overflow-hidden">
-            <div class="absolute -right-20 -top-20 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
-            
-            <div class="p-6 border-b border-white/10 flex justify-between items-center relative z-10 bg-slate-900/80">
+    <!-- REGISTER MODAL -->
+    <div id="registerModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-[150] flex items-center justify-center p-4 animate-fade-in overflow-y-auto">
+        <div class="bg-slate-900 rounded-2xl border border-white/15 w-full max-w-xl shadow-2xl flex flex-col my-8 relative overflow-hidden">
+            <div class="p-5 border-b border-white/10 flex justify-between items-center bg-black/30">
                 <div>
-                    <h3 class="text-2xl font-black text-white flex items-center gap-2"><i class="fa-solid fa-user-plus text-emerald-400"></i> Create Player Account</h3>
-                    <p class="text-xs text-slate-400 mt-1">Join the portal to track your stats and register for events.</p>
+                    <h3 class="text-xl font-black text-white flex items-center gap-2">
+                        <i class="fa-solid fa-user-plus text-emerald-400"></i> Create Player Account
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Link your official GCTTA player profile.</p>
                 </div>
-                <button onclick="window.closeRegisterModal()" class="text-slate-400 hover:text-white transition bg-black/20 w-8 h-8 rounded-full flex justify-center items-center"><i class="fa-solid fa-xmark"></i></button>
+                <button onclick="window.closeRegisterModal()" class="text-slate-400 hover:text-white bg-white/5 w-8 h-8 rounded-xl flex justify-center items-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
             </div>
             
-            <div class="p-6 relative z-10 space-y-5">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="p-5 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
-                        <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">First Name *</label>
-                        <input type="text" id="reg-first" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm">
+                        <label class="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">First Name *</label>
+                        <input type="text" id="reg-first" class="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-xs font-semibold">
                     </div>
                     <div>
-                        <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Middle Name</label>
-                        <input type="text" id="reg-middle" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm">
+                        <label class="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">Middle Name</label>
+                        <input type="text" id="reg-middle" class="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-xs font-semibold">
                     </div>
                     <div>
-                        <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Last Name *</label>
-                        <input type="text" id="reg-last" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Email Address *</label>
-                        <input type="email" id="reg-email" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm">
-                    </div>
-                    <div>
-                        <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Date of Birth *</label>
-                        <input type="date" id="reg-dob" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-emerald-500 outline-none text-sm" style="color-scheme: dark;">
+                        <label class="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">Last Name *</label>
+                        <input type="text" id="reg-last" class="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-xs font-semibold">
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                        <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Password *</label>
-                        <input type="password" id="reg-pass1" placeholder="Min 6 characters" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm">
+                        <label class="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">Email Address *</label>
+                        <input type="email" id="reg-email" class="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-xs font-semibold">
                     </div>
                     <div>
-                        <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Confirm Password *</label>
-                        <input type="password" id="reg-pass2" placeholder="Re-type password" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm">
+                        <label class="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">Date of Birth *</label>
+                        <input type="date" id="reg-dob" class="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white focus:border-emerald-500 outline-none text-xs font-semibold" style="color-scheme: dark;">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">Password *</label>
+                        <input type="password" id="reg-pass1" placeholder="Min 6 characters" class="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-xs font-semibold">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">Confirm Password *</label>
+                        <input type="password" id="reg-pass2" placeholder="Re-type password" class="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-xs font-semibold">
                     </div>
                 </div>
 
                 <div>
-                    <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Home Club</label>
-                    <input type="text" id="reg-club" placeholder="e.g. Gold Coast Table Tennis" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm">
+                    <label class="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">Home Club</label>
+                    <input type="text" id="reg-club" value="Gold Coast Table Tennis" class="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-xs font-semibold">
                 </div>
 
-                <div class="bg-emerald-900/10 border border-emerald-500/20 rounded-xl p-4">
+                <div class="bg-black/40 border border-white/10 rounded-xl p-4">
                     <div class="flex justify-between items-center mb-3">
-                        <h4 class="text-xs font-black text-emerald-400 uppercase tracking-widest"><i class="fa-solid fa-globe mr-1"></i> Ratings Central</h4>
+                        <h4 class="text-xs font-black text-emerald-400 uppercase tracking-wider"><i class="fa-solid fa-globe mr-1"></i> Ratings Central</h4>
                         <label class="flex items-center gap-2 cursor-pointer">
                             <input type="checkbox" id="reg-no-rc" onchange="window.toggleRcFields()" class="w-4 h-4 accent-emerald-500 rounded bg-black/40 border-white/10">
-                            <span class="text-[10px] text-slate-300 font-bold uppercase tracking-widest mt-0.5">I don't have one</span>
+                            <span class="text-[11px] text-slate-300 font-bold">I don't have one</span>
                         </label>
                     </div>
                     
-                    <div id="rc-fields-group" class="grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-300">
+                    <div id="rc-fields-group" class="grid grid-cols-1 md:grid-cols-2 gap-3 transition-opacity duration-200">
                         <div>
-                            <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">RC ID Number</label>
-                            <input type="number" id="reg-rc-id" placeholder="e.g. 123456" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm font-mono">
+                            <label class="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">RC ID Number</label>
+                            <input type="number" id="reg-rc-id" placeholder="e.g. 123456" class="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white focus:border-emerald-500 outline-none text-xs font-mono">
                         </div>
                         <div>
-                            <label class="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Estimated RC Rating</label>
-                            <input type="number" id="reg-rc-rating" placeholder="e.g. 1200" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-emerald-500 outline-none text-sm font-mono">
+                            <label class="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">Estimated RC Rating</label>
+                            <input type="number" id="reg-rc-rating" placeholder="e.g. 1200" class="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-white focus:border-emerald-500 outline-none text-xs font-mono">
                         </div>
                     </div>
                 </div>
 
-                <button id="reg-btn" onclick="window.handleRegistration()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-transform hover:scale-[1.01] uppercase tracking-widest mt-2">Create Free Account</button>
+                <button id="reg-btn" onclick="window.handleRegistration()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3.5 rounded-xl shadow-lg transition uppercase tracking-wider text-xs">Create Account</button>
             </div>
         </div>
     </div>
 
+    <!-- LIVE MATCH TOAST -->
     <div id="matchNotification" class="fixed -top-24 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ease-out pointer-events-none">
-        <div class="bg-slate-900 border-2 border-green-500 rounded-full px-6 py-3 shadow-2xl flex items-center gap-3">
-            <span class="relative flex h-3 w-3">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+        <div class="bg-slate-900 border border-emerald-500/40 rounded-xl px-5 py-2.5 shadow-2xl flex items-center gap-3">
+            <span class="relative flex h-2.5 w-2.5">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
             </span>
-            <span class="text-green-400 font-bold text-sm">New Match Started:</span>
-            <span id="notifText" class="text-white text-sm"></span>
+            <span class="text-emerald-400 font-extrabold text-xs uppercase tracking-wider">Live Match:</span>
+            <span id="notifText" class="text-white text-xs font-bold"></span>
         </div>
     </div>
 
@@ -430,51 +539,43 @@
         function generateStars() {
             const starContainer = document.getElementById('starContainer');
             if(!starContainer) return;
-            
-            const numberOfStars = 100; 
-            const colors = ['#ffffff', '#e0f7fa', '#fff9c4', '#bbdefb', '#ffffff']; 
+            const numberOfStars = 65; 
+            const colors = ['#ffffff', '#e0f7fa', '#fff9c4', '#bbdefb']; 
 
             for (let i = 0; i < numberOfStars; i++) {
                 const star = document.createElement('div');
-                const xPos = Math.random() * 100;
-                const yPos = Math.random() * 100;
-                const size = Math.random() * 4 + 3; 
-                const animDuration = Math.random() * 4 + 2; 
-                const animDelay = Math.random() * 10; 
-                const starColor = colors[Math.floor(Math.random() * colors.length)];
-
                 star.className = 'cross-star';
-                star.style.left = `${xPos}vw`;
-                star.style.top = `${yPos}vh`;
+                star.style.left = `${Math.random() * 100}vw`;
+                star.style.top = `${Math.random() * 100}vh`;
+                const size = Math.random() * 3.5 + 2.5;
                 star.style.width = `${size}px`;
                 star.style.height = `${size}px`;
-                star.style.backgroundColor = starColor;
-                star.style.animation = `sporadic-twinkle ${animDuration}s ease-in-out ${animDelay}s infinite`;
-
+                star.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                star.style.animation = `sporadic-twinkle ${Math.random() * 4 + 3}s ease-in-out ${Math.random() * 10}s infinite`;
                 starContainer.appendChild(star);
             }
         }
 
         window.addEventListener('popstate', function(event) {
-            const reportModal = document.getElementById('reportModal');
-            const donateModal = document.getElementById('donateModal');
-            const feedbackModal = document.getElementById('feedbackModal');
-            const compareModal = document.getElementById('compareModal');
-            const matchDetailsModal = document.getElementById('matchDetailsModal');
-            const registerModal = document.getElementById('registerModal');
-
-            if (reportModal && !reportModal.classList.contains('hidden')) { closeReportModal(); return; }
-            if (donateModal && !donateModal.classList.contains('hidden')) { closeDonateModal(); return; }
-            if (feedbackModal && !feedbackModal.classList.contains('hidden')) { document.getElementById('feedbackModal').classList.add('hidden'); return; }
-            if (compareModal && !compareModal.classList.contains('hidden')) { closeCompareModal(); return; }
-            if (matchDetailsModal && !matchDetailsModal.classList.contains('hidden')) { closeMatchDetails(); return; }
-            if (registerModal && !registerModal.classList.contains('hidden')) { window.closeRegisterModal(); return; }
-            
-            if (event.state && event.state.tab) { switchTab(event.state.tab, false); }
+            const modals = ['reportModal', 'donateModal', 'feedbackModal', 'compareModal', 'matchDetailsModal', 'registerModal', 'ratingHistoryModal', 'volatilityGuideModal'];
+            for (const mId of modals) {
+                const el = document.getElementById(mId);
+                if (el && !el.classList.contains('hidden')) {
+                    el.classList.add('hidden');
+                    return;
+                }
+            }
+            if (event.state && event.state.page === 'profile' && event.state.name) {
+                window.loadStats(event.state.name, false);
+            } else if (event.state && event.state.tab) {
+                window.switchTab(event.state.tab, false);
+            }
         });
 
         window.switchTab = function(tabId, pushHistory = true) {
-            if(pushHistory) { history.pushState({ page: 'fixtures', tab: tabId }, "", "#" + tabId); }
+            if(pushHistory) {
+                history.pushState({ page: 'fixtures', tab: tabId }, "", "#" + tabId);
+            }
             
             ['home', 'week', 'sheets', 'search', 'notices', 'community', 'live-center', 'rules', 'player-hub'].forEach(t => { 
                 const el = document.getElementById(`tab-${t}`); 
@@ -488,11 +589,17 @@
             const stats = document.getElementById('statsContainer'); 
             if(stats) stats.classList.add('hidden'); 
             
-            if (tabId === 'statsContainer') { 
-                if(stats) { stats.classList.remove('hidden'); stats.classList.add('animate-fade-in'); }
+            if (tabId === 'statsContainer' || tabId === 'profile') { 
+                if(stats) {
+                    stats.classList.remove('hidden');
+                    stats.classList.add('animate-fade-in');
+                }
             } else { 
                 const target = document.getElementById(`tab-${tabId}`); 
-                if(target) { target.classList.remove('hidden'); target.classList.add('animate-fade-in'); } 
+                if(target) {
+                    target.classList.remove('hidden');
+                    target.classList.add('animate-fade-in');
+                } 
                 const targetNav = document.getElementById(`nav-${tabId}`); 
                 if(targetNav) targetNav.classList.add('active'); 
                 const targetBNav = document.getElementById(`b-nav-${tabId}`); 
@@ -502,10 +609,9 @@
                     const searchInput = document.getElementById('bigPlayerSearch');
                     if(searchInput) setTimeout(() => searchInput.focus(), 100);
                 }
-                
-                if(tabId === 'community' && typeof window.initCommunity === 'function') {
-                    window.initCommunity();
-                }
+                if(tabId === 'sheets') window.loadResults();
+                if(tabId === 'week') window.loadDivisionLeaderboard();
+                if(tabId === 'community') window.loadCommunityFeed();
             } 
             window.scrollTo({ top: 0, behavior: 'smooth' }); 
         };
@@ -517,32 +623,88 @@
                 window.allPlayersRaw = await pRes.json(); 
                 
                 if (window.allPlayersRaw.length === 0 && loadAttempts < 10) { 
-                    console.log("Waiting for backend background sync to finish...");
                     loadAttempts++;
-                    setTimeout(originalLoadInitialData, 3000); 
+                    setTimeout(originalLoadInitialData, 2500); 
                     return; 
                 }
 
-                setupMainSearch(); 
+                window.setupMainSearch(); 
                 const [sRes, dRes] = await Promise.all([fetch('/api/seasons'), fetch('/api/divisions')]);
-                const seasons = await sRes.json(); const divisions = await dRes.json();
+                const seasons = await sRes.json();
+                const divisions = await dRes.json();
                 
-                const latestSeason = seasons.includes("Winter 2026") ? "Winter 2026" : (seasons[seasons.length - 1] || "Career");
-                currentSeason = latestSeason;
+                // Always prioritize the latest active season (e.g. Winter 2026)
+                const latestSeason = seasons.includes("Winter 2026")
+                    ? "Winter 2026"
+                    : (seasons.length > 0 ? seasons[0] : "Career");
+                window.currentSeason = latestSeason;
 
-                const sSelect = document.getElementById('seasonSelect'); if (sSelect) { sSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; sSelect.appendChild(opt); }); sSelect.value = latestSeason; }
-                const pDivSelect = document.getElementById('profileDivisionSelect'); if (pDivSelect) { pDivSelect.innerHTML = '<option value="All">All Divisions</option>'; divisions.forEach(d => { let opt = document.createElement('option'); opt.value = d; opt.innerText = d; pDivSelect.appendChild(opt); }); }
+                const sSelect = document.getElementById('seasonSelect');
+                if (sSelect) {
+                    sSelect.innerHTML = '<option value="Career">All-Time Career</option>';
+                    seasons.forEach(s => {
+                        if (s !== "Career") {
+                            let opt = document.createElement('option');
+                            opt.value = s;
+                            opt.innerText = s;
+                            sSelect.appendChild(opt);
+                        }
+                    });
+                    sSelect.value = "Career";
+                }
+
+                const pDivSelect = document.getElementById('profileDivisionSelect');
+                if (pDivSelect) {
+                    pDivSelect.innerHTML = '<option value="All">All Divisions</option>';
+                    divisions.forEach(d => {
+                        let opt = document.createElement('option');
+                        opt.value = d;
+                        opt.innerText = d;
+                        pDivSelect.appendChild(opt);
+                    });
+                }
                 
-                document.getElementById('seasonSelect')?.addEventListener('change', () => loadStats(window.currentProfileName)); 
-                document.getElementById('profileDivisionSelect')?.addEventListener('change', () => loadStats(window.currentProfileName));
+                document.getElementById('seasonSelect')?.addEventListener('change', () => window.loadStats(window.currentProfileName, false)); 
+                document.getElementById('profileDivisionSelect')?.addEventListener('change', () => window.loadStats(window.currentProfileName, false));
                 
-                const boardDivSelect = document.getElementById('boardDiv'); const boardSeasonSelect = document.getElementById('boardSeason');
-                if(boardDivSelect) { boardDivSelect.innerHTML = ''; divisions.forEach(d => { let opt = document.createElement('option'); opt.value = d; opt.innerText = d; boardDivSelect.appendChild(opt); }); }
-                if(boardSeasonSelect) { boardSeasonSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; boardSeasonSelect.appendChild(opt); }); boardSeasonSelect.value = latestSeason; }
+                const boardDivSelect = document.getElementById('boardDiv');
+                const boardSeasonSelect = document.getElementById('boardSeason');
+                if(boardDivSelect) {
+                    boardDivSelect.innerHTML = '';
+                    divisions.forEach(d => {
+                        let opt = document.createElement('option');
+                        opt.value = d;
+                        opt.innerText = d;
+                        boardDivSelect.appendChild(opt);
+                    });
+                }
+                if(boardSeasonSelect) {
+                    boardSeasonSelect.innerHTML = '';
+                    seasons.forEach(s => {
+                        let opt = document.createElement('option');
+                        opt.value = s;
+                        opt.innerText = s;
+                        boardSeasonSelect.appendChild(opt);
+                    });
+                    boardSeasonSelect.value = latestSeason;
+                }
                 
-                const resultSeasonSelect = document.getElementById('resultsSeason'); if(resultSeasonSelect) { resultSeasonSelect.innerHTML = ''; seasons.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerText = s; resultSeasonSelect.appendChild(opt); }); resultSeasonSelect.value = latestSeason; }
+                const resultSeasonSelect = document.getElementById('resultsSeason');
+                if(resultSeasonSelect) {
+                    resultSeasonSelect.innerHTML = '';
+                    seasons.forEach(s => {
+                        let opt = document.createElement('option');
+                        opt.value = s;
+                        opt.innerText = s;
+                        resultSeasonSelect.appendChild(opt);
+                    });
+                    resultSeasonSelect.value = latestSeason;
+                }
                 
-                loadDivisionLeaderboard(); loadResults(); loadTopDonors(); window.loadNotices();
+                window.loadDivisionLeaderboard();
+                window.loadResults();
+                window.loadTopDonors();
+                window.loadNotices();
                 
                 const initialHash = window.location.hash;
                 if (initialHash && initialHash !== '#fixtures') {
@@ -551,13 +713,13 @@
                     
                     if (initialHash.startsWith('#profile/')) {
                         const pName = decodeURIComponent(initialHash.replace('#profile/', ''));
-                        loadStats(pName, false);
+                        window.loadStats(pName, false);
                     } else {
                         const tabId = initialHash.replace('#', '');
                         if (['home', 'week', 'sheets', 'search', 'notices', 'community', 'live-center', 'rules', 'player-hub'].includes(tabId)) {
-                            switchTab(tabId, false);
+                            window.switchTab(tabId, false);
                         } else {
-                            switchTab('home', false);
+                            window.switchTab('home', false);
                         }
                     }
                 }
@@ -572,16 +734,22 @@
             const paymentIntent = new URLSearchParams(window.location.search).get('payment_intent');
             
             if (clientSecret && paymentIntent) {
-                const dName = localStorage.getItem('pending_donation_name') || 'Anonymous'; const dAmt = localStorage.getItem('pending_donation_amount') || 0;
-                fetch('/api/record_donation', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({intent_id: paymentIntent, name: dName, amount: dAmt}) }).then(() => {
-                    localStorage.removeItem('pending_donation_name'); localStorage.removeItem('pending_donation_amount');
-                    alert(`Thank you ${dName} for your support! Payment successful. You are on the Honour Board!`);
-                    window.history.replaceState({}, document.title, window.location.pathname); enterFixturesMode();
+                const dName = localStorage.getItem('pending_donation_name') || 'Anonymous';
+                const dAmt = localStorage.getItem('pending_donation_amount') || 0;
+                fetch('/api/record_donation', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({intent_id: paymentIntent, name: dName, amount: dAmt})
+                }).then(() => {
+                    localStorage.removeItem('pending_donation_name');
+                    localStorage.removeItem('pending_donation_amount');
+                    alert(`Thank you ${dName} for your support! Payment successful.`);
+                    window.history.replaceState({}, document.title, window.location.pathname);
                 });
             }
             
             originalLoadInitialData();
-        }
+        };
     </script>
 </body>
 </html>

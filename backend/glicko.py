@@ -1,95 +1,382 @@
 # backend/glicko.py
 import datetime
 import math
+import re
 
-DEFAULT_RATING = 1500.0
-DEFAULT_RD = 350.0
+DEFAULT_RATING = 1050.0
+DEFAULT_RD = 200.0
+MIN_RD = 25.0
+TARGET_RD = 35.0
+MAX_RD = 400.0
+DEFAULT_VOL_SCORE = 25.0
 RATING_START_DATE = datetime.date(2022, 1, 1)
+
+# Division Brackets: (Floor, Ceiling, Default Starting Seed)
+DIVISION_BRACKETS = {
+    1: (1200.0, 99999.0, 1350.0),
+    2: (900.0, 1199.0, 1050.0),
+    3: (600.0, 899.0, 750.0),
+    4: (300.0, 599.0, 450.0),
+    5: (1.0, 299.0, 150.0)
+}
+
+VOLATILITY_GUIDE = [
+    {
+        "min": 1,
+        "max": 25,
+        "tier": "The Metronome",
+        "label": "Low Volatility",
+        "color": "emerald",
+        "description": "Rock-solid consistency. Beats lower-rated players reliably, loses to higher-rated players as expected, and rarely experiences random blowouts."
+    },
+    {
+        "min": 26,
+        "max": 55,
+        "tier": "Standard Form",
+        "label": "Normal Volatility",
+        "color": "blue",
+        "description": "Typical competitive club form. Capable of pulling off a solid upset on a good night or dropping a tight 5-setter on an off night."
+    },
+    {
+        "min": 56,
+        "max": 80,
+        "tier": "Wildcard",
+        "label": "High Volatility",
+        "color": "amber",
+        "description": "Streaky and dangerous. Form fluctuates heavily from match to match—ratings rarely predict which version of this player is showing up at the table."
+    },
+    {
+        "min": 81,
+        "max": 100,
+        "tier": "Pure Chaos",
+        "label": "Extreme Volatility",
+        "color": "rose",
+        "description": "Could push Fan Zhendong to 7 sets at 7:30 PM and lose 3-0 (11-0, 11-0, 11-0) to the lowest-rated player in the club at 8:15 PM. Completely immune to expectations."
+    }
+]
+
+
+def parse_division_number(div_str):
+    if not div_str:
+        return None
+    s = str(div_str).strip().lower()
+    if "premier" in s or "open" in s or "super" in s:
+        return 1
+    m = re.search(r'([1-5])', s)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+def clamp_public_rating(true_rating, div_num):
+    r = max(1.0, float(true_rating))
+    if not div_num or div_num not in DIVISION_BRACKETS:
+        return r
+    floor_val, ceil_val, _ = DIVISION_BRACKETS[div_num]
+    return max(floor_val, min(ceil_val, r))
+
+
+def compute_next_rd(current_rd, matches_played_before, anti_riot_bump=0.0):
+    """
+    Hard steps for brand-new players (first 3 matches): 200 -> 130 -> 80 -> 60.
+    Fluid mathematical curve for everyone else settling around ~35 SD (min floor 25).
+    """
+    if matches_played_before == 0:
+        return 130.0
+    elif matches_played_before == 1:
+        return 80.0
+    elif matches_played_before == 2:
+        return 60.0
+
+    if anti_riot_bump > 0:
+        return max(MIN_RD, min(MAX_RD, current_rd + anti_riot_bump))
+
+    # Fluid proportional tightening curve toward ~35 SD
+    if current_rd > TARGET_RD:
+        drop = max(1.5, (current_rd - 30.0) * 0.28)
+        new_rd = current_rd - drop
+    else:
+        # Gentle tightening between 35 and the 25 floor
+        drop = max(0.35, (current_rd - MIN_RD) * 0.12)
+        new_rd = current_rd - drop
+
+    return max(MIN_RD, min(MAX_RD, new_rd))
+
+
+def compute_match_volatility(expected_win_prob, actual_set_share, current_vol, matches_played):
+    """
+    Calculates a 1-100 Volatility Score using an exponentially weighted moving average
+    of how far actual match set margins deviate from rating expectations.
+    """
+    surprise = abs(actual_set_share - expected_win_prob)
+    instant_chaos = min(100.0, max(5.0, (surprise / 0.52) * 85.0))
+    alpha = 0.28 if matches_played < 8 else 0.18
+    new_vol = (current_vol * (1.0 - alpha)) + (instant_chaos * alpha)
+    return max(1.0, min(100.0, round(new_vol, 1)))
+
 
 def calculate_match(w, l, s1, s2, k_win=1.0, k_loss=1.4, anti_riot=True, point_scalar=1.0):
     total_sets = s1 + s2
-    if total_sets == 0: return {'winner': w, 'loser': l}
-    
+    if total_sets == 0:
+        return {'winner': w, 'loser': l}
+
     w_score = 0.7 + 0.3 * ((s1 - s2) / total_sets)
     l_score = 1.0 - w_score
-    
-    E_w = 1.0 / (1.0 + 10.0 ** ((l['rating'] - w['rating']) / 400.0))
+
+    w_true = max(1.0, float(w.get('true_rating', w.get('rating', DEFAULT_RATING))))
+    l_true = max(1.0, float(l.get('true_rating', l.get('rating', DEFAULT_RATING))))
+
+    E_w = 1.0 / (1.0 + 10.0 ** ((l_true - w_true) / 400.0))
     E_l = 1.0 - E_w
-    
-    K_w = max(30.0, w['rd'] * k_win) * point_scalar
-    K_l = max(40.0, l['rd'] * k_loss) * point_scalar
-    
+
+    w_rd = float(w.get('rd', DEFAULT_RD))
+    l_rd = float(l.get('rd', DEFAULT_RD))
+
+    K_w = max(24.0, w_rd * 0.85 * k_win) * point_scalar
+    K_l = max(28.0, l_rd * 0.95 * k_loss) * point_scalar
+
     w_shift = K_w * (w_score - E_w)
     l_shift = K_l * (l_score - E_l)
-    
-    w_rd_shift = -4.0
-    l_rd_shift = -4.0
-    
+
+    w_bump = 0.0
+    l_bump = 0.0
+
     if anti_riot:
-        if w_shift < 0: w_shift = 0.0; w_rd_shift = 5.0
-        if l_shift > 0: l_shift = 0.0; l_rd_shift = 2.0
-        
-    w['rating'] += w_shift
-    l['rating'] += l_shift
-    w['rd'] = max(20.0, min(350.0, w['rd'] + w_rd_shift))
-    l['rd'] = max(20.0, min(350.0, l['rd'] + l_rd_shift))
-    
+        if w_shift < 0:
+            w_shift = 0.0
+            w_bump = 3.0
+        if l_shift > 0:
+            l_shift = 0.0
+            l_bump = 1.5
+
+    w_matches = int(w.get('matches_played', 0))
+    l_matches = int(l.get('matches_played', 0))
+
+    # Update Volatility Score (1-100)
+    w_set_share = s1 / float(total_sets)
+    l_set_share = s2 / float(total_sets)
+    w['vol'] = compute_match_volatility(E_w, w_set_share, float(w.get('vol', DEFAULT_VOL_SCORE)), w_matches)
+    l['vol'] = compute_match_volatility(E_l, l_set_share, float(l.get('vol', DEFAULT_VOL_SCORE)), l_matches)
+
+    # Update True Ratings (Floored at 1.0)
+    w['true_rating'] = max(1.0, w_true + w_shift)
+    l['true_rating'] = max(1.0, l_true + l_shift)
+
+    # Update Public Ratings (Clamped by active home division)
+    w['public_rating'] = clamp_public_rating(w['true_rating'], w.get('home_div'))
+    l['public_rating'] = clamp_public_rating(l['true_rating'], l.get('home_div'))
+    w['rating'] = w['public_rating']
+    l['rating'] = l['public_rating']
+
+    # Update Standard Deviation (Hard steps for new players, fluid for established)
+    w['rd'] = compute_next_rd(w_rd, w_matches, w_bump)
+    l['rd'] = compute_next_rd(l_rd, l_matches, l_bump)
+
+    w['matches_played'] = w_matches + 1
+    l['matches_played'] = l_matches + 1
+
     return {'winner': w, 'loser': l}
 
-class RatingEngine:
-    def __init__(self): 
-        self.players = {}
-    
-    def get_rating(self, name):
-        if name not in self.players: self.players[name] = {'rating': DEFAULT_RATING, 'rd': DEFAULT_RD, 'vol': 0.06}
-        return self.players[name]
-        
-    def set_seed(self, name, rating, rd=None, vol=None):
-        try:
-            r_val = float(rating); rd_val = float(rd) if rd and str(rd).strip() else DEFAULT_RD
-            if rd_val < 0: rd_val = DEFAULT_RD
-            self.players[name] = {'rating': r_val, 'rd': rd_val, 'vol': float(vol) if vol is not None else 0.06}
-        except ValueError: pass
 
-    def apply_time_decay(self, name, days_since_last, max_rd=350.0, c_value=15.0):
+class RatingEngine:
+    def __init__(self):
+        self.players = {}
+
+    def get_rating(self, name, div_str=None):
+        if name not in self.players:
+            div_num = parse_division_number(div_str)
+            if div_num in DIVISION_BRACKETS:
+                seed_rating = DIVISION_BRACKETS[div_num][2]
+            else:
+                seed_rating = DEFAULT_RATING
+            pub_rating = clamp_public_rating(seed_rating, div_num)
+            self.players[name] = {
+                'rating': pub_rating,
+                'public_rating': pub_rating,
+                'true_rating': seed_rating,
+                'rd': DEFAULT_RD,
+                'vol': DEFAULT_VOL_SCORE,
+                'home_div': div_num,
+                'matches_played': 0
+            }
+        return self.players[name]
+
+    def set_seed(self, name, rating, rd=None, vol=None, div_str=None):
+        try:
+            r_val = max(1.0, float(rating))
+            rd_val = float(rd) if rd is not None and str(rd).strip() != '' else DEFAULT_RD
+            if rd_val < MIN_RD or rd_val > MAX_RD:
+                rd_val = DEFAULT_RD
+            vol_val = float(vol) if vol is not None and str(vol).strip() != '' else DEFAULT_VOL_SCORE
+            if vol_val < 1.0:
+                vol_val = DEFAULT_VOL_SCORE
+
+            existing = self.players.get(name, {})
+            div_num = parse_division_number(div_str) or existing.get('home_div')
+            pub_val = clamp_public_rating(r_val, div_num)
+
+            self.players[name] = {
+                'rating': pub_val,
+                'public_rating': pub_val,
+                'true_rating': r_val,
+                'rd': rd_val,
+                'vol': vol_val,
+                'home_div': div_num,
+                'matches_played': existing.get('matches_played', 3)
+            }
+        except ValueError:
+            pass
+
+    def update_player_division(self, name, div_str, is_fillin=False):
         """
-        Standard Glicko decay: RD_new = min( sqrt(RD_old^2 + c^2 * t), max_rd )
-        t = weeks missed. c_value determines how fast uncertainty grows.
+        Tracks a player's regular home division and enforces promotion/demotion rules.
+        Fill-ins are ignored so filling in for a higher/lower division doesn't alter caps.
+        """
+        stats = self.get_rating(name, div_str)
+        if is_fillin:
+            return None
+
+        new_div = parse_division_number(div_str)
+        if not new_div or new_div not in DIVISION_BRACKETS:
+            return None
+
+        old_div = stats.get('home_div')
+        if old_div is None:
+            stats['home_div'] = new_div
+            if stats.get('matches_played', 0) == 0 and stats['true_rating'] == DEFAULT_RATING:
+                stats['true_rating'] = DIVISION_BRACKETS[new_div][2]
+            stats['public_rating'] = clamp_public_rating(stats['true_rating'], new_div)
+            stats['rating'] = stats['public_rating']
+            return None
+
+        if new_div == old_div:
+            return None
+
+        old_pub = stats['public_rating']
+        old_true = stats['true_rating']
+        old_rd = stats['rd']
+        event_type = None
+
+        # Demotion (e.g. Div 1 -> Div 2 means new_div > old_div)
+        if new_div > old_div:
+            event_type = "DEMOTION"
+            _, new_ceil, _ = DIVISION_BRACKETS[new_div]
+            if stats['true_rating'] > new_ceil:
+                stats['true_rating'] = new_ceil
+            stats['rd'] = min(MAX_RD, max(stats['rd'] + 25.0, 65.0))
+        else:
+            # Promotion (e.g. Div 2 -> Div 1 means new_div < old_div)
+            event_type = "PROMOTION"
+            new_floor, _, _ = DIVISION_BRACKETS[new_div]
+            if stats['true_rating'] < new_floor:
+                stats['true_rating'] = new_floor
+            stats['rd'] = min(MAX_RD, max(stats['rd'] + 12.0, 50.0))
+
+        stats['home_div'] = new_div
+        stats['public_rating'] = clamp_public_rating(stats['true_rating'], new_div)
+        stats['rating'] = stats['public_rating']
+
+        return {
+            'type': event_type,
+            'old_div': old_div,
+            'new_div': new_div,
+            'old_pub': old_pub,
+            'new_pub': stats['public_rating'],
+            'old_true': old_true,
+            'new_true': stats['true_rating'],
+            'old_rd': old_rd,
+            'new_rd': stats['rd']
+        }
+
+    def apply_time_decay(self, name, days_since_last, max_rd=MAX_RD, c_value=16.5):
+        """
+        Fluid inactivity decay after 21 days (3 weeks):
+        - SD grows continuously via square-root time curve up to 400.0.
+        - True Rating drifts down by ~5.5 points per missed week beyond 3 weeks.
         """
         stats = self.get_rating(name)
-        if days_since_last <= 14: return 0.0 # Grace period of 2 weeks
-        
-        weeks_missed = (days_since_last - 14) / 7.0
+        if days_since_last <= 21:
+            return {'rd_delta': 0.0, 'pub_delta': 0.0, 'true_delta': 0.0}
+
+        weeks_missed = (days_since_last - 21) / 7.0
         old_rd = stats['rd']
-        
-        # Calculate new variance mathematically
+        old_true = stats['true_rating']
+        old_pub = stats['public_rating']
+
         new_rd = min(max_rd, math.sqrt((old_rd ** 2) + ((c_value ** 2) * weeks_missed)))
-        
+
+        drift = min(35.0, round(weeks_missed * 5.5, 1))
+        new_true = max(1.0, old_true - drift)
+        new_pub = clamp_public_rating(new_true, stats.get('home_div'))
+
         stats['rd'] = new_rd
-        return new_rd - old_rd
-        
-    def update_match(self, p1_name, p2_name, s1, s2, game_history='', k_win=1.0, k_loss=1.4, anti_riot=True):
-        p1_stats = self.get_rating(p1_name); p2_stats = self.get_rating(p2_name)
-        r1_old = p1_stats['rating']; rd1_old = p1_stats['rd']; r2_old = p2_stats['rating']; rd2_old = p2_stats['rd']
-        
-        if s1 == s2: return {'p1_delta': 0, 'p2_delta': 0, 'p1_before': r1_old, 'p1_rd_before': rd1_old, 'p1_after': r1_old, 'p1_rd_after': rd1_old, 'p2_before': r2_old, 'p2_rd_before': rd2_old, 'p2_after': r2_old, 'p2_rd_after': rd2_old}
-        
+        stats['true_rating'] = new_true
+        stats['public_rating'] = new_pub
+        stats['rating'] = new_pub
+
+        return {
+            'rd_delta': new_rd - old_rd,
+            'pub_delta': new_pub - old_pub,
+            'true_delta': new_true - old_true,
+            'old_rd': old_rd,
+            'new_rd': new_rd,
+            'old_pub': old_pub,
+            'new_pub': new_pub,
+            'old_true': old_true,
+            'new_true': new_true
+        }
+
+    def update_match(self, p1_name, p2_name, s1, s2, game_history='', k_win=1.0, k_loss=1.4, anti_riot=True, div_str=None, p1_fill=False, p2_fill=False):
+        if div_str:
+            self.update_player_division(p1_name, div_str, is_fillin=p1_fill)
+            self.update_player_division(p2_name, div_str, is_fillin=p2_fill)
+
+        p1_stats = self.get_rating(p1_name, div_str)
+        p2_stats = self.get_rating(p2_name, div_str)
+
+        pub1_old = p1_stats['public_rating']
+        true1_old = p1_stats['true_rating']
+        rd1_old = p1_stats['rd']
+        vol1_old = p1_stats.get('vol', DEFAULT_VOL_SCORE)
+
+        pub2_old = p2_stats['public_rating']
+        true2_old = p2_stats['true_rating']
+        rd2_old = p2_stats['rd']
+        vol2_old = p2_stats.get('vol', DEFAULT_VOL_SCORE)
+
+        if s1 == s2:
+            return {
+                'p1_delta': 0.0, 'p2_delta': 0.0,
+                'p1_true_delta': 0.0, 'p2_true_delta': 0.0,
+                'p1_before': pub1_old, 'p1_rd_before': rd1_old, 'p1_after': pub1_old, 'p1_rd_after': rd1_old,
+                'p2_before': pub2_old, 'p2_rd_before': rd2_old, 'p2_after': pub2_old, 'p2_rd_after': rd2_old,
+                'p1_true_before': true1_old, 'p1_true_after': true1_old,
+                'p2_true_before': true2_old, 'p2_true_after': true2_old,
+                'p1_vol_before': vol1_old, 'p1_vol_after': vol1_old,
+                'p2_vol_before': vol2_old, 'p2_vol_after': vol2_old
+            }
+
         point_scalar = 1.0
         if game_history:
             try:
-                p1_pts = 0; p2_pts = 0
+                p1_pts = 0
+                p2_pts = 0
                 for g in str(game_history).split(','):
                     pts = g.strip().split('-')
                     if len(pts) == 2:
                         p1_pts += int(pts[0])
                         p2_pts += int(pts[1])
-                
+
                 if p1_pts > 0 and p2_pts > 0:
                     ratio = (p1_pts / p2_pts) if s1 > s2 else (p2_pts / p1_pts)
-                    if ratio >= 2.0: point_scalar = 1.25
-                    elif ratio >= 1.5: point_scalar = 1.10
-                    elif ratio < 1.15: point_scalar = 0.85
-            except: pass
+                    if ratio >= 2.0:
+                        point_scalar = 1.25
+                    elif ratio >= 1.5:
+                        point_scalar = 1.10
+                    elif ratio < 1.15:
+                        point_scalar = 0.85
+            except Exception:
+                pass
 
         if s1 > s2:
             res = calculate_match(p1_stats, p2_stats, s1, s2, k_win, k_loss, anti_riot, point_scalar)
@@ -99,9 +386,29 @@ class RatingEngine:
             res = calculate_match(p2_stats, p1_stats, s2, s1, k_win, k_loss, anti_riot, point_scalar)
             self.players[p2_name] = res['winner']
             self.players[p1_name] = res['loser']
-            
+
+        p1_now = self.players[p1_name]
+        p2_now = self.players[p2_name]
+
         return {
-            'p1_delta': self.players[p1_name]['rating'] - r1_old, 'p2_delta': self.players[p2_name]['rating'] - r2_old, 
-            'p1_before': r1_old, 'p1_rd_before': rd1_old, 'p1_after': self.players[p1_name]['rating'], 'p1_rd_after': self.players[p1_name]['rd'], 
-            'p2_before': r2_old, 'p2_rd_before': rd2_old, 'p2_after': self.players[p2_name]['rating'], 'p2_rd_after': self.players[p2_name]['rd']
+            'p1_delta': p1_now['public_rating'] - pub1_old,
+            'p2_delta': p2_now['public_rating'] - pub2_old,
+            'p1_true_delta': p1_now['true_rating'] - true1_old,
+            'p2_true_delta': p2_now['true_rating'] - true2_old,
+            'p1_before': pub1_old,
+            'p1_rd_before': rd1_old,
+            'p1_after': p1_now['public_rating'],
+            'p1_rd_after': p1_now['rd'],
+            'p2_before': pub2_old,
+            'p2_rd_before': rd2_old,
+            'p2_after': p2_now['public_rating'],
+            'p2_rd_after': p2_now['rd'],
+            'p1_true_before': true1_old,
+            'p1_true_after': p1_now['true_rating'],
+            'p2_true_before': true2_old,
+            'p2_true_after': p2_now['true_rating'],
+            'p1_vol_before': vol1_old,
+            'p1_vol_after': p1_now['vol'],
+            'p2_vol_before': vol2_old,
+            'p2_vol_after': p2_now['vol']
         }
