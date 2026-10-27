@@ -1,8 +1,9 @@
 import math
 import re
+import datetime
 
-# Restored to fix SheetsSyncEngine import error
-RATING_START_DATE = "01/01/2020"
+# Fixed: Declared as a proper datetime.date object so sheets_sync.py can compare it mathematically
+RATING_START_DATE = datetime.date(2020, 1, 1)
 
 # ==========================================
 # DIVISION MAPPINGS & CAPS
@@ -15,7 +16,7 @@ DIVISION_CAPS = {
     3: {"floor": 601,  "ceiling": 900,  "label": "Division 3 (601–900)"},
     4: {"floor": 301,  "ceiling": 600,  "label": "Division 4 (301–600)"},
     5: {"floor": 0,    "ceiling": 300,  "label": "Division 5 (0–300)"},
-    99: {"floor": 0,   "ceiling": 785,  "label": "All Stars (0–785)"}
+    99: {"floor": 0,   "ceiling": 900,  "label": "All Stars (0–900)"}
 }
 
 # Fallback dictionary to prevent legacy import errors
