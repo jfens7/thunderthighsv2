@@ -37,6 +37,8 @@ db_lock = threading.Lock()
 sync_lock = threading.Lock()
 is_first_snapshot = True
 
+GOD_ADMIN_EMAIL = "jakobwill7@gmail.com"
+
 
 # ==========================================
 # WEBAUTHN / ICLOUD PASSKEY CRYPTO HELPERS
@@ -203,7 +205,10 @@ def scheduled_refresh(commit_history=False):
     if db and sync_lock.acquire(blocking=False):
         try:
             logger.info("🔄 Executing background database sync...")
-            db.refresh_data(commit_history=commit_history)
+            try:
+                db.refresh_data(commit_history=commit_history)
+            except TypeError:
+                db.refresh_data()
             if db.db:
                 aest_now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=10)))
                 db.db.collection('system_config').document('sync_status').set({
@@ -312,7 +317,26 @@ except Exception:
     pass
 
 
+# ==========================================
+# 3-TIER ROLE-BASED ACCESS CONTROL (RBAC)
+# Tier 1: God Mode (jakobwill7@gmail.com)
+# Tier 2: General Manager (gctta... / gm / super_admin / temp_super_admin)
+# Tier 3: Data Entry / Temp Admin (admin / temp_admin / moderator)
+# ==========================================
+def get_admin_tier(email, role):
+    email_clean = str(email or '').lower().strip()
+    role_clean = str(role or '').lower().strip()
+    if email_clean == GOD_ADMIN_EMAIL or role_clean == 'god':
+        return 1
+    if email_clean.startswith('gctta') or 'gctta' in email_clean or role_clean in ['gm', 'general_manager', 'super_admin', 'temp_super_admin']:
+        return 2
+    if role_clean in ['admin', 'temp_admin', 'data_entry', 'moderator']:
+        return 3
+    return 99
+
+
 def login_required(f):
+    """Allows Tier 1 (God), Tier 2 (GM), and Tier 3 (Temp/Data Entry Admins)."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not session.get('admin_logged_in'):
@@ -321,14 +345,34 @@ def login_required(f):
     return decorated_function
 
 
-def super_admin_required(f):
+def gm_required(f):
+    """Allows Tier 1 (God) and Tier 2 (General Manager). Blocks Tier 3 Data Entry admins."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        role = session.get('admin_role')
-        if not session.get('admin_logged_in') or role not in ['super_admin', 'temp_super_admin']:
-            return jsonify({'error': 'Super Admin Required'}), 403
+        if not session.get('admin_logged_in'):
+            return jsonify({'error': 'Unauthorized'}), 401
+        tier = get_admin_tier(session.get('admin_email'), session.get('admin_role'))
+        if tier > 2:
+            return jsonify({'error': 'General Manager or God Mode privileges required.'}), 403
         return f(*args, **kwargs)
     return decorated_function
+
+
+def god_required(f):
+    """Strictly allows Tier 1 (jakobwill7@gmail.com) only."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('admin_logged_in'):
+            return jsonify({'error': 'Unauthorized'}), 401
+        tier = get_admin_tier(session.get('admin_email'), session.get('admin_role'))
+        if tier != 1:
+            return jsonify({'error': 'God Mode privileges required.'}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+# Alias for backward compatibility across routes where GM + God are permitted
+super_admin_required = gm_required
 
 
 def wait_for_sync(f):
@@ -382,12 +426,12 @@ def cron_friday_sync():
 @app.route('/api/firebase-config')
 def get_firebase_config():
     return jsonify({
-        "apiKey": os.environ.get("FIREBASE_API_KEY", "PASTE_YOUR_API_KEY_HERE"),
-        "authDomain": os.environ.get("FIREBASE_AUTH_DOMAIN", "PASTE_YOUR_AUTH_DOMAIN_HERE"),
-        "projectId": os.environ.get("FIREBASE_PROJECT_ID", "PASTE_YOUR_PROJECT_ID_HERE"),
-        "storageBucket": os.environ.get("FIREBASE_STORAGE_BUCKET", "PASTE_YOUR_STORAGE_BUCKET_HERE"),
-        "messagingSenderId": os.environ.get("FIREBASE_MESSAGING_SENDER_ID", "PASTE_YOUR_SENDER_ID_HERE"),
-        "appId": os.environ.get("FIREBASE_APP_ID", "PASTE_YOUR_APP_ID_HERE")
+        "apiKey": os.environ.get("FIREBASE_API_KEY", "AIzaSyDq05wFsKLHtt8G0Z5yLOG9pIk9UX24S4o"),
+        "authDomain": os.environ.get("FIREBASE_AUTH_DOMAIN", "gctta-stats-live.firebaseapp.com"),
+        "projectId": os.environ.get("FIREBASE_PROJECT_ID", "gctta-stats-live"),
+        "storageBucket": os.environ.get("FIREBASE_STORAGE_BUCKET", "gctta-stats-live.firebasestorage.app"),
+        "messagingSenderId": os.environ.get("FIREBASE_MESSAGING_SENDER_ID", "1070856258556"),
+        "appId": os.environ.get("FIREBASE_APP_ID", "1:1070856258556:web:be438e04c1941abc3c6879")
     })
 
 
@@ -406,17 +450,23 @@ def auth_google():
 
     user_data = db.verify_admin_token(request.json.get('token'))
     role = user_data['role'] if user_data else 'player'
+    if email.lower().strip() == GOD_ADMIN_EMAIL:
+        role = 'god'
+    elif 'gctta' in email.lower() and role in ['pending', 'player']:
+        role = 'gm'
+
     session.permanent = True
     session['logged_in'] = True
     session['user_email'] = email
     session['user_uid'] = uid
 
-    if role in ['admin', 'super_admin', 'temp_super_admin', 'moderator']:
+    if role in ['god', 'gm', 'general_manager', 'super_admin', 'temp_super_admin', 'admin', 'temp_admin', 'data_entry', 'moderator']:
         session['admin_logged_in'] = True
         session['admin_email'] = email
         session['admin_role'] = role
-        db._log_audit(email, 'SESSION_START', f"Authenticated as {role}.", {})
-        return jsonify({"success": True, "redirect": "/admin"})
+        session['admin_tier'] = get_admin_tier(email, role)
+        db._log_audit(email, 'SESSION_START', f"Authenticated as {role} (Tier {session['admin_tier']}).", {})
+        return jsonify({"success": True, "redirect": "/admin", "role": role, "tier": session['admin_tier']})
     else:
         session['player_logged_in'] = True
         return jsonify({"success": True, "redirect": "/"})
@@ -435,23 +485,30 @@ def auth_admin_login():
         return jsonify({"success": False, "error": "Invalid Token"})
 
     user_data = db.verify_admin_token(request.json.get('token'))
-    if not user_data:
+    if not user_data and email.lower().strip() != GOD_ADMIN_EMAIL:
         return jsonify({"success": False, "error": "Token Verification Failed"})
 
-    role = user_data['role']
-    if role in ['admin', 'super_admin', 'temp_super_admin', 'moderator']:
+    role = user_data['role'] if user_data else 'pending'
+    if email.lower().strip() == GOD_ADMIN_EMAIL:
+        role = 'god'
+    elif 'gctta' in email.lower() and role == 'pending':
+        role = 'gm'
+
+    if role in ['god', 'gm', 'general_manager', 'super_admin', 'temp_super_admin', 'admin', 'temp_admin', 'data_entry', 'moderator']:
         session.permanent = True
         session['admin_logged_in'] = True
         session['admin_email'] = email
         session['admin_role'] = role
+        session['admin_tier'] = get_admin_tier(email, role)
         db._log_audit(email, 'SESSION_START', f"Authenticated as {role} via Control Tower.", {})
-        return jsonify({"success": True})
+        return jsonify({"success": True, "role": role, "tier": session['admin_tier']})
     else:
         return jsonify({"success": False, "error": "Access Denied. You are not an authorized Administrator."})
 
 
 # ==========================================
 # PASSKEY (WEBAUTHN ICLOUD KEYCHAIN SYNC) ROUTES
+# Supports both /generate-options & /login-options aliases
 # ==========================================
 
 @app.route('/api/auth/passkey/register-options', methods=['POST'])
@@ -532,8 +589,11 @@ def passkey_register_verify():
         existing_creds = [c for c in existing_creds if c.get('cred_id') != cose_data['cred_id']]
         existing_creds.append(cose_data)
 
+        role_to_set = 'god' if email == GOD_ADMIN_EMAIL else (doc.to_dict().get('role', 'admin') if doc.exists else 'admin')
+
         doc_ref.set({
             'email': email,
+            'role': role_to_set,
             'passkeys': existing_creds,
             'updated_at': firestore.SERVER_TIMESTAMP
         }, merge=True)
@@ -546,6 +606,7 @@ def passkey_register_verify():
 
 
 @app.route('/api/auth/passkey/generate-options', methods=['POST'])
+@app.route('/api/auth/passkey/login-options', methods=['POST'])
 def passkey_generate_options():
     if not db or not db.db:
         return jsonify({"error": "Database offline"}), 500
@@ -554,17 +615,36 @@ def passkey_generate_options():
     if not email:
         return jsonify({"error": "Please enter your Admin Email."}), 400
 
-    doc = db.db.collection('admin_users').document(email).get()
+    doc_ref = db.db.collection('admin_users').document(email)
+    doc = doc_ref.get()
+
+    if email == GOD_ADMIN_EMAIL:
+        if not doc.exists or doc.to_dict().get('role') not in ['god', 'super_admin']:
+            doc_ref.set({'email': email, 'role': 'god'}, merge=True)
+            doc = doc_ref.get()
+    elif 'gctta' in email:
+        if not doc.exists or doc.to_dict().get('role') == 'pending':
+            doc_ref.set({'email': email, 'role': 'gm'}, merge=True)
+            doc = doc_ref.get()
+
     if not doc.exists:
         return jsonify({"error": "No admin record found for this email."}), 404
 
     data = doc.to_dict()
-    if data.get('role') not in ['admin', 'super_admin', 'temp_super_admin', 'moderator']:
+    role = data.get('role', 'pending')
+
+    # Check if temporary admin access has expired
+    expires_at = data.get('expires_at')
+    if role in ['temp_super_admin', 'temp_admin'] and expires_at and datetime.datetime.now(datetime.timezone.utc) > expires_at:
+        doc_ref.update({'role': 'pending', 'expires_at': firestore.DELETE_FIELD})
+        return jsonify({"error": "Your temporary Admin access has expired."}), 403
+
+    if role not in ['god', 'gm', 'general_manager', 'super_admin', 'temp_super_admin', 'admin', 'temp_admin', 'data_entry', 'moderator']:
         return jsonify({"error": "Account does not have active Admin privileges."}), 403
 
     passkeys = data.get('passkeys', [])
     if not passkeys:
-        return jsonify({"error": "No Passkey registered for this account yet. Log in with Credentials or Bypass Code first to register your Passkey."}), 404
+        return jsonify({"error": "No Passkey registered for this account yet. Log in with Credentials first, then click 'Register Passkey' inside the Control Tower."}), 404
 
     challenge = _b64url_encode(os.urandom(32))
     session['webauthn_auth_challenge'] = challenge
@@ -589,6 +669,7 @@ def passkey_generate_options():
 
 
 @app.route('/api/auth/passkey/verify', methods=['POST'])
+@app.route('/api/auth/passkey/login-verify', methods=['POST'])
 def passkey_verify():
     if not db or not db.db:
         return jsonify({"success": False, "error": "Database offline"}), 500
@@ -607,8 +688,8 @@ def passkey_verify():
         return jsonify({"success": False, "error": "Admin user not found."}), 404
 
     data = doc.to_dict()
-    role = data.get('role', 'pending')
-    if role not in ['admin', 'super_admin', 'temp_super_admin', 'moderator']:
+    role = 'god' if email == GOD_ADMIN_EMAIL else data.get('role', 'pending')
+    if role not in ['god', 'gm', 'general_manager', 'super_admin', 'temp_super_admin', 'admin', 'temp_admin', 'data_entry', 'moderator']:
         return jsonify({"success": False, "error": "Unauthorized role."}), 403
 
     cred_id = auth_response.get('id') or auth_response.get('rawId')
@@ -629,9 +710,10 @@ def passkey_verify():
         session['admin_logged_in'] = True
         session['admin_email'] = email
         session['admin_role'] = role
+        session['admin_tier'] = get_admin_tier(email, role)
         session.pop('webauthn_auth_challenge', None)
 
-        db._log_audit(email, 'SESSION_START', "Authenticated via Synced Passkey.", {})
+        db._log_audit(email, 'SESSION_START', f"Authenticated via Synced Passkey (Tier {session['admin_tier']}).", {})
 
         custom_token_str = None
         try:
@@ -693,7 +775,7 @@ def auth_bypass_login():
         data = doc.to_dict()
         stored_role = data.get('role')
 
-        if stored_role != 'temp_super_admin':
+        if stored_role not in ['temp_super_admin', 'temp_admin']:
             return jsonify({"success": False, "error": "Unauthorized operational mode."}), 403
 
         expires_at = data.get('expires_at')
@@ -709,12 +791,13 @@ def auth_bypass_login():
             expected_pin = str(abs(hash(base_seed)) % 1000000).zfill(6)
 
         if input_code == str(expected_pin):
-            doc_ref.update({'role': 'pending', 'expires_at': firestore.DELETE_FIELD, 'bypass_pin': firestore.DELETE_FIELD})
+            doc_ref.update({'bypass_pin': firestore.DELETE_FIELD})
 
             session.permanent = True
             session['admin_logged_in'] = True
             session['admin_email'] = req_email
-            session['admin_role'] = 'super_admin'
+            session['admin_role'] = stored_role
+            session['admin_tier'] = get_admin_tier(req_email, stored_role)
             db._log_audit(req_email, 'SESSION_START', "Emergency Bypass Clearance executed successfully.", {})
             return jsonify({"success": True})
         else:
@@ -737,7 +820,10 @@ def logout():
 def admin():
     if not session.get('admin_logged_in'):
         return redirect(url_for('login'))
-    return render_template('admin.html', email=session.get('admin_email'), role=session.get('admin_role'))
+    email = session.get('admin_email')
+    role = session.get('admin_role')
+    tier = get_admin_tier(email, role)
+    return render_template('admin.html', email=email, role=role, tier=tier)
 
 
 # --- PUBLIC DATA APIS ---
@@ -972,7 +1058,11 @@ def rating_history(player_name):
         return jsonify([])
 
     is_admin = bool(session.get('admin_logged_in'))
-    raw_history = db.get_rating_history(clean_name, include_true_rating=is_admin)
+    try:
+        raw_history = db.get_rating_history(clean_name, include_true_rating=is_admin)
+    except TypeError:
+        raw_history = db.get_rating_history(clean_name)
+
     if not is_admin:
         sanitized = []
         for item in raw_history:
@@ -1176,10 +1266,10 @@ def sms_webhook():
         return jsonify({"error": str(e)}), 500
 
 
-# --- ADMIN: ACCOUNT MANAGEMENT ---
+# --- ADMIN: ACCOUNT MANAGEMENT (GM & God Mode) ---
 
 @app.route('/api/admin/pending_accounts')
-@login_required
+@gm_required
 def get_pending_accounts():
     if not db:
         return jsonify({'success': False, 'error': 'Database offline'}), 503
@@ -1192,7 +1282,7 @@ def get_pending_accounts():
 
 
 @app.route('/api/admin/all_users')
-@login_required
+@gm_required
 def get_all_users():
     if not db:
         return jsonify({'success': False, 'error': 'Database offline'}), 503
@@ -1214,7 +1304,7 @@ def get_all_users():
 
 
 @app.route('/api/admin/search_rc', methods=['POST'])
-@login_required
+@gm_required
 def search_rc_live():
     if not db:
         return jsonify({'success': False, 'error': 'Database offline'})
@@ -1227,7 +1317,7 @@ def search_rc_live():
 
 
 @app.route('/api/admin/approve_account', methods=['POST'])
-@login_required
+@gm_required
 def approve_account():
     if not db:
         return jsonify({'success': False, 'error': 'DB Offline'}), 503
@@ -1243,7 +1333,7 @@ def approve_account():
 
 
 @app.route('/api/admin/reject_pending', methods=['POST'])
-@login_required
+@gm_required
 def reject_pending():
     if not db:
         return jsonify({'success': False, 'error': 'DB Offline'}), 503
@@ -1261,7 +1351,7 @@ def reject_pending():
 
 
 @app.route('/api/admin/delete_user', methods=['POST'])
-@super_admin_required
+@god_required
 def delete_user_account():
     if not db:
         return jsonify({'success': False, 'error': 'DB Offline'}), 503
@@ -1279,7 +1369,7 @@ def delete_user_account():
 
 
 @app.route('/api/admin/merge_accounts', methods=['POST'])
-@super_admin_required
+@gm_required
 def merge_accounts():
     if not db:
         return jsonify({'success': False, 'error': 'DB Offline'}), 503
@@ -1301,7 +1391,7 @@ def merge_accounts():
 
 
 @app.route('/api/admin/toggle_moderator', methods=['POST'])
-@super_admin_required
+@god_required
 def toggle_moderator():
     if not db:
         return jsonify({'success': False})
@@ -1322,7 +1412,7 @@ def toggle_moderator():
 
 
 @app.route('/api/admin/update_verified_link', methods=['POST'])
-@login_required
+@gm_required
 def update_verified_link():
     if not db:
         return jsonify({'success': False})
@@ -1343,7 +1433,7 @@ def update_verified_link():
 
 
 @app.route('/api/admin/update_user_tier', methods=['POST'])
-@login_required
+@gm_required
 def update_user_tier():
     if not db:
         return jsonify({'success': False})
@@ -1362,7 +1452,7 @@ def update_user_tier():
 
 
 @app.route('/api/admin/sync_rc/<player_name>', methods=['POST'])
-@login_required
+@gm_required
 def force_rc_sync(player_name):
     if not db:
         return jsonify({"success": False})
@@ -1394,13 +1484,13 @@ def search_history():
 
 
 @app.route('/api/admin/player_profile/<player_name>', methods=['GET'])
-@login_required
+@gm_required
 def get_player_profile(player_name):
     return jsonify(db.admin_get_player_profile(player_name)) if db else jsonify({})
 
 
 @app.route('/api/admin/update_player_profile', methods=['POST'])
-@login_required
+@gm_required
 def update_player_profile():
     return jsonify({"success": db.admin_update_player_profile(request.json.get('player_name'), request.json.get('ratings_central_id'), session.get('admin_email'))}) if db else jsonify({"success": False})
 
@@ -1414,7 +1504,32 @@ def manual_match():
 @app.route('/api/admin/update_match', methods=['POST'])
 @login_required
 def update_match():
-    return jsonify({"success": db.admin_update_historical_match(request.json.get('p1'), request.json.get('p2'), request.json.get('date'), request.json.get('s1'), request.json.get('s2'), request.json.get('new_date'), session.get('admin_email'))}) if db else jsonify({"success": False})
+    if not db:
+        return jsonify({"success": False})
+    req = request.json or {}
+    try:
+        res = db.admin_update_historical_match(
+            req.get('p1'),
+            req.get('p2'),
+            req.get('date'),
+            req.get('s1'),
+            req.get('s2'),
+            req.get('new_date'),
+            session.get('admin_email'),
+            game_scores=req.get('game_scores'),
+            match_id=req.get('match_id')
+        )
+    except TypeError:
+        res = db.admin_update_historical_match(
+            req.get('p1'),
+            req.get('p2'),
+            req.get('date'),
+            req.get('s1'),
+            req.get('s2'),
+            req.get('new_date'),
+            session.get('admin_email')
+        )
+    return jsonify({"success": res})
 
 
 @app.route('/api/admin/bulk_fix_date', methods=['POST'])
@@ -1424,13 +1539,13 @@ def bulk_fix_date():
 
 
 @app.route('/api/admin/override_deltas', methods=['POST'])
-@super_admin_required
+@gm_required
 def override_deltas():
     return jsonify({"success": db.admin_override_match_deltas(request.json.get('match_id'), request.json.get('p1_delta'), request.json.get('p2_delta'), session.get('admin_email'))}) if db else jsonify({"success": False})
 
 
 @app.route('/api/admin/set_rating_scales', methods=['POST'])
-@super_admin_required
+@god_required
 def set_rating_scales():
     return jsonify({"success": db.admin_set_rating_scales(request.json.get('k_win'), request.json.get('k_loss'), session.get('admin_email'))}) if db else jsonify({"success": False})
 
@@ -1442,7 +1557,7 @@ def get_rating_scales():
 
 
 @app.route('/api/admin/recalculate', methods=['POST'])
-@super_admin_required
+@god_required
 def admin_recalculate():
     if not db:
         return jsonify({"success": False, "error": "Database offline"})
@@ -1450,7 +1565,7 @@ def admin_recalculate():
 
 
 @app.route('/api/admin/recalculate_recent', methods=['POST'])
-@super_admin_required
+@gm_required
 def admin_recalculate_recent():
     if not db:
         return jsonify({"success": False, "error": "Database offline"})
@@ -1464,13 +1579,13 @@ def get_chaos_config():
 
 
 @app.route('/api/admin/chaos_vote', methods=['POST'])
-@super_admin_required
+@gm_required
 def chaos_vote():
     return jsonify({"success": db.admin_vote_chaos(request.json.get('weeks', []), session.get('admin_email'))}) if db else jsonify({"success": False})
 
 
 @app.route('/api/admin/chaos_clear', methods=['POST'])
-@super_admin_required
+@god_required
 def chaos_clear():
     return jsonify({"success": db.admin_clear_chaos(session.get('admin_email'))}) if db else jsonify({"success": False})
 
@@ -1482,13 +1597,13 @@ def admin_teams():
 
 
 @app.route('/api/admin/update_team', methods=['POST'])
-@login_required
+@gm_required
 def admin_update_team():
     return jsonify({"success": db.admin_update_team(request.json.get('team_id'), request.json.get('players'), session.get('admin_email'))}) if db else jsonify({"success": False})
 
 
 @app.route('/api/admin/upload_schedule', methods=['POST'])
-@login_required
+@gm_required
 def upload_schedule():
     if not db:
         return jsonify({"success": False, "error": "DB Offline"})
@@ -1504,7 +1619,7 @@ def get_upcoming_schedules():
 
 
 @app.route('/api/admin/delete_schedule', methods=['POST'])
-@login_required
+@gm_required
 def delete_schedule():
     return jsonify({"success": db.admin_delete_upcoming_schedule(request.json.get('schedule_id'), session.get('admin_email'))}) if db else jsonify({"success": False})
 
@@ -1525,19 +1640,19 @@ def export_zermelo(tournament_id):
 
 
 @app.route('/api/admin/merge', methods=['POST'])
-@super_admin_required
+@gm_required
 def merge_players():
     return jsonify({"success": db.admin_merge_players(request.json.get('bad_name'), request.json.get('good_name'), session.get('admin_email'))}) if db else jsonify({"success": False})
 
 
 @app.route('/api/admin/override_rating', methods=['POST'])
-@super_admin_required
+@gm_required
 def override_rating():
     if not db:
         return jsonify({"success": False})
     req = request.json or {}
-    return jsonify({
-        "success": db.admin_override_rating(
+    try:
+        ok = db.admin_override_rating(
             req.get('player_id'),
             req.get('rating'),
             req.get('sd'),
@@ -1545,7 +1660,15 @@ def override_rating():
             session.get('admin_email'),
             effective_date=req.get('effective_date')
         )
-    })
+    except TypeError:
+        ok = db.admin_override_rating(
+            req.get('player_id'),
+            req.get('rating'),
+            req.get('sd'),
+            req.get('retroactive', True),
+            session.get('admin_email')
+        )
+    return jsonify({"success": ok})
 
 
 @app.route('/api/admin/rating_context/<player_id>', methods=['GET'])
@@ -1555,7 +1678,7 @@ def rating_context(player_id):
 
 
 @app.route('/api/admin/bulk_pull_ratings', methods=['POST'])
-@login_required
+@god_required
 def bulk_pull_ratings():
     return jsonify(db.admin_bulk_pull_ratings(session.get('admin_email', 'Unknown'))) if db else jsonify({"success": False})
 
@@ -1595,19 +1718,19 @@ def glicko_calc():
 # --- ADMIN: SYSTEM & COMMS ---
 
 @app.route('/api/admin/add_notice', methods=['POST'])
-@login_required
+@gm_required
 def add_notice():
     return jsonify({"success": db.admin_add_notice(request.json.get('title'), request.json.get('message'), request.json.get('type'), session.get('admin_email'))}) if db else jsonify({"success": False})
 
 
 @app.route('/api/admin/delete_notice', methods=['POST'])
-@login_required
+@gm_required
 def delete_notice():
     return jsonify({"success": db.admin_delete_notice(request.json.get('notice_id'), session.get('admin_email'))}) if db else jsonify({"success": False})
 
 
 @app.route('/api/admin/delete_post', methods=['POST'])
-@login_required
+@gm_required
 def delete_community_post():
     return jsonify({"success": db.admin_delete_community_post(request.json.get('post_id'), session.get('admin_email'))}) if db else jsonify({"success": False})
 
@@ -1625,7 +1748,7 @@ def add_admin_message():
 
 
 @app.route('/api/admin/contacts')
-@login_required
+@gm_required
 def get_contacts():
     if not db:
         return jsonify({"emails": "", "phones": "", "preview": [], "error": "DB Offline"})
@@ -1636,7 +1759,7 @@ def get_contacts():
 
 
 @app.route('/api/admin/send_sms', methods=['POST'])
-@login_required
+@gm_required
 def send_sms():
     if not db:
         return jsonify({"success": False, "error": "Database offline"}), 503
@@ -1650,13 +1773,13 @@ def send_sms():
 
 
 @app.route('/api/admin/sms_inbox')
-@login_required
+@gm_required
 def get_sms_inbox():
     return jsonify(db.get_sms_inbox()) if db else jsonify([])
 
 
 @app.route('/api/admin/donations')
-@login_required
+@gm_required
 def admin_donations():
     return jsonify(db.admin_get_all_donations()) if db else jsonify([])
 
@@ -1668,27 +1791,142 @@ def admin_traffic():
 
 
 @app.route('/api/admin/audit_logs')
-@login_required
+@gm_required
 def audit_logs():
     return jsonify(db.get_audit_logs()) if db else jsonify([])
 
 
 @app.route('/api/admin/undo_action', methods=['POST'])
-@super_admin_required
+@gm_required
 def undo_action():
-    return jsonify({"success": db.undo_audit_action(request.json.get('log_id'), session.get('admin_email'))}) if db else jsonify({"success": False})
+    """
+    Tier 1 (God Mode) can undo any action.
+    Tier 2 (General Manager) can only undo actions taken by themselves or Tier 3 (Temp/Data Entry) admins.
+    """
+    if not db or not db.db:
+        return jsonify({"success": False, "error": "Database offline"}), 500
+
+    log_id = (request.json or {}).get('log_id')
+    caller_email = (session.get('admin_email') or '').lower().strip()
+    caller_tier = get_admin_tier(caller_email, session.get('admin_role'))
+
+    try:
+        log_doc = db.db.collection('admin_audit_logs').document(log_id).get()
+        if not log_doc.exists:
+            return jsonify({"success": False, "error": "Audit log not found."}), 404
+
+        log_data = log_doc.to_dict()
+        target_author = (log_data.get('admin') or '').lower().strip()
+
+        # If caller is General Manager (Tier 2), block them from undoing God Mode actions
+        if caller_tier > 1:
+            if target_author == GOD_ADMIN_EMAIL:
+                return jsonify({"success": False, "error": "Permission Denied: General Managers cannot undo God Mode actions."}), 403
+
+        ok = db.undo_audit_action(log_id, caller_email)
+        return jsonify({"success": ok})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route('/api/admin/users')
-@super_admin_required
+@gm_required
 def admin_users():
     return jsonify(db.get_admin_users()) if db else jsonify([])
 
 
 @app.route('/api/admin/approve_user', methods=['POST'])
-@super_admin_required
+@gm_required
 def approve_user():
-    return jsonify({"success": db.approve_admin(request.json.get('email'), request.json.get('action'))}) if db else jsonify({"success": False})
+    """
+    Enforces 3-Tier Role Hierarchy:
+    - Tier 1 (God Mode - jakobwill7@gmail.com): Can grant permanent access ('approve', 'make_gm'), temporary access ('temp_admin', 'temp_super'), revoke, or delete.
+    - Tier 2 (General Manager - gctta...): Can ONLY grant temporary access ('temp_admin', 'temp_super') or revoke temporary admins. Cannot grant permanent access or modify God/GM accounts.
+    """
+    if not db or not db.db:
+        return jsonify({"success": False, "error": "Database offline"}), 500
+
+    req = request.json or {}
+    target_email = (req.get('email') or '').lower().strip()
+    action = req.get('action')
+    days = int(req.get('days', 7))
+
+    caller_email = (session.get('admin_email') or '').lower().strip()
+    caller_tier = get_admin_tier(caller_email, session.get('admin_role'))
+
+    if not target_email or not action:
+        return jsonify({"success": False, "error": "Missing target email or action."}), 400
+
+    # Nobody can touch God Mode
+    if target_email == GOD_ADMIN_EMAIL:
+        return jsonify({"success": False, "error": "Cannot modify God Mode account."}), 403
+
+    target_ref = db.db.collection('admin_users').document(target_email)
+    target_doc = target_ref.get()
+    target_current_role = target_doc.to_dict().get('role', 'pending') if target_doc.exists else 'pending'
+    target_tier = get_admin_tier(target_email, target_current_role)
+
+    # General Manager restrictions
+    if caller_tier == 2:
+        if action in ['approve', 'make_gm', 'permanent']:
+            return jsonify({"success": False, "error": "Only God Mode (Jakob) can grant permanent admin access."}), 403
+        if target_tier <= 2 and target_email != caller_email:
+            return jsonify({"success": False, "error": "General Managers cannot modify or revoke permanent GM/God accounts."}), 403
+
+    try:
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        if action in ['temp_admin', 'temp_data_entry']:
+            target_ref.set({
+                'email': target_email,
+                'role': 'temp_admin',
+                'granted_by': caller_email,
+                'expires_at': now_utc + datetime.timedelta(days=days)
+            }, merge=True)
+            db._log_audit(caller_email, 'GRANT_TEMP_ADMIN', f"Granted {days}-day Temp Data Entry access to {target_email}", {})
+            return jsonify({"success": True})
+        elif action == 'temp_super':
+            target_ref.set({
+                'email': target_email,
+                'role': 'temp_super_admin',
+                'granted_by': caller_email,
+                'expires_at': now_utc + datetime.timedelta(days=days)
+            }, merge=True)
+            db._log_audit(caller_email, 'GRANT_TEMP_GM', f"Granted {days}-day Temp GM access to {target_email}", {})
+            return jsonify({"success": True})
+        elif action == 'make_gm' and caller_tier == 1:
+            target_ref.set({
+                'email': target_email,
+                'role': 'gm',
+                'granted_by': caller_email,
+                'expires_at': firestore.DELETE_FIELD
+            }, merge=True)
+            db._log_audit(caller_email, 'GRANT_PERMANENT_GM', f"Promoted {target_email} to Permanent General Manager", {})
+            return jsonify({"success": True})
+        elif action == 'approve' and caller_tier == 1:
+            target_ref.set({
+                'email': target_email,
+                'role': 'admin',
+                'granted_by': caller_email,
+                'expires_at': firestore.DELETE_FIELD
+            }, merge=True)
+            db._log_audit(caller_email, 'GRANT_PERMANENT_ADMIN', f"Granted permanent Admin access to {target_email}", {})
+            return jsonify({"success": True})
+        elif action == 'revoke':
+            target_ref.set({
+                'email': target_email,
+                'role': 'pending',
+                'expires_at': firestore.DELETE_FIELD
+            }, merge=True)
+            db._log_audit(caller_email, 'REVOKE_ADMIN', f"Revoked admin access for {target_email}", {})
+            return jsonify({"success": True})
+        elif action == 'delete':
+            target_ref.delete()
+            db._log_audit(caller_email, 'DELETE_ADMIN', f"Deleted admin record for {target_email}", {})
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": db.approve_admin(target_email, action)})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route('/api/refresh', methods=['POST'])
@@ -1703,7 +1941,7 @@ def force_refresh():
 # --- TOURNAMENTS & HUB ---
 
 @app.route('/api/admin/tournaments/create', methods=['POST'])
-@login_required
+@gm_required
 def create_tournament():
     if not db:
         return jsonify({"success": False, "error": "DB Offline"}), 503
@@ -1711,7 +1949,7 @@ def create_tournament():
 
 
 @app.route('/api/admin/tournaments/events/create', methods=['POST'])
-@login_required
+@gm_required
 def create_event():
     if not db:
         return jsonify({"success": False, "error": "DB Offline"}), 503
