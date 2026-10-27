@@ -85,7 +85,8 @@
 </div>
 
 <script>
-    let _currentProfileData = null;
+    // FIX: Attach to window to prevent redeclaration crashes in dynamic environments
+    window._currentProfileData = null;
 
     window.toggleProfileTab = function(tab) {
         if (tab === 'history') {
@@ -106,99 +107,127 @@
     };
 
     window.loadStats = async function(playerName, pushHistory = true) {
-        if(pushHistory) history.pushState({page: 'profile', name: playerName}, "", "#profile/" + encodeURIComponent(playerName));
-        window.switchTab('profile', false);
+        if(pushHistory && typeof history.pushState === 'function') {
+            history.pushState({page: 'profile', name: playerName}, "", "#profile/" + encodeURIComponent(playerName));
+        }
+        
+        if (typeof window.switchTab === 'function') window.switchTab('profile', false);
         window.currentProfileName = playerName;
 
         const histContainer = document.getElementById('pHistory');
         const insightsGrid = document.getElementById('pInsightsGrid');
         
-        histContainer.innerHTML = '<div class="text-center py-16 text-blue-400"><i class="fa-solid fa-spinner fa-spin text-4xl mb-3"></i></div>';
-        insightsGrid.innerHTML = '';
+        if(histContainer) histContainer.innerHTML = '<div class="text-center py-16 text-blue-400"><i class="fa-solid fa-spinner fa-spin text-4xl mb-3"></i></div>';
+        if(insightsGrid) insightsGrid.innerHTML = '';
 
         try {
-            const season = document.getElementById('seasonSelect') ? document.getElementById('seasonSelect').value : 'Career';
-            const division = document.getElementById('profileDivisionSelect') ? document.getElementById('profileDivisionSelect').value : 'All';
+            const seasonSelect = document.getElementById('seasonSelect');
+            const divisionSelect = document.getElementById('profileDivisionSelect');
+            const season = seasonSelect ? seasonSelect.value : 'Career';
+            const division = divisionSelect ? divisionSelect.value : 'All';
 
             const res = await fetch(`/api/stats/${encodeURIComponent(playerName)}?season=${encodeURIComponent(season)}&division=${encodeURIComponent(division)}`);
             if(!res.ok) throw new Error("Not found");
             const data = await res.json();
-            _currentProfileData = data;
+            window._currentProfileData = data;
 
             // Populate Header
-            document.getElementById('pName').innerText = data.name;
-            document.getElementById('pRating').innerText = data.rating;
-            document.getElementById('pFirstYear').innerText = `Est. ${data.first_year}`;
-            document.getElementById('pMatches').innerText = `${data.career_matches || 0} Matches Played`;
-            document.getElementById('pWinRate').innerText = `${data.combined?.win_rate || '0%'} Win Rate`;
+            const nameEl = document.getElementById('pName');
+            if(nameEl) nameEl.innerText = data.name || playerName;
+            
+            const ratingEl = document.getElementById('pRating');
+            if(ratingEl) ratingEl.innerText = data.rating || '--';
+            
+            const firstYearEl = document.getElementById('pFirstYear');
+            if(firstYearEl) firstYearEl.innerText = `Est. ${data.first_year || '--'}`;
+            
+            const matchesEl = document.getElementById('pMatches');
+            if(matchesEl) matchesEl.innerText = `${data.career_matches || 0} Matches Played`;
+            
+            const winRateEl = document.getElementById('pWinRate');
+            if(winRateEl) winRateEl.innerText = `${data.combined?.win_rate || '0%'} Win Rate`;
 
             // Admin Logic
             const adminBar = document.getElementById('admin-stats-bar');
             const editHint = document.getElementById('admin-edit-hint');
             if (data.is_admin_view) {
-                adminBar.classList.remove('hidden');
-                adminBar.classList.add('flex');
-                editHint.classList.remove('hidden');
-                document.getElementById('pTrueRating').innerText = data.true_rating || data.rating;
-                document.getElementById('pRD').innerText = data.rd || 'N/A';
-                document.getElementById('pVol').innerText = data.vol ? data.vol.toFixed(3) : '0.060';
+                if(adminBar) {
+                    adminBar.classList.remove('hidden');
+                    adminBar.classList.add('flex');
+                }
+                if(editHint) editHint.classList.remove('hidden');
+                
+                const tRatingEl = document.getElementById('pTrueRating');
+                if(tRatingEl) tRatingEl.innerText = data.true_rating || data.rating || '--';
+                
+                const rdEl = document.getElementById('pRD');
+                if(rdEl) rdEl.innerText = data.rd || 'N/A';
+                
+                const volEl = document.getElementById('pVol');
+                if(volEl) volEl.innerText = data.vol ? data.vol.toFixed(3) : '0.060';
             } else {
-                adminBar.classList.add('hidden');
-                adminBar.classList.remove('flex');
-                editHint.classList.add('hidden');
+                if(adminBar) {
+                    adminBar.classList.add('hidden');
+                    adminBar.classList.remove('flex');
+                }
+                if(editHint) editHint.classList.add('hidden');
             }
 
             // Populate Match History
-            const hist = data.combined?.match_history || [];
-            if(hist.length === 0) {
-                histContainer.innerHTML = '<div class="text-center text-slate-500 py-12 bg-black/20 rounded-2xl border border-white/5 text-xs font-bold uppercase tracking-widest">No matches found for this filter.</div>';
-            } else {
-                histContainer.innerHTML = hist.map((m) => {
-                    const isWin = m.result === 'Win';
-                    const resultColor = isWin ? 'text-emerald-400' : 'text-rose-400';
-                    const deltaColor = m.delta > 0 ? 'text-emerald-400' : (m.delta < 0 ? 'text-rose-400' : 'text-slate-500');
-                    const deltaSign = m.delta > 0 ? '+' : '';
-                    const matchId = m.match_id || m.id || '';
-                    
-                    const clickAction = data.is_admin_view ? `onclick="window.inlineEditMatch('${matchId}', '${data.name.replace(/'/g, "\\'")}', '${m.opponent.replace(/'/g, "\\'")}', '${m.date}', '${m.score}')"` : ``;
-                    const hoverClasses = data.is_admin_view ? `cursor-pointer hover:bg-blue-900/40 hover:border-blue-500/50 group transition-all` : ``;
-                    const editIcon = data.is_admin_view ? `<div class="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-blue-600/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end pr-4 rounded-r-xl border-l border-transparent"><i class="fa-solid fa-pen text-blue-400 text-sm"></i></div>` : ``;
+            if(histContainer) {
+                const hist = data.combined?.match_history || [];
+                if(hist.length === 0) {
+                    histContainer.innerHTML = '<div class="text-center text-slate-500 py-12 bg-black/20 rounded-2xl border border-white/5 text-xs font-bold uppercase tracking-widest">No matches found for this filter.</div>';
+                } else {
+                    histContainer.innerHTML = hist.map((m) => {
+                        const isWin = m.result === 'Win';
+                        const resultColor = isWin ? 'text-emerald-400' : 'text-rose-400';
+                        const deltaColor = m.delta > 0 ? 'text-emerald-400' : (m.delta < 0 ? 'text-rose-400' : 'text-slate-500');
+                        const deltaSign = m.delta > 0 ? '+' : '';
+                        const matchId = m.match_id || m.id || '';
+                        
+                        const clickAction = data.is_admin_view ? `onclick="window.inlineEditMatch('${matchId}', '${(data.name || '').replace(/'/g, "\\'")}', '${(m.opponent || '').replace(/'/g, "\\'")}', '${m.date}', '${m.score}')"` : ``;
+                        const hoverClasses = data.is_admin_view ? `cursor-pointer hover:bg-blue-900/40 hover:border-blue-500/50 group transition-all` : ``;
+                        const editIcon = data.is_admin_view ? `<div class="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-blue-600/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end pr-4 rounded-r-xl border-l border-transparent"><i class="fa-solid fa-pen text-blue-400 text-sm"></i></div>` : ``;
 
-                    return `
-                    <div ${clickAction} class="p-3 bg-black/40 rounded-xl border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative ${hoverClasses}">
-                        ${editIcon}
-                        <div class="flex items-center gap-3 relative z-10">
-                            <div class="w-1.5 h-8 ${isWin ? 'bg-emerald-500' : 'bg-rose-500'} rounded-full shadow-[0_0_8px_${isWin ? 'rgba(16,185,129,0.5)' : 'rgba(244,63,94,0.5)'}]"></div>
-                            <div>
-                                <div class="text-xs font-black text-white uppercase tracking-wider mb-0.5">vs <span class="text-blue-300 hover:text-yellow-400 transition-colors cursor-pointer" onclick="event.stopPropagation(); window.loadStats('${m.opponent.replace(/'/g, "\\'")}')">${m.opponent}</span></div>
-                                <div class="text-[10px] text-slate-400 font-mono">${m.date} ${m.division ? `• ${m.division}` : ''}</div>
+                        return `
+                        <div ${clickAction} class="p-3 bg-black/40 rounded-xl border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative ${hoverClasses}">
+                            ${editIcon}
+                            <div class="flex items-center gap-3 relative z-10">
+                                <div class="w-1.5 h-8 ${isWin ? 'bg-emerald-500' : 'bg-rose-500'} rounded-full shadow-[0_0_8px_${isWin ? 'rgba(16,185,129,0.5)' : 'rgba(244,63,94,0.5)'}]"></div>
+                                <div>
+                                    <div class="text-xs font-black text-white uppercase tracking-wider mb-0.5">vs <span class="text-blue-300 hover:text-yellow-400 transition-colors cursor-pointer" onclick="event.stopPropagation(); window.loadStats('${(m.opponent || '').replace(/'/g, "\\'")}')">${m.opponent}</span></div>
+                                    <div class="text-[10px] text-slate-400 font-mono">${m.date} ${m.division ? `• ${m.division}` : ''}</div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="flex items-center gap-4 text-right relative z-10 sm:pr-8">
-                            <div>
-                                <div class="text-sm font-black ${resultColor} font-mono">${m.result}</div>
-                                <div class="text-[10px] text-slate-300 font-mono font-bold">${m.score || '--'}</div>
+                            <div class="flex items-center gap-4 text-right relative z-10 sm:pr-8">
+                                <div>
+                                    <div class="text-sm font-black ${resultColor} font-mono">${m.result}</div>
+                                    <div class="text-[10px] text-slate-300 font-mono font-bold">${m.score || '--'}</div>
+                                </div>
+                                <div class="w-16 bg-slate-900/80 rounded-lg py-1.5 border border-white/10 flex flex-col items-center justify-center shrink-0">
+                                    <div class="text-[9px] text-slate-500 uppercase font-black tracking-widest leading-none mb-0.5">Delta</div>
+                                    <div class="text-xs font-black ${deltaColor} font-mono leading-none">${deltaSign}${m.delta ? m.delta.toFixed(1) : '0.0'}</div>
+                                </div>
                             </div>
-                            <div class="w-16 bg-slate-900/80 rounded-lg py-1.5 border border-white/10 flex flex-col items-center justify-center shrink-0">
-                                <div class="text-[9px] text-slate-500 uppercase font-black tracking-widest leading-none mb-0.5">Delta</div>
-                                <div class="text-xs font-black ${deltaColor} font-mono leading-none">${deltaSign}${m.delta ? m.delta.toFixed(1) : '0.0'}</div>
-                            </div>
-                        </div>
-                    </div>`;
-                }).join('');
+                        </div>`;
+                    }).join('');
+                }
             }
 
             // Populate Career Insights
-            window.renderInsights(data.insights, data.career_matches || 0);
+            if (typeof window.renderInsights === 'function') {
+                window.renderInsights(data.insights, data.career_matches || 0);
+            }
 
         } catch (e) {
-            histContainer.innerHTML = '<div class="text-center text-rose-400 py-12 bg-rose-950/20 rounded-2xl border border-rose-500/20 text-xs font-bold uppercase tracking-widest">Error loading player profile.</div>';
+            if(histContainer) histContainer.innerHTML = '<div class="text-center text-rose-400 py-12 bg-rose-950/20 rounded-2xl border border-rose-500/20 text-xs font-bold uppercase tracking-widest">Error loading player profile.</div>';
         }
     };
 
     window.renderInsights = function(insights, totalMatches) {
         const grid = document.getElementById('pInsightsGrid');
-        if (!insights) return;
+        if (!grid || !insights) return;
 
         const createCard = (title, icon, iconColor, dataArr, desc, isWinType) => {
             const count = dataArr ? dataArr.length : 0;
@@ -250,7 +279,7 @@
 
     window.inlineEditMatch = async function(matchId, p1, p2, date, currentScore) {
         if(!matchId || matchId === 'undefined' || matchId === 'null') {
-            alert("❌ Cannot edit this match directly. It lacks a Database ID (likely an old imported RC match).");
+            alert("❌ Cannot edit this match directly. It lacks a Database ID.");
             return;
         }
         

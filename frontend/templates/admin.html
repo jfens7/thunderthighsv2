@@ -1,152 +1,411 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control Tower | ThunderThighs</title>
+    <title>GCTTA Control Tower</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #090d16; color: white; margin: 0; padding: 0; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-        .sidebar-btn.active { background-color: rgba(14, 165, 233, 0.15); color: #38bdf8; border-right: 3px solid #38bdf8; }
-        .sidebar-btn.active-emerald { background-color: rgba(16, 185, 129, 0.15); color: #34d399; border-right: 3px solid #34d399; }
-        .sidebar-btn.active-purple { background-color: rgba(168, 85, 247, 0.15); color: #c084fc; border-right: 3px solid #c084fc; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
     </style>
 </head>
-<body class="flex h-screen overflow-hidden">
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col md:flex-row antialiased">
 
-    <!-- MODERN SIDEBAR NAV -->
-    <div class="w-64 bg-slate-900 border-r border-white/5 flex flex-col shrink-0 z-50 shadow-2xl">
-        <div class="p-5 border-b border-white/5 flex items-center gap-3 bg-black/20">
-            <div class="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center shadow-lg"><i class="fa-solid fa-shield text-white text-sm"></i></div>
+    <!-- SIDEBAR NAVIGATION -->
+    <aside class="w-full md:w-72 bg-slate-900 border-r border-white/10 flex flex-col shrink-0">
+        <div class="p-6 border-b border-white/10 flex items-center justify-between">
             <div>
-                <h1 class="text-white font-black text-lg tracking-tight leading-none">CONTROL TOWER</h1>
-                <p class="text-[9px] text-slate-400 font-mono tracking-widest uppercase">Admin: {{ email }}</p>
+                <h1 class="font-black text-white text-base tracking-wider uppercase flex items-center gap-2">
+                    <i class="fa-solid fa-shield-halved text-indigo-400"></i> Control Tower
+                </h1>
+                <p class="text-[10px] text-slate-400 font-mono mt-0.5 truncate max-w-[180px]">{{ email }}</p>
+            </div>
+            <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Tier {{ tier }}</span>
+        </div>
+
+        <nav class="p-4 space-y-1.5 flex-1 overflow-y-auto custom-scrollbar">
+            <div class="text-[9px] font-black text-slate-500 uppercase tracking-widest px-3 mb-2">Match Operations</div>
+            <button onclick="window.switchAdminTab('batch-logger')" id="nav-batch-logger" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition text-slate-400 hover:text-white hover:bg-white/5">
+                <i class="fa-solid fa-bolt w-4 text-emerald-400"></i> Speed-Logger
+            </button>
+            <button onclick="window.switchAdminTab('time-machine')" id="nav-time-machine" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition text-slate-400 hover:text-white hover:bg-white/5">
+                <i class="fa-solid fa-clock-rotate-left w-4 text-blue-400"></i> Match Time Machine
+            </button>
+
+            <div class="text-[9px] font-black text-slate-500 uppercase tracking-widest px-3 mt-6 mb-2">Player Management</div>
+            <button onclick="window.switchAdminTab('command-center')" id="nav-command-center" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition text-slate-400 hover:text-white hover:bg-white/5">
+                <i class="fa-solid fa-users-gear w-4 text-indigo-400"></i> Command Center
+            </button>
+            <button onclick="window.switchAdminTab('pending')" id="nav-pending" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition text-slate-400 hover:text-white hover:bg-white/5">
+                <i class="fa-solid fa-user-check w-4 text-amber-400"></i> Account Requests
+            </button>
+
+            <div class="text-[9px] font-black text-slate-500 uppercase tracking-widest px-3 mt-6 mb-2">System &amp; Comms</div>
+            <button onclick="window.switchAdminTab('diagnostics')" id="nav-diagnostics" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition text-slate-400 hover:text-white hover:bg-white/5">
+                <i class="fa-solid fa-stethoscope w-4 text-rose-400"></i> Diagnostics &amp; Traffic
+            </button>
+            <button onclick="window.switchAdminTab('audit')" id="nav-audit" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition text-slate-400 hover:text-white hover:bg-white/5">
+                <i class="fa-solid fa-list-check w-4 text-sky-400"></i> Audit Logs &amp; Undo
+            </button>
+        </nav>
+
+        <div class="p-4 border-t border-white/10 space-y-2">
+            <button onclick="window.triggerSync()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-2.5 px-4 rounded-xl text-xs uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-lg">
+                <i class="fa-solid fa-rotate-right"></i> Sync Google Sheets
+            </button>
+            <a href="/" class="w-full bg-black/40 hover:bg-black/60 text-slate-400 hover:text-white font-bold py-2 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 border border-white/5">
+                <i class="fa-solid fa-arrow-left"></i> Exit to Site
+            </a>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT VIEWAREA -->
+    <main class="flex-1 p-6 md:p-10 overflow-y-auto custom-scrollbar">
+        
+        <!-- Tab: Batch Logger -->
+        <div id="tab-batch-logger" class="admin-tab-content">
+            {% include 'Components/Admin/view_batch_logger.html' %}
+        </div>
+
+        <!-- Tab: Match Time Machine -->
+        <div id="tab-time-machine" class="admin-tab-content hidden">
+            <div class="space-y-6 max-w-5xl mx-auto">
+                <div>
+                    <h2 class="text-xl font-black text-white flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left text-blue-400"></i> Match Time Machine &amp; History
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-1">Search historical matches and inspect scores.</p>
+                </div>
+                <div class="flex gap-3">
+                    <input type="text" id="time-machine-query" placeholder="Search player name or match ID..." class="flex-1 bg-black/50 border border-white/15 text-white text-xs font-bold rounded-xl px-4 py-3 focus:border-blue-500 outline-none">
+                    <button onclick="window.searchMatchHistory()" class="bg-blue-600 hover:bg-blue-500 text-white font-black px-6 py-3 rounded-xl text-xs uppercase tracking-wider transition">Search</button>
+                </div>
+                <div id="time-machine-results" class="space-y-3">
+                    <div class="text-center py-12 text-slate-500 text-xs font-bold uppercase tracking-widest">Enter a query above to search match records.</div>
+                </div>
             </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto py-4 flex flex-col gap-1 px-3 custom-scrollbar">
-            <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest px-3 mb-2 mt-2">Core Operations</div>
-            <button onclick="window.switchAdminTab('live', 'active')" id="nav-live" class="sidebar-btn active flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left"><i class="fa-solid fa-satellite-dish w-5 text-center"></i> Live iPads</button>
-            <button onclick="window.switchAdminTab('batch-logger', 'active-emerald')" id="nav-batch-logger" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-emerald-500 hover:bg-emerald-500/10 transition-colors text-left"><i class="fa-solid fa-list-check w-5 text-center"></i> Batch Points Logger</button>
-            <button onclick="window.switchAdminTab('manual', 'active')" id="nav-manual" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left"><i class="fa-solid fa-plus w-5 text-center"></i> Inject Match</button>
-            <button onclick="window.switchAdminTab('history', 'active')" id="nav-history" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left"><i class="fa-solid fa-clock-rotate-left w-5 text-center"></i> Match Database</button>
+        <!-- Tab: Command Center (Player Directory & True Rating Overrides) -->
+        <div id="tab-command-center" class="admin-tab-content hidden">
+            <div class="space-y-6 max-w-6xl mx-auto">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/10 pb-4">
+                    <div>
+                        <h2 class="text-indigo-400 font-black uppercase tracking-widest text-lg flex items-center gap-2">
+                            <i class="fa-solid fa-users-gear"></i> Player Command Center
+                        </h2>
+                        <p class="text-xs text-slate-400 mt-0.5">Manage true ratings, division caps, overrides, and Ratings Central links.</p>
+                    </div>
+                    <div class="relative w-full md:w-72">
+                        <input type="text" id="admin-directory-search" placeholder="Search players..." class="w-full bg-black/50 border border-white/15 text-white text-xs font-bold rounded-xl px-4 py-2.5 pl-10 focus:border-indigo-500 outline-none transition-colors" onkeyup="window.filterAdminDirectory()">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"></i>
+                    </div>
+                </div>
 
-            <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest px-3 mb-2 mt-4">Player Management</div>
-            <button onclick="window.switchAdminTab('players', 'active-purple')" id="nav-players" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-purple-400 hover:bg-purple-500/10 transition-colors text-left"><i class="fa-solid fa-user-astronaut w-5 text-center"></i> Command Center</button>
-            <button onclick="window.switchAdminTab('ratings-central', 'active')" id="nav-ratings-central" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left"><i class="fa-solid fa-globe w-5 text-center"></i> RC Integration</button>
-            <button onclick="window.switchAdminTab('approvals', 'active')" id="nav-approvals" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left"><i class="fa-solid fa-user-check w-5 text-center"></i> App Accounts</button>
-            
-            <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest px-3 mb-2 mt-4">System & Comms</div>
-            <button onclick="window.switchAdminTab('notices', 'active')" id="nav-notices" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left"><i class="fa-solid fa-bullhorn w-5 text-center"></i> Public Notices</button>
-            <button onclick="window.switchAdminTab('diagnostics', 'active')" id="nav-diagnostics" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left"><i class="fa-solid fa-stethoscope w-5 text-center"></i> Diagnostics</button>
-            <button onclick="window.switchAdminTab('audit', 'active')" id="nav-audit" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left super-admin-only"><i class="fa-solid fa-shield-halved w-5 text-center"></i> Audit Logs</button>
+                <div class="bg-slate-900/90 rounded-2xl border border-white/10 shadow-xl overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse min-w-[800px]">
+                            <thead>
+                                <tr class="bg-black/60 border-b border-white/10 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    <th class="p-4">Player Name</th>
+                                    <th class="p-4 text-center">Division Cap</th>
+                                    <th class="p-4 text-center text-indigo-300"><i class="fa-solid fa-user-secret mr-1"></i> True Rating</th>
+                                    <th class="p-4 text-center text-yellow-400"><i class="fa-solid fa-trophy mr-1"></i> Public Rating</th>
+                                    <th class="p-4 text-center">Deviation (SD)</th>
+                                    <th class="p-4 text-center">RC Link</th>
+                                    <th class="p-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-directory-tbody" class="divide-y divide-white/5 text-sm">
+                                <tr>
+                                    <td colspan="7" class="text-center py-12 text-indigo-400"><i class="fa-solid fa-spinner fa-spin text-3xl"></i></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
-        if (tabId === 'diagnostics' && typeof window.loadSystemDiagnostics === 'function') window.loadSystemDiagnostics();
 
-        <div class="p-4 border-t border-white/5 space-y-2 bg-black/20">
-            <button onclick="window.forceRefresh()" class="w-full bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 text-[10px] font-black px-4 py-2.5 rounded-lg uppercase tracking-widest transition flex items-center justify-center gap-2"><i class="fa-solid fa-bolt"></i> Sync Sheets</button>
-            <a href="/" class="flex items-center justify-center gap-2 w-full text-xs font-bold text-slate-400 hover:text-white py-2 transition"><i class="fa-solid fa-arrow-left"></i> Exit to Site</a>
+        <!-- Tab: Account Requests -->
+        <div id="tab-pending" class="admin-tab-content hidden">
+            <div class="space-y-6 max-w-5xl mx-auto">
+                <h2 class="text-xl font-black text-white flex items-center gap-2">
+                    <i class="fa-solid fa-user-check text-amber-400"></i> Pending Account Approvals
+                </h2>
+                <div id="pending-accounts-container" class="space-y-3">
+                    <div class="text-center py-12 text-slate-500 text-xs font-bold uppercase tracking-widest">Loading pending requests...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Diagnostics -->
+        <div id="tab-diagnostics" class="admin-tab-content hidden">
+            {% include 'Components/Admin/view_diagnostics.html' %}
+        </div>
+
+        <!-- Tab: Audit Logs -->
+        <div id="tab-audit" class="admin-tab-content hidden">
+            <div class="space-y-6 max-w-5xl mx-auto">
+                <h2 class="text-xl font-black text-white flex items-center gap-2">
+                    <i class="fa-solid fa-list-check text-sky-400"></i> Audit Logs &amp; Action History
+                </h2>
+                <div id="audit-logs-container" class="space-y-2">
+                    <div class="text-center py-12 text-slate-500 text-xs font-bold uppercase tracking-widest">Loading audit logs...</div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Command Center Edit Modal -->
+    <div id="adminPlayerModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fade-in overflow-y-auto">
+        <div class="bg-slate-900 rounded-2xl border border-indigo-500/50 w-full max-w-lg shadow-2xl flex flex-col my-8">
+            <div class="p-5 border-b border-white/10 flex justify-between items-center bg-black/40">
+                <h3 class="text-lg font-black text-white uppercase tracking-widest flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-indigo-400"></i> Edit <span id="edit-p-name" class="text-indigo-300"></span>
+                </h3>
+                <button onclick="window.closeAdminPlayerModal()" class="text-slate-400 hover:text-white transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-6">
+                <input type="hidden" id="edit-p-id">
+                <input type="hidden" id="edit-p-raw-name">
+                <div class="bg-blue-950/30 border border-blue-500/30 p-4 rounded-xl">
+                    <h4 class="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3"><i class="fa-solid fa-link mr-1"></i> Ratings Central Link</h4>
+                    <div class="flex gap-2">
+                        <input type="number" id="edit-p-rc" placeholder="RC ID Number" class="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-blue-500 outline-none">
+                        <button onclick="window.saveRCLink()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 rounded-lg text-xs font-black uppercase tracking-wider transition-colors shrink-0">Save RC</button>
+                    </div>
+                </div>
+                <div class="bg-rose-950/30 border border-rose-500/30 p-4 rounded-xl">
+                    <h4 class="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-3"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Master Rating Override</h4>
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="text-[9px] text-slate-400 uppercase font-bold tracking-widest block mb-1">True Rating</label>
+                            <input type="number" id="edit-p-true" class="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-rose-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="text-[9px] text-slate-400 uppercase font-bold tracking-widest block mb-1">Deviation (SD)</label>
+                            <input type="number" id="edit-p-sd" class="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-rose-500 outline-none">
+                        </div>
+                    </div>
+                    <label class="flex items-center gap-2 mb-4 cursor-pointer">
+                        <input type="checkbox" id="edit-p-retro" checked class="w-4 h-4 accent-rose-600 rounded bg-black border-white/20">
+                        <span class="text-[11px] text-rose-200 font-bold">Apply Retroactively (Rewrites History)</span>
+                    </label>
+                    <button onclick="window.saveRatingOverride()" class="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-lg text-xs font-black uppercase tracking-wider transition-colors shadow-lg flex justify-center items-center gap-2">
+                        <i class="fa-solid fa-skull"></i> Force Override
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- MAIN CONTENT AREA -->
-    <div class="flex-1 overflow-y-auto bg-[#0a0f1a] relative custom-scrollbar p-6 lg:p-10">
-        
-        <div id="admin-live" class="admin-panel w-full max-w-5xl mx-auto animate-fade-in">
-            <div class="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
-                <h2 class="text-blue-400 font-black uppercase tracking-widest text-lg"><i class="fa-solid fa-satellite-dish mr-2"></i> Live iPad Telemetry</h2>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="live-list"></div>
-        </div>
-
-        <div id="admin-batch-logger" class="admin-panel hidden w-full max-w-6xl mx-auto animate-fade-in">
-            {% include 'Components/Admin/view_batch_logger.html' ignore missing %}
-        </div>
-
-        <div id="admin-players" class="admin-panel hidden w-full max-w-6xl mx-auto animate-fade-in">
-            {% include 'Components/Admin/view_players.html' ignore missing %}
-        </div>
-        
-        <div id="admin-manual" class="admin-panel hidden w-full max-w-4xl mx-auto animate-fade-in">
-            <div class="bg-slate-800 p-8 rounded-xl border border-white/10 shadow-xl">
-                <h2 class="text-emerald-400 font-black text-xl mb-2"><i class="fa-solid fa-pen-to-square mr-2"></i> Inject Match</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <div class="relative">
-                        <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Player 1 (Home)</label>
-                        <input type="text" id="manual-p1" placeholder="Search..." class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm" autocomplete="off">
-                        <div id="sugg-p1" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 rounded shadow-xl max-h-48 overflow-y-auto hidden border border-white/10"></div>
-                    </div>
-                    <div class="relative">
-                        <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Player 2 (Away)</label>
-                        <input type="text" id="manual-p2" placeholder="Search..." class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm" autocomplete="off">
-                        <div id="sugg-p2" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 rounded shadow-xl max-h-48 overflow-y-auto hidden border border-white/10"></div>
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <div>
-                        <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Date</label>
-                        <input type="text" id="manual-date" placeholder="DD/MM/YYYY" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm font-mono">
-                    </div>
-                    <div>
-                        <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Exact Game Scores (Optional)</label>
-                        <input type="text" id="manual-scores" placeholder="e.g. 11-8, 9-11, 14-12, 11-5" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm font-mono">
-                    </div>
-                </div>
-                <button onclick="window.submitManualMatch()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.3)] transition text-sm">INJECT INTO HISTORY</button>
-            </div>
-        </div>
-
-        <div id="admin-history" class="admin-panel hidden w-full max-w-6xl mx-auto animate-fade-in">
-            {% include 'Components/Admin/view_history.html' ignore missing %}
-        </div>
-        <div id="admin-ratings-central" class="admin-panel hidden w-full max-w-5xl mx-auto animate-fade-in">
-            {% include 'Components/Admin/view_ratings_central.html' ignore missing %}
-        </div>
-        <div id="admin-approvals" class="admin-panel hidden w-full max-w-5xl mx-auto animate-fade-in">
-            {% include 'Components/Admin/view_accounts.html' ignore missing %}
-        </div>
-        <div id="admin-notices" class="admin-panel hidden w-full max-w-5xl mx-auto animate-fade-in">
-            {% include 'Components/Admin/view_notices.html' ignore missing %}
-        </div>
-        <div id="admin-diagnostics" class="admin-panel hidden w-full max-w-5xl mx-auto animate-fade-in">
-            {% include 'Components/Admin/view_diagnostics.html' ignore missing %}
-        </div>
-        <div id="admin-audit" class="admin-panel hidden w-full max-w-5xl mx-auto animate-fade-in">
-            <h2 class="text-yellow-400 font-bold uppercase tracking-widest text-sm mb-4">Audit Logs</h2>
-            <div id="auditLogList" class="space-y-2 h-[400px] overflow-y-auto pr-2 custom-scrollbar border border-white/5 rounded-lg bg-black/20 p-2"></div>
-        </div>
-
-    </div>
-
-    {% include 'Components/Admin/admin_scripts.html' %}
+    <!-- ADMIN SCRIPTS -->
     <script>
-        window.switchAdminTab = function(tabId, activeClass = 'active') {
-            document.querySelectorAll('.admin-panel').forEach(p => p.classList.add('hidden'));
-            document.querySelectorAll('.sidebar-btn').forEach(b => {
-                b.classList.remove('active', 'active-emerald', 'active-purple', 'bg-white/5');
-                b.classList.add('text-slate-400');
-                if(b.id === 'nav-batch-logger') { b.classList.add('text-emerald-500'); b.classList.remove('text-slate-400'); }
-                if(b.id === 'nav-players') { b.classList.add('text-purple-400'); b.classList.remove('text-slate-400'); }
-            });
+        window.switchAdminTab = function(tabId) {
+            document.querySelectorAll('.admin-tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('aside nav button').forEach(el => el.classList.remove('bg-white/10', 'text-white'));
             
-            const targetPanel = document.getElementById('admin-' + tabId);
-            const targetBtn = document.getElementById('nav-' + tabId);
-            
-            if(targetPanel) targetPanel.classList.remove('hidden');
-            if(targetBtn) {
-                targetBtn.classList.add(activeClass);
-                targetBtn.classList.remove('text-slate-400', 'text-emerald-500', 'text-purple-400');
+            const targetTab = document.getElementById(`tab-${tabId}`);
+            if (targetTab) targetTab.classList.remove('hidden');
+
+            const targetNav = document.getElementById(`nav-${tabId}`);
+            if (targetNav) targetNav.classList.add('bg-white/10', 'text-white');
+
+            if (tabId === 'diagnostics' && typeof window.loadSystemDiagnostics === 'function') {
+                window.loadSystemDiagnostics();
             }
-            
-            if (tabId === 'batch-logger' && typeof window.loadBatchQueue === 'function') window.loadBatchQueue();
-            if (tabId === 'players' && typeof window.loadPlayerDirectory === 'function') window.loadPlayerDirectory();
-            if (tabId === 'audit' && typeof window.loadAuditLogs === 'function') window.loadAuditLogs();
+            if (tabId === 'command-center' && typeof window.loadAdminDirectory === 'function') {
+                window.loadAdminDirectory();
+            }
+            if (tabId === 'audit' && typeof window.loadAuditLogs === 'function') {
+                window.loadAuditLogs();
+            }
         };
+
+        window.triggerSync = async function() {
+            if(!confirm("Trigger full Google Sheets synchronization?")) return;
+            try {
+                const res = await fetch('/api/refresh', { method: 'POST' });
+                const data = await res.json();
+                if(data.success) alert("✅ Sync triggered successfully!");
+                else alert("❌ Sync failed.");
+            } catch(e) { alert("Network error."); }
+        };
+
+        // Time Machine Search
+        window.searchMatchHistory = async function() {
+            const q = document.getElementById('time-machine-query').value.trim();
+            const container = document.getElementById('time-machine-results');
+            container.innerHTML = '<div class="text-center py-8 text-blue-400"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
+
+            try {
+                const res = await fetch(`/api/admin/history?q=${encodeURIComponent(q)}&source=All`);
+                const matches = await res.json();
+
+                if(matches.length === 0) {
+                    container.innerHTML = '<div class="text-center text-slate-500 py-8 text-xs font-bold uppercase tracking-widest">No matching records found.</div>';
+                    return;
+                }
+
+                container.innerHTML = matches.map(m => `
+                    <div class="bg-slate-900 border border-white/10 p-4 rounded-xl flex items-center justify-between gap-4">
+                        <div>
+                            <div class="text-[9px] text-slate-500 font-mono mb-1">ID: ${m.match_id || m.id || 'N/A'} • ${m.date || ''}</div>
+                            <div class="text-sm font-black text-white">${m.p1} vs ${m.p2}</div>
+                            <div class="text-xs text-emerald-400 font-mono mt-0.5">Score: ${m.s1}-${m.s2} (${m.game_history || m.details || 'No set scores'})</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch(e) {
+                container.innerHTML = '<div class="text-rose-400 text-center py-8 text-xs font-bold">Failed to search match history.</div>';
+            }
+        };
+
+        // Command Center Directory & Overrides
+        window._adminDirectoryData = [];
+        window.loadAdminDirectory = async function() {
+            const tbody = document.getElementById('admin-directory-tbody');
+            if (!tbody) return;
+
+            try {
+                const res = await fetch('/api/admin/player_directory');
+                window._adminDirectoryData = await res.json();
+                window.renderAdminDirectory(window._adminDirectoryData);
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-rose-400 text-xs font-bold uppercase tracking-widest">Failed to load directory.</td></tr>';
+            }
+        };
+
+        window.renderAdminDirectory = function(data) {
+            const tbody = document.getElementById('admin-directory-tbody');
+            if (!tbody) return;
+
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-slate-500 text-xs font-bold uppercase tracking-widest">No players found.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(p => {
+                const rcBadge = p.rc_id 
+                    ? `<span class="bg-blue-900/50 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded text-[9px] font-mono font-black">${p.rc_id}</span>` 
+                    : `<span class="text-slate-600 text-[10px] font-bold">Unlinked</span>`;
+
+                return `
+                <tr class="hover:bg-white/5 transition-colors group">
+                    <td class="p-4 font-bold text-white">${p.name} <span class="text-[9px] text-slate-500 ml-2 font-mono">${p.id}</span></td>
+                    <td class="p-4 text-center text-xs font-bold text-slate-300">${p.division_cap || 'Unassigned'}</td>
+                    <td class="p-4 text-center font-mono font-black text-indigo-300 bg-indigo-950/20">${p.true_rating || '--'}</td>
+                    <td class="p-4 text-center font-mono font-black text-yellow-400 bg-yellow-950/10">${p.public_rating || '--'}</td>
+                    <td class="p-4 text-center font-mono font-bold text-slate-400">${p.rd || '--'}</td>
+                    <td class="p-4 text-center">${rcBadge}</td>
+                    <td class="p-4 text-right">
+                        <button onclick="window.openAdminPlayerModal('${p.id}', '${p.name.replace(/'/g, "\\'")}', '${p.rc_id || ''}', ${p.true_rating || 1050}, ${p.rd || 350})" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shadow">
+                            Manage
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+        };
+
+        window.filterAdminDirectory = function() {
+            const query = document.getElementById('admin-directory-search').value.toLowerCase();
+            const filtered = window._adminDirectoryData.filter(p => 
+                p.name.toLowerCase().includes(query) || p.id.toLowerCase().includes(query)
+            );
+            window.renderAdminDirectory(filtered);
+        };
+
+        window.openAdminPlayerModal = function(id, name, rc, trueRating, sd) {
+            document.getElementById('edit-p-id').value = id;
+            document.getElementById('edit-p-raw-name').value = name;
+            document.getElementById('edit-p-name').innerText = name;
+            document.getElementById('edit-p-rc').value = rc;
+            document.getElementById('edit-p-true').value = trueRating;
+            document.getElementById('edit-p-sd').value = sd;
+            document.getElementById('adminPlayerModal').classList.remove('hidden');
+        };
+
+        window.closeAdminPlayerModal = function() {
+            document.getElementById('adminPlayerModal').classList.add('hidden');
+        };
+
+        window.saveRCLink = async function() {
+            const name = document.getElementById('edit-p-raw-name').value;
+            const rc = document.getElementById('edit-p-rc').value.trim();
+            try {
+                const res = await fetch('/api/admin/update_player_profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ player_name: name, ratings_central_id: rc })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ RC Link updated for ${name}.`);
+                    window.loadAdminDirectory();
+                } else alert("❌ Update failed.");
+            } catch(e) { alert("❌ Network error."); }
+        };
+
+        window.saveRatingOverride = async function() {
+            const id = document.getElementById('edit-p-id').value;
+            const name = document.getElementById('edit-p-raw-name').value;
+            const rating = document.getElementById('edit-p-true').value;
+            const sd = document.getElementById('edit-p-sd').value;
+            const retro = document.getElementById('edit-p-retro').checked;
+
+            if (!confirm(`Force override rating for ${name}?`)) return;
+
+            try {
+                const res = await fetch('/api/admin/override_rating', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ player_id: id, rating: rating, sd: sd, retroactive: retro })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ Rating overridden for ${name}.`);
+                    window.closeAdminPlayerModal();
+                    window.loadAdminDirectory();
+                } else alert("❌ Override failed.");
+            } catch(e) { alert("❌ Network error."); }
+        };
+
+        // Audit Logs
+        window.loadAuditLogs = async function() {
+            const container = document.getElementById('audit-logs-container');
+            if(!container) return;
+            try {
+                const res = await fetch('/api/admin/audit_logs');
+                const logs = await res.json();
+                if(logs.length === 0) {
+                    container.innerHTML = '<div class="text-center text-slate-500 py-8 text-xs font-bold uppercase tracking-widest">No audit logs recorded yet.</div>';
+                    return;
+                }
+                container.innerHTML = logs.map(l => `
+                    <div class="bg-slate-900 border border-white/10 p-4 rounded-xl flex items-center justify-between gap-4">
+                        <div>
+                            <div class="text-[9px] text-slate-500 font-mono mb-1">${l.time_str} • Admin: ${l.admin}</div>
+                            <div class="text-xs font-bold text-white">${l.description}</div>
+                        </div>
+                        <span class="px-2.5 py-1 rounded text-[10px] font-black uppercase ${l.status === 'undone' ? 'bg-rose-500/20 text-rose-300' : 'bg-emerald-500/20 text-emerald-300'}">${l.status}</span>
+                    </div>
+                `).join('');
+            } catch(e) {
+                container.innerHTML = '<div class="text-rose-400 text-center py-8 text-xs font-bold">Failed to load audit logs.</div>';
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            window.switchAdminTab('batch-logger');
+        });
     </script>
 </body>
 </html>
