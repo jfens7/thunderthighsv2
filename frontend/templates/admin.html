@@ -2,140 +2,78 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Control Tower | ThunderThighs</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: white; margin: 0; padding: 0; overflow-x: hidden; }
-        .hide-scroll::-webkit-scrollbar { display: none; }
-        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        body { font-family: 'Inter', sans-serif; background-color: #090d16; color: white; margin: 0; padding: 0; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+        .sidebar-btn.active { background-color: rgba(14, 165, 233, 0.15); color: #38bdf8; border-right: 3px solid #38bdf8; }
+        .sidebar-btn.active-emerald { background-color: rgba(16, 185, 129, 0.15); color: #34d399; border-right: 3px solid #34d399; }
+        .sidebar-btn.active-purple { background-color: rgba(168, 85, 247, 0.15); color: #c084fc; border-right: 3px solid #c084fc; }
     </style>
 </head>
-<body class="flex flex-col h-screen">
+<body class="flex h-screen overflow-hidden">
 
-    <div class="bg-black border-b border-white/10 px-6 py-4 flex justify-between items-center z-50 shrink-0">
-        <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center shadow-lg"><i class="fa-solid fa-shield text-white text-xl"></i></div>
+    <!-- MODERN SIDEBAR NAV -->
+    <div class="w-64 bg-slate-900 border-r border-white/5 flex flex-col shrink-0 z-50 shadow-2xl">
+        <div class="p-5 border-b border-white/5 flex items-center gap-3 bg-black/20">
+            <div class="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center shadow-lg"><i class="fa-solid fa-shield text-white text-sm"></i></div>
             <div>
-                <h1 class="text-white font-black text-xl tracking-tight leading-none">CONTROL TOWER</h1>
-                <p class="text-[9px] text-slate-400 font-mono tracking-widest uppercase">LOGGED IN AS {{ email }}</p>
+                <h1 class="text-white font-black text-lg tracking-tight leading-none">CONTROL TOWER</h1>
+                <p class="text-[9px] text-slate-400 font-mono tracking-widest uppercase">Admin: {{ email }}</p>
             </div>
         </div>
-        <div class="flex items-center gap-3">
-            <button onclick="window.forceRefresh()" class="bg-yellow-500 hover:bg-yellow-400 text-black text-[10px] font-black px-4 py-2 rounded uppercase tracking-widest transition shadow-[0_0_15px_rgba(234,179,8,0.3)] flex items-center gap-2"><i class="fa-solid fa-bolt"></i> FORCE REFRESH APP CONTEXT</button>
-            <a href="{{ url_for('logout') }}" class="text-xs text-slate-400 hover:text-white px-3 py-2 border border-white/10 rounded transition">Sign Out</a>
-            <a href="/" class="text-xs font-bold text-sky-400 hover:text-sky-300 ml-2"><i class="fa-solid fa-house mr-1"></i> Public Site</a>
+
+        <div class="flex-1 overflow-y-auto py-4 flex flex-col gap-1 px-3 custom-scrollbar">
+            <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest px-3 mb-2 mt-2">Core Operations</div>
+            <button onclick="window.switchAdminTab('live', 'active')" id="nav-live" class="sidebar-btn active flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left"><i class="fa-solid fa-satellite-dish w-5 text-center"></i> Live iPads</button>
+            <button onclick="window.switchAdminTab('batch-logger', 'active-emerald')" id="nav-batch-logger" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-emerald-500 hover:bg-emerald-500/10 transition-colors text-left"><i class="fa-solid fa-list-check w-5 text-center"></i> Batch Points Logger</button>
+            <button onclick="window.switchAdminTab('manual', 'active')" id="nav-manual" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left"><i class="fa-solid fa-plus w-5 text-center"></i> Inject Match</button>
+            <button onclick="window.switchAdminTab('history', 'active')" id="nav-history" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left"><i class="fa-solid fa-clock-rotate-left w-5 text-center"></i> Match Database</button>
+
+            <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest px-3 mb-2 mt-4">Player Management</div>
+            <button onclick="window.switchAdminTab('players', 'active-purple')" id="nav-players" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-purple-400 hover:bg-purple-500/10 transition-colors text-left"><i class="fa-solid fa-user-astronaut w-5 text-center"></i> Command Center</button>
+            <button onclick="window.switchAdminTab('ratings-central', 'active')" id="nav-ratings-central" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left"><i class="fa-solid fa-globe w-5 text-center"></i> RC Integration</button>
+            <button onclick="window.switchAdminTab('approvals', 'active')" id="nav-approvals" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left"><i class="fa-solid fa-user-check w-5 text-center"></i> App Accounts</button>
+            
+            <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest px-3 mb-2 mt-4">System & Comms</div>
+            <button onclick="window.switchAdminTab('notices', 'active')" id="nav-notices" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left"><i class="fa-solid fa-bullhorn w-5 text-center"></i> Public Notices</button>
+            <button onclick="window.switchAdminTab('diagnostics', 'active')" id="nav-diagnostics" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left"><i class="fa-solid fa-stethoscope w-5 text-center"></i> Diagnostics</button>
+            <button onclick="window.switchAdminTab('audit', 'active')" id="nav-audit" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left super-admin-only"><i class="fa-solid fa-shield-halved w-5 text-center"></i> Audit Logs</button>
+        </div>
+
+        <div class="p-4 border-t border-white/5 space-y-2 bg-black/20">
+            <button onclick="window.forceRefresh()" class="w-full bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 text-[10px] font-black px-4 py-2.5 rounded-lg uppercase tracking-widest transition flex items-center justify-center gap-2"><i class="fa-solid fa-bolt"></i> Sync Sheets</button>
+            <a href="/" class="flex items-center justify-center gap-2 w-full text-xs font-bold text-slate-400 hover:text-white py-2 transition"><i class="fa-solid fa-arrow-left"></i> Exit to Site</a>
         </div>
     </div>
 
-    <!-- MAIN CATEGORY NAV -->
-    <div class="bg-slate-900 border-b border-white/5 px-4 flex gap-8 overflow-x-auto hide-scroll shrink-0">
-        <button onclick="window.setAdminCategory('ops')" id="cat-ops" class="py-4 border-b-2 border-blue-500 text-blue-400 font-bold uppercase tracking-widest text-xs flex items-center gap-2"><i class="fa-solid fa-table-tennis-paddle-ball"></i> Match Ops</button>
-        <button onclick="window.setAdminCategory('players')" id="cat-players" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-users-gear"></i> Players & Maths</button>
-        <button onclick="window.setAdminCategory('accounts')" id="cat-accounts" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-users-rectangle"></i> Accounts</button>
-        <button onclick="window.setAdminCategory('comms')" id="cat-comms" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-bullhorn"></i> Comms & Money</button>
-        <button onclick="window.setAdminCategory('system')" id="cat-system" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-server"></i> System Logs</button>
-        <button onclick="window.setAdminCategory('diagnostics')" id="cat-diagnostics" class="py-4 border-b-2 border-transparent text-slate-500 font-bold uppercase tracking-widest text-xs hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-microchip"></i> Diagnostics</button>
-    </div>
-
-    <!-- SUB-TABS: MATCH OPS (Includes Batch Logger) -->
-    <div id="sub-ops" class="bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
-        <button onclick="window.switchAdminTab('live')" id="tab-btn-live" class="px-4 py-2 text-xs font-bold text-blue-400 bg-blue-900/30 rounded-lg">Live iPads</button>
-        <button onclick="window.switchAdminTab('batch-logger')" id="tab-btn-batch-logger" class="px-4 py-2 text-xs font-bold text-emerald-400 hover:text-white transition-colors flex items-center gap-1.5"><i class="fa-solid fa-list-check"></i> Batch Logger</button>
-        <button onclick="window.switchAdminTab('history')" id="tab-btn-history" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Full History</button>
-        <button onclick="window.switchAdminTab('manual')" id="tab-btn-manual" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">+ Add Match</button>
-        <button onclick="window.switchAdminTab('date-errors')" id="tab-btn-date-errors" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Date Errors <span id="date-badge" class="hidden ml-1 bg-red-500 text-white rounded-full px-1.5 py-0.5 text-[9px]"></span></button>
-        <button onclick="window.switchAdminTab('tournaments')" id="tab-btn-tournaments" class="px-4 py-2 text-xs font-bold text-amber-400 bg-amber-900/30 rounded-lg"><i class="fa-solid fa-trophy mr-1"></i> Tournaments</button>
-    </div>
-
-    <!-- SUB-TABS: PLAYERS -->
-    <div id="sub-players" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
-        <button onclick="window.switchAdminTab('players')" id="tab-btn-players" class="px-4 py-2 text-xs font-bold text-purple-400 bg-purple-900/30 rounded-lg">Player Editor</button>
-        <button onclick="window.switchAdminTab('ratings-central')" id="tab-btn-ratings-central" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"><i class="fa-solid fa-satellite-dish mr-1"></i> Ratings Central</button>
-        <button onclick="window.switchAdminTab('schedules')" id="tab-btn-schedules" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"><i class="fa-solid fa-calendar-days mr-1"></i> Schedule Manager</button>
-    </div>
-
-    <!-- SUB-TABS: ACCOUNTS -->
-    <div id="sub-accounts" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
-        <button onclick="window.switchAdminTab('approvals')" id="tab-btn-approvals" class="px-4 py-2 text-xs font-bold text-green-400 bg-green-900/30 rounded-lg">New Approvals</button>
-        <button onclick="window.switchAdminTab('directory')" id="tab-btn-directory" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Account Directory</button>
-        <button onclick="window.switchAdminTab('merge-accounts')" id="tab-btn-merge-accounts" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white super-admin-only">Merge Tools</button>
-    </div>
-
-    <!-- SUB-TABS: COMMS -->
-    <div id="sub-comms" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
-        <button onclick="window.switchAdminTab('broadcast')" id="tab-btn-broadcast" class="px-4 py-2 text-xs font-bold text-sky-400 bg-sky-900/30 rounded-lg">SMS Broadcast</button>
-        <button onclick="window.switchAdminTab('sms-inbox')" id="tab-btn-sms-inbox" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">SMS Inbox</button>
-        <button onclick="window.switchAdminTab('notices')" id="tab-btn-notices" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Public Notices</button>
-        <button onclick="window.switchAdminTab('community-mod')" id="tab-btn-community-mod" class="px-4 py-2 text-xs font-bold text-red-400 hover:text-white"><i class="fa-solid fa-shield-halved mr-1"></i> Community Mod</button>
-        <button onclick="window.switchAdminTab('inbox-feedback')" id="tab-btn-inbox-feedback" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">App Feedback</button>
-        <button onclick="window.switchAdminTab('donations')" id="tab-btn-donations" class="px-4 py-2 text-xs font-bold text-emerald-400 hover:text-white">Donations Ledger</button>
-    </div>
-
-    <!-- SUB-TABS: SYSTEM -->
-    <div id="sub-system" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
-        <button onclick="window.switchAdminTab('audit')" id="tab-btn-audit" class="px-4 py-2 text-xs font-bold text-yellow-400 bg-yellow-900/30 rounded-lg super-admin-only">Audit Logs</button>
-        <button onclick="window.switchAdminTab('chat')" id="tab-btn-chat" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white">Admin Notes</button>
-    </div>
-
-    <!-- SUB-TABS: DIAGNOSTICS -->
-    <div id="sub-diagnostics" class="hidden bg-slate-800/50 px-4 py-2 flex gap-4 overflow-x-auto hide-scroll shrink-0 border-b border-white/5">
-        <button onclick="window.switchAdminTab('diagnostics')" id="tab-btn-diagnostics" class="px-4 py-2 text-xs font-bold text-indigo-400 bg-indigo-900/30 rounded-lg">Traffic & Tools</button>
-    </div>
-
-    <!-- CONTENT PANELS VIEWPORT -->
-    <div class="flex-1 overflow-y-auto p-6 pb-20">
+    <!-- MAIN CONTENT AREA -->
+    <div class="flex-1 overflow-y-auto bg-[#0a0f1a] relative custom-scrollbar p-6 lg:p-10">
         
-        <!-- Players & Multi-Rating Search View -->
-        <div id="admin-players" class="hidden animate-fade-in w-full max-w-5xl mx-auto">
-            {% include 'Components/Admin/view_players.html' ignore missing %}
+        <div id="admin-live" class="admin-panel w-full max-w-5xl mx-auto animate-fade-in">
+            <div class="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+                <h2 class="text-blue-400 font-black uppercase tracking-widest text-lg"><i class="fa-solid fa-satellite-dish mr-2"></i> Live iPad Telemetry</h2>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="live-list"></div>
         </div>
 
-        <!-- Batch Queue Match Logger View -->
-        <div id="admin-batch-logger" class="hidden animate-fade-in w-full max-w-6xl mx-auto">
+        <div id="admin-batch-logger" class="admin-panel hidden w-full max-w-6xl mx-auto animate-fade-in">
             {% include 'Components/Admin/view_batch_logger.html' ignore missing %}
         </div>
 
-        <div id="admin-ratings-central" class="hidden animate-fade-in w-full max-w-5xl mx-auto">
-            {% include 'Components/Admin/view_ratings_central.html' ignore missing %}
+        <div id="admin-players" class="admin-panel hidden w-full max-w-6xl mx-auto animate-fade-in">
+            {% include 'Components/Admin/view_players.html' ignore missing %}
         </div>
-
-        <div id="admin-accounts-wrapper">
-            {% include 'Components/Admin/view_accounts.html' ignore missing %}
-        </div>
-
-        <div id="admin-diagnostics-wrapper">
-            {% include 'Components/Admin/view_diagnostics.html' ignore missing %}
-        </div>
-
-        <div id="admin-broadcast" class="hidden animate-fade-in w-full max-w-3xl mx-auto">
-            {% include 'Components/Admin/view_broadcast.html' ignore missing %}
-        </div>
-
-        <div id="admin-community-mod" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
-            <h2 class="text-red-400 font-bold uppercase tracking-widest text-sm border-b border-white/10 pb-4 mb-4"><i class="fa-solid fa-shield-halved mr-2"></i> Forum Moderation</h2>
-            <div id="mod-forum-feed" class="space-y-4"></div>
-        </div>
-
-        <div id="admin-live" class="animate-fade-in w-full max-w-4xl mx-auto space-y-6">
-            <div class="flex justify-between items-center mb-2 border-b border-white/10 pb-4">
-                <h2 class="text-blue-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-satellite-dish mr-2"></i> Live iPad Telemetry</h2>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="live-list"></div>
-            <h3 class="text-slate-500 font-bold uppercase tracking-widest text-xs mt-8 mb-4 border-b border-white/5 pb-2">Scheduled (Not Started)</h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 opacity-70" id="scheduled-list"></div>
-        </div>
-
-        <div id="admin-manual" class="hidden animate-fade-in w-full max-w-3xl mx-auto">
+        
+        <div id="admin-manual" class="admin-panel hidden w-full max-w-4xl mx-auto animate-fade-in">
             <div class="bg-slate-800 p-8 rounded-xl border border-white/10 shadow-xl">
-                <h2 class="text-emerald-400 font-black text-xl mb-2"><i class="fa-solid fa-pen-to-square mr-2"></i> Manual Match Creator</h2>
-                <p class="text-xs text-slate-400 mb-8">Inject a custom match directly into history.</p>
+                <h2 class="text-emerald-400 font-black text-xl mb-2"><i class="fa-solid fa-pen-to-square mr-2"></i> Inject Match</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div class="relative">
                         <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-2">Player 1 (Home)</label>
@@ -162,397 +100,52 @@
             </div>
         </div>
 
-        <div id="admin-history" class="hidden animate-fade-in w-full max-w-5xl mx-auto">
-            <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
-                <h2 class="text-white font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-clock-rotate-left mr-2"></i> Match Database</h2>
-            </div>
-            <div class="flex flex-col md:flex-row gap-3 mb-6">
-                <input type="text" id="history-search" placeholder="Search by player name..." class="flex-1 bg-slate-800 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-indigo-500 focus:outline-none">
-                <select id="hist-div-filter" class="bg-slate-800 border border-white/10 text-white rounded-lg px-4 py-3 focus:outline-none w-full md:w-auto"><option value="All">All Divisions</option></select>
-                <select id="hist-source-filter" class="bg-slate-800 border border-white/10 text-white rounded-lg px-4 py-3 focus:outline-none w-full md:w-auto">
-                    <option value="All">All Sources</option>
-                    <option value="Spreadsheet">Spreadsheet Only</option>
-                    <option value="Live App">Live App / Admin</option>
-                </select>
-                <button onclick="window.searchHistory()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-lg font-bold transition">Search</button>
-            </div>
-            <div id="historyList" class="space-y-3"></div>
+        <div id="admin-history" class="admin-panel hidden w-full max-w-6xl mx-auto animate-fade-in">
+            {% include 'Components/Admin/view_history.html' ignore missing %}
+        </div>
+        <div id="admin-ratings-central" class="admin-panel hidden w-full max-w-5xl mx-auto animate-fade-in">
+            {% include 'Components/Admin/view_ratings_central.html' ignore missing %}
+        </div>
+        <div id="admin-approvals" class="admin-panel hidden w-full max-w-5xl mx-auto animate-fade-in">
+            {% include 'Components/Admin/view_accounts.html' ignore missing %}
+        </div>
+        <div id="admin-notices" class="admin-panel hidden w-full max-w-5xl mx-auto animate-fade-in">
+            {% include 'Components/Admin/view_notices.html' ignore missing %}
+        </div>
+        <div id="admin-diagnostics" class="admin-panel hidden w-full max-w-5xl mx-auto animate-fade-in">
+            {% include 'Components/Admin/view_diagnostics.html' ignore missing %}
+        </div>
+        <div id="admin-audit" class="admin-panel hidden w-full max-w-5xl mx-auto animate-fade-in">
+            <h2 class="text-yellow-400 font-bold uppercase tracking-widest text-sm mb-4">Audit Logs</h2>
+            <div id="auditLogList" class="space-y-2 h-[400px] overflow-y-auto pr-2 custom-scrollbar border border-white/5 rounded-lg bg-black/20 p-2"></div>
         </div>
 
-        <div id="admin-date-errors" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
-            <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
-                <h2 class="text-orange-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-calendar-xmark mr-2"></i> Missing Date Scrubber</h2>
-                <button onclick="window.loadDateErrors()" class="text-xs text-slate-400 hover:text-white"><i class="fa-solid fa-rotate mr-1"></i> Scan</button>
-            </div>
-            <div id="dateErrorsList" class="w-full"></div>
-        </div>
-
-        <div id="admin-tournaments" class="hidden animate-fade-in w-full max-w-6xl mx-auto">
-            <div class="flex justify-between items-center mb-6 border-b border-amber-500/30 pb-4">
-                <h2 class="text-amber-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-trophy mr-2"></i> Tournament Director</h2>
-                <span class="bg-amber-900/50 text-amber-400 border border-amber-500/50 text-[10px] font-bold px-2 py-1 rounded shadow-inner animate-pulse">SMART ENGINE ACTIVE</span>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="lg:col-span-1 bg-slate-800 p-6 rounded-xl border border-white/5 h-fit shadow-xl">
-                    <h3 class="text-white font-black mb-4 text-lg border-b border-white/10 pb-2">1. New Tournament</h3>
-                    <input type="text" id="t-name" placeholder="e.g., Gold Coast Open 2026" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white mb-3 text-sm focus:outline-none focus:border-amber-500">
-                    <div class="grid grid-cols-2 gap-3 mb-3">
-                        <div>
-                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Start Date</label>
-                            <input type="date" id="t-start" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-slate-300 text-sm focus:outline-none focus:border-amber-500">
-                        </div>
-                        <div>
-                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">End Date</label>
-                            <input type="date" id="t-end" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-slate-300 text-sm focus:outline-none focus:border-amber-500">
-                        </div>
-                    </div>
-                    <button onclick="window.adminCreateTournament()" class="w-full bg-amber-600 hover:bg-amber-500 text-black font-black py-3 rounded-lg transition shadow-lg text-sm mt-2">CREATE TOURNAMENT</button>
-                </div>
-
-                <div class="lg:col-span-2 bg-slate-800 p-6 rounded-xl border border-amber-500/20 shadow-xl relative overflow-hidden">
-                    <div class="absolute top-0 right-0 bg-amber-500 text-black text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-lg">STEP 2</div>
-                    <h3 class="text-white font-black mb-4 text-lg border-b border-white/10 pb-2">2. Add Events to Tournament</h3>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Tournament ID</label>
-                            <input type="text" id="e-tournament-id" placeholder="e.g., gc-open-2026" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-500">
-                        </div>
-                        <div>
-                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Event Name</label>
-                            <input type="text" id="e-name" placeholder="e.g., &lt;1500 Singles" class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-500">
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                        <div>
-                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Type</label>
-                            <select id="e-type" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500">
-                                <option value="Singles">Singles</option>
-                                <option value="Doubles">Doubles</option>
-                                <option value="Team">Team</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Price ($)</label>
-                            <input type="number" id="e-price" value="25" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500">
-                        </div>
-                        <div>
-                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Max Players</label>
-                            <input type="number" id="e-max-players" value="64" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500">
-                        </div>
-                        <div>
-                            <label class="text-[9px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Exact Date & Time</label>
-                            <input type="datetime-local" id="e-time" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" style="color-scheme: dark;">
-                        </div>
-                    </div>
-
-                    <div class="p-4 bg-amber-900/10 border border-amber-500/20 rounded-lg mb-6">
-                        <h4 class="text-amber-400 font-bold text-[10px] uppercase tracking-widest mb-3"><i class="fa-solid fa-lock mr-1"></i> Smart Eligibility Rules</h4>
-                        <div class="grid grid-cols-3 gap-4">
-                            <div>
-                                <label class="text-[9px] text-slate-400 uppercase font-bold tracking-widest block mb-1">Max Rating</label>
-                                <input type="number" id="e-max-rating" placeholder="e.g. 1499" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500">
-                            </div>
-                            <div>
-                                <label class="text-[9px] text-slate-400 uppercase font-bold tracking-widest block mb-1">Max Age</label>
-                                <input type="number" id="e-max-age" placeholder="e.g. 17" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500">
-                            </div>
-                            <div>
-                                <label class="text-[9px] text-slate-400 uppercase font-bold tracking-widest block mb-1">Min Age</label>
-                                <input type="number" id="e-min-age" placeholder="e.g. 40" class="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500">
-                            </div>
-                        </div>
-                    </div>
-
-                    <button onclick="window.adminCreateEvent()" class="w-full bg-white hover:bg-slate-200 text-black font-black py-3 rounded-lg transition shadow-[0_0_15px_rgba(255,255,255,0.2)] text-sm"><i class="fa-solid fa-plus mr-2"></i> ADD EVENT TO TOURNAMENT</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="admin-schedules" class="hidden animate-fade-in w-full max-w-6xl mx-auto">
-            <div class="flex justify-between items-center mb-6 border-b border-red-500/30 pb-4">
-                <h2 class="text-red-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-calendar-days mr-2"></i> Schedule & Fixture Manager</h2>
-                <div class="flex gap-2">
-                    <span class="bg-red-900/50 text-red-400 border border-red-500/50 text-[10px] font-bold px-2 py-1 rounded shadow-inner animate-pulse">PDF ENGINE ACTIVE</span>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="lg:col-span-1 bg-slate-800 p-6 rounded-xl border border-white/5 h-fit shadow-xl">
-                    <div class="w-12 h-12 bg-red-600/20 text-red-500 rounded-full flex items-center justify-center mb-4 text-xl"><i class="fa-solid fa-file-pdf"></i></div>
-                    <h3 class="text-white font-black mb-2 text-lg">PDF Scraper</h3>
-                    <p class="text-[10px] text-slate-400 mb-6">Upload the weekly fixture PDFs sent out by the club. The AI will extract the matchups and save them as a Draft.</p>
-                    
-                    <div class="grid grid-cols-2 gap-3 mb-3">
-                        <div>
-                            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Year</label>
-                            <input type="number" id="pdf-year" placeholder="e.g. 2026" value="2026" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none text-sm">
-                        </div>
-                        <div>
-                            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Season</label>
-                            <select id="pdf-season" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none text-sm">
-                                <option value="Summer">Summer</option>
-                                <option value="Winter">Winter</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-4">
-                        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Division</label>
-                        <input type="text" id="pdf-division" placeholder="e.g. Division 1" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none text-sm">
-                    </div>
-                    
-                    <input type="file" id="pdf-file-upload" accept=".pdf" class="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-bold file:bg-red-900/30 file:text-red-400 hover:file:bg-red-900/50 mb-4 bg-black/20 p-3 border border-white/5 rounded-lg cursor-pointer">
-                    <button onclick="window.uploadPdfSchedule(event)" id="pdf-upload-btn" class="w-full bg-red-600 hover:bg-red-500 text-white font-black py-3 rounded-lg shadow-[0_0_15px_rgba(220,38,38,0.3)] transition text-xs">EXTRACT MATCHUPS</button>
-                </div>
-
-                <div class="lg:col-span-2 bg-slate-800 p-6 rounded-xl border border-white/5 shadow-xl relative flex flex-col h-[600px]">
-                    <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-2 shrink-0">
-                        <h3 class="text-white font-bold text-sm">Extracted Matches Dashboard</h3>
-                        <button onclick="window.loadSchedules()" class="text-[10px] text-slate-400 hover:text-white uppercase font-bold tracking-widest bg-slate-900 px-3 py-1.5 rounded transition border border-white/10"><i class="fa-solid fa-rotate mr-1"></i> Refresh</button>
-                    </div>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 shrink-0 bg-black/20 p-3 rounded-lg border border-white/5">
-                        <div>
-                            <label class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Filter Year</label>
-                            <select id="schedule-year-filter" onchange="window.renderSchedules()" class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none">
-                                <option value="All">All Years</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Filter Season</label>
-                            <select id="schedule-season-filter" onchange="window.renderSchedules()" class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none">
-                                <option value="All">All Seasons</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Filter Division</label>
-                            <select id="schedule-div-filter" onchange="window.renderSchedules()" class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none">
-                                <option value="All">All Divisions</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div id="schedules-list" class="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2">
-                        <div class="text-center py-10 text-slate-500 text-sm italic">Loading schedules...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div id="admin-sms-inbox" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
-            <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
-                <h2 class="text-pink-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-message mr-2"></i> Player Text Replies</h2>
-                <button onclick="window.loadSmsInbox()" class="text-xs text-slate-400 hover:text-white"><i class="fa-solid fa-rotate mr-1"></i> Refresh</button>
-            </div>
-            <div id="smsInboxList" class="space-y-3"></div>
-        </div>
-
-        <div id="admin-inbox-feedback" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
-            <h2 class="text-white font-bold uppercase tracking-widest text-sm border-b border-white/10 pb-4 mb-4">App Feedback</h2>
-            <div id="feedbackList" class="w-full"></div>
-        </div>
-
-        <div id="admin-notices" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
-            <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
-                <h2 class="text-white font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-bullhorn mr-2"></i> Public Notices</h2>
-            </div>
-            <div class="bg-slate-800 p-5 rounded-xl border border-white/5 mb-6 shadow-lg">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                    <input type="text" id="notice-title" placeholder="Notice Title" class="md:col-span-3 w-full bg-black/40 border border-white/10 rounded px-4 py-2 text-white focus:outline-none">
-                    <select id="notice-type" class="w-full bg-black/40 border border-white/10 rounded px-4 py-2 text-white focus:outline-none">
-                        <option value="Update">Blue (Update)</option>
-                        <option value="Event">Yellow (Event)</option>
-                        <option value="Alert">Red (Alert)</option>
-                    </select>
-                </div>
-                <textarea id="notice-message" placeholder="Type the full message here..." rows="3" class="w-full bg-black/40 border border-white/10 rounded px-4 py-3 text-white focus:outline-none mb-4 resize-none"></textarea>
-                <button onclick="window.submitNotice()" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 rounded-lg transition-colors shadow">Post Notice to Public Site</button>
-            </div>
-            <div id="adminNoticesList" class="space-y-3"></div>
-        </div>
-
-        <div id="admin-donations" class="hidden animate-fade-in w-full max-w-4xl mx-auto">
-            <div class="flex justify-between items-center mb-4 border-b border-emerald-500/30 pb-4">
-                <h2 class="text-emerald-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-hand-holding-dollar mr-2"></i> Agnes Foundation Ledger</h2>
-            </div>
-            <div class="grid grid-cols-2 gap-4 mb-6">
-                <div class="bg-slate-800 p-5 rounded-xl border border-emerald-500/20 text-center">
-                    <div class="text-xs text-slate-400 uppercase font-bold tracking-widest mb-1">Total Raised</div>
-                    <div class="text-4xl font-black text-emerald-400 font-mono" id="donations-total">$0</div>
-                </div>
-                <div class="bg-slate-800 p-5 rounded-xl border border-emerald-500/20 text-center">
-                    <div class="text-xs text-slate-400 uppercase font-bold tracking-widest mb-1">Supporters</div>
-                    <div class="text-4xl font-black text-emerald-400 font-mono" id="donations-count">0</div>
-                </div>
-            </div>
-            <div id="donationsList" class="space-y-3"></div>
-        </div>
-
-        <div id="admin-audit" class="hidden animate-fade-in w-full max-w-5xl mx-auto space-y-8">
-            <div>
-                <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
-                    <h2 class="text-yellow-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-shield-halved mr-2"></i> Server Audit Trail</h2>
-                    <select id="audit-filter" onchange="window.loadAuditLogs()" class="bg-slate-800 border border-white/10 text-white rounded px-3 py-1 text-xs outline-none">
-                        <option value="ALL">Show All Actions</option>
-                        <option value="MATCH">Matches & Edits</option>
-                        <option value="RATING">Rating Math Overrides</option>
-                        <option value="SYSTEM">System & Users</option>
-                    </select>
-                </div>
-                <div id="auditLogList" class="space-y-2 h-[400px] overflow-y-auto pr-2 custom-scrollbar border border-white/5 rounded-lg bg-black/20 p-2"></div>
-            </div>
-            {% if role == 'super_admin' or role == 'temp_super_admin' %}
-            <div>
-                <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-4 mt-8">
-                    <h2 class="text-red-400 font-bold uppercase tracking-widest text-sm"><i class="fa-solid fa-users-gear mr-2"></i> Admin Access Control</h2>
-                </div>
-                <div id="adminUsersList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
-            </div>
-            {% endif %}
-        </div>
-
-        <div id="admin-chat" class="hidden animate-fade-in w-full max-w-3xl mx-auto">
-            <h2 class="text-white font-bold uppercase tracking-widest text-sm border-b border-white/10 pb-4 mb-4"><i class="fa-solid fa-comments mr-2"></i> Admin Notes</h2>
-            <div class="bg-slate-800 p-4 rounded-xl border border-white/5 mb-6">
-                <textarea id="admin-chat-input" placeholder="Leave a note for other admins..." rows="2" class="w-full bg-black/40 border border-white/10 rounded px-4 py-3 text-white focus:outline-none mb-3 resize-none text-sm"></textarea>
-                <button onclick="window.postAdminMessage()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 rounded-lg transition-colors text-sm shadow">Post Note</button>
-            </div>
-            <div id="adminChatList" class="space-y-3"></div>
-        </div>
-
-    </div>
-
-    <div id="admin-diagnostics" class="hidden animate-fade-in w-full max-w-5xl mx-auto space-y-6">
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4 border-b border-white/10 pb-4">
-            <div>
-                <h2 class="text-2xl font-black text-white"><i class="fa-solid fa-stethoscope text-indigo-500 mr-2"></i> System Diagnostics & Operations</h2>
-                <p class="text-sm text-slate-400 mt-1">Live web traffic, bot detection, error logs, and system recalculations.</p>
-            </div>
-            <button onclick="window.loadSystemDiagnostics()" class="bg-slate-800 hover:bg-slate-700 text-white border border-white/10 font-bold py-2.5 px-4 rounded-xl text-xs uppercase tracking-widest shadow transition flex items-center gap-2">
-                <i class="fa-solid fa-rotate-right"></i> Refresh Data
-            </button>
-        </div>
-
-        <div class="bg-slate-800 p-6 rounded-2xl border border-indigo-500/20 shadow-xl relative overflow-hidden">
-            <div class="absolute -right-10 -top-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl"></div>
-            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2 relative z-10"><i class="fa-solid fa-satellite-dish text-indigo-400"></i> Daily Web Traffic</h3>
-            
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 relative z-10 mb-6">
-                <div class="bg-black/30 p-5 rounded-xl border border-white/5 text-center shadow-inner">
-                    <div class="text-[10px] text-slate-500 uppercase tracking-widest font-black mb-1">Total Page Views</div>
-                    <div id="diag-views" class="text-3xl font-black text-white font-mono">--</div>
-                </div>
-                <div class="bg-emerald-900/10 p-5 rounded-xl border border-emerald-500/20 text-center shadow-inner">
-                    <div class="text-[10px] text-emerald-500/70 uppercase tracking-widest font-black mb-1"><i class="fa-solid fa-user-check mr-1"></i> Real Humans</div>
-                    <div id="diag-humans" class="text-3xl font-black text-emerald-400 font-mono">--</div>
-                </div>
-                <div class="bg-amber-900/10 p-5 rounded-xl border border-amber-500/20 text-center shadow-inner">
-                    <div class="text-[10px] text-amber-500/70 uppercase tracking-widest font-black mb-1"><i class="fa-solid fa-robot mr-1"></i> Search Bots</div>
-                    <div id="diag-bots" class="text-3xl font-black text-amber-400 font-mono">--</div>
-                </div>
-                <div class="bg-black/30 p-5 rounded-xl border border-white/5 flex flex-col justify-center items-center shadow-inner">
-                    <div class="text-[10px] text-slate-500 uppercase tracking-widest font-black mb-2">Bot Filter Status</div>
-                    <div class="flex items-center gap-2 bg-indigo-900/30 border border-indigo-500/30 text-indigo-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest">
-                        <i class="fa-solid fa-shield-halved"></i> Active
-                    </div>
-                </div>
-            </div>
-
-            <div class="relative z-10 border-t border-white/10 pt-6">
-                <h4 class="text-sm font-bold text-slate-300 mb-3 uppercase tracking-widest flex items-center gap-2"><i class="fa-solid fa-list text-indigo-400"></i> Live Visitor Log (Today)</h4>
-                <div class="bg-black/20 rounded-xl border border-white/5 overflow-hidden">
-                    <div class="grid grid-cols-4 gap-4 p-3 bg-slate-900/50 border-b border-white/5 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                        <div>Time (AEST)</div>
-                        <div>IP Address</div>
-                        <div>Device/Platform</div>
-                        <div>Visitor Type</div>
-                    </div>
-                    <div id="visitor-log-table" class="max-h-64 overflow-y-auto custom-scrollbar">
-                        <div class="text-center py-6 text-slate-500 text-xs italic">Loading logs...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="bg-slate-800 p-6 rounded-2xl border border-sky-500/20 shadow-xl">
-                <h3 class="text-lg font-bold text-white mb-2"><i class="fa-solid fa-clock-rotate-left text-sky-500 mr-2"></i> Recalculate Recent (3 Weeks)</h3>
-                <p class="text-xs text-slate-400 mb-6 h-12">Quickly replays matches from the last 21 days. Use this after fixing a recent match score mistake in the admin panel.</p>
-                <button onclick="window.triggerRecalc(21)" id="btn-recalc-recent" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-black py-3 rounded-xl uppercase tracking-widest text-sm transition shadow flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-bolt"></i> FAST RECALCULATE
-                </button>
-            </div>
-
-            <div class="bg-slate-800 p-6 rounded-2xl border border-red-500/20 shadow-xl">
-                <h3 class="text-lg font-bold text-white mb-2"><i class="fa-solid fa-triangle-exclamation text-red-500 mr-2"></i> Full Database Recalculation</h3>
-                <p class="text-xs text-slate-400 mb-6 h-12">Re-simulates the ENTIRE club history from day one, injecting inactivity penalties chronologically. Takes 10-30 seconds.</p>
-                <button onclick="window.triggerRecalc('ALL')" id="btn-recalc-full" class="w-full bg-red-900 hover:bg-red-700 text-white border border-red-500/50 font-black py-3 rounded-xl uppercase tracking-widest text-sm transition shadow flex items-center justify-center gap-2 super-admin-only">
-                    <i class="fa-solid fa-skull"></i> EXECUTE DEEP RECALC
-                </button>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="bg-slate-800 p-6 rounded-2xl border border-white/5 shadow-xl">
-                <h3 class="text-lg font-bold text-white mb-4"><i class="fa-solid fa-calculator text-blue-500 mr-2"></i> Rating Math Sandbox</h3>
-                <p class="text-sm text-slate-400 mb-6">Test the live algorithm against real players to debug points logic. Does not affect the database.</p>
-                
-                <div class="space-y-4">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="relative">
-                            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Player 1</label>
-                            <input type="text" id="diag-p1-search" placeholder="Search..." class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" autocomplete="off">
-                            <div id="diag-p1-suggestions" class="hidden absolute left-0 right-0 top-16 bg-slate-800 border border-white/10 rounded-lg shadow-xl z-20 max-h-40 overflow-y-auto"></div>
-                        </div>
-                        <div>
-                            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Sets Won</label>
-                            <input type="number" id="diag-s1" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-blue-500 outline-none font-mono" value="3">
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="relative">
-                            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Player 2</label>
-                            <input type="text" id="diag-p2-search" placeholder="Search..." class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" autocomplete="off">
-                            <div id="diag-p2-suggestions" class="hidden absolute left-0 right-0 top-16 bg-slate-800 border border-white/10 rounded-lg shadow-xl z-20 max-h-40 overflow-y-auto"></div>
-                        </div>
-                        <div>
-                            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Sets Won</label>
-                            <input type="number" id="diag-s2" class="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 outline-none font-mono" value="0">
-                        </div>
-                    </div>
-
-                    <button onclick="window.runMathDiagnostic()" id="diag-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-xl uppercase tracking-widest text-sm transition shadow mt-2">
-                        Run Calculation
-                    </button>
-                </div>
-
-                <div id="diag-results" class="hidden mt-6 p-4 bg-black/40 rounded-xl border border-white/5 text-sm space-y-2 font-mono"></div>
-            </div>
-
-            <div class="bg-slate-800 p-6 rounded-2xl border border-white/5 shadow-xl flex flex-col">
-                <h3 class="text-lg font-bold text-white mb-4"><i class="fa-solid fa-sliders text-yellow-500 mr-2"></i> Global Glicko Multipliers</h3>
-                <p class="text-xs text-slate-400 mb-6">If the Loss Multiplier is higher than the Win Multiplier, the system is actively punishing losers. Set both to 1.0 for pure exchanges.</p>
-                
-                <div class="flex justify-center items-center gap-8 mb-auto">
-                    <div class="text-center w-full">
-                        <label class="text-[10px] text-emerald-500 font-bold uppercase tracking-widest block mb-2">Win Multiplier</label>
-                        <input type="number" step="0.1" id="math-k-win" value="1.0" class="w-full bg-black/50 border border-emerald-500/30 text-emerald-400 text-center font-mono font-bold py-3 rounded-xl focus:outline-none focus:border-emerald-500">
-                    </div>
-                    <div class="text-center w-full">
-                        <label class="text-[10px] text-red-500 font-bold uppercase tracking-widest block mb-2">Loss Multiplier</label>
-                        <input type="number" step="0.1" id="math-k-loss" value="1.4" class="w-full bg-black/50 border border-red-500/30 text-red-400 text-center font-mono font-bold py-3 rounded-xl focus:outline-none focus:border-red-500">
-                    </div>
-                </div>
-                <button onclick="window.saveMathMultipliers()" class="mt-6 w-full bg-slate-900 hover:bg-slate-700 text-white font-bold py-3 rounded-xl border border-white/10 transition-colors text-xs uppercase tracking-widest shadow">SAVE CONFIG</button>
-            </div>
-        </div>
     </div>
 
     {% include 'Components/Admin/admin_scripts.html' %}
-
+    <script>
+        window.switchAdminTab = function(tabId, activeClass = 'active') {
+            document.querySelectorAll('.admin-panel').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.sidebar-btn').forEach(b => {
+                b.classList.remove('active', 'active-emerald', 'active-purple', 'bg-white/5');
+                b.classList.add('text-slate-400');
+                if(b.id === 'nav-batch-logger') { b.classList.add('text-emerald-500'); b.classList.remove('text-slate-400'); }
+                if(b.id === 'nav-players') { b.classList.add('text-purple-400'); b.classList.remove('text-slate-400'); }
+            });
+            
+            const targetPanel = document.getElementById('admin-' + tabId);
+            const targetBtn = document.getElementById('nav-' + tabId);
+            
+            if(targetPanel) targetPanel.classList.remove('hidden');
+            if(targetBtn) {
+                targetBtn.classList.add(activeClass);
+                targetBtn.classList.remove('text-slate-400', 'text-emerald-500', 'text-purple-400');
+            }
+            
+            if (tabId === 'batch-logger' && typeof window.loadBatchQueue === 'function') window.loadBatchQueue();
+            if (tabId === 'players' && typeof window.loadPlayerDirectory === 'function') window.loadPlayerDirectory();
+            if (tabId === 'audit' && typeof window.loadAuditLogs === 'function') window.loadAuditLogs();
+        };
+    </script>
 </body>
 </html>

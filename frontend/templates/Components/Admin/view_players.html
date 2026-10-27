@@ -1,120 +1,191 @@
-<div class="flex flex-wrap justify-between items-center gap-3 mb-4 border-b border-white/10 pb-4">
-    <h2 class="text-purple-400 font-bold uppercase tracking-widest text-sm flex items-center gap-2">
-        <i class="fa-solid fa-users"></i> Player Directory &amp; Rating Checkpoints
-    </h2>
-    <div class="flex items-center gap-3">
-        <button type="button" onclick="window.registerAdminPasskey()" class="text-xs bg-purple-600 hover:bg-purple-500 text-white border border-purple-400/40 font-black px-3.5 py-2 rounded-lg transition shadow-[0_0_15px_rgba(147,51,234,0.4)] flex items-center gap-2">
-            <i class="fa-solid fa-fingerprint"></i> Setup / Register Passkey
+<div class="space-y-6">
+    <div class="flex flex-wrap justify-between items-center gap-3 border-b border-white/10 pb-4">
+        <div>
+            <h2 class="text-purple-400 font-black uppercase tracking-widest text-lg flex items-center gap-2">
+                <i class="fa-solid fa-user-astronaut"></i> Player Command Center
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">Full edit privileges: True Ratings, RC Links, Merging, and Account Deletion.</p>
+        </div>
+        <button type="button" onclick="window.loadPlayerDirectory()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-3.5 py-2 rounded-xl border border-white/10 transition">
+            <i class="fa-solid fa-rotate mr-1.5 text-sky-400"></i> Refresh Directory
         </button>
-        <button type="button" onclick="window.loadPlayerDirectory && window.loadPlayerDirectory()" class="text-xs text-slate-300 hover:text-white transition bg-slate-800 px-3 py-2 rounded-lg border border-white/10">
-            <i class="fa-solid fa-rotate mr-1"></i> Refresh List
-        </button>
     </div>
-</div>
 
-<!-- MERGE DUPLICATE PROFILES -->
-<div class="bg-slate-800 p-5 rounded-xl border border-red-500/20 mb-6 shadow-lg">
-    <h3 class="text-red-400 font-bold uppercase tracking-widest text-xs mb-2"><i class="fa-solid fa-code-merge mr-2"></i> Merge Duplicate Profiles (Match Stats)</h3>
-    <p class="text-[11px] text-slate-400 mb-4">Warning: This moves all matches from the Duplicate Name to the Target Name and deletes the Duplicate profile.</p>
-    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end relative">
-        <div class="md:col-span-2 relative">
-            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Duplicate Name (To Delete)</label>
-            <input type="text" id="merge-bad-search" placeholder="Search Player..." autocomplete="off" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-500 text-sm">
-            <div id="merge-bad-suggestions" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto hidden"></div>
-        </div>
-        <div class="text-center text-slate-600 hidden md:block mb-2"><i class="fa-solid fa-arrow-right"></i></div>
-        <div class="md:col-span-2 relative">
-            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Target Name (To Keep)</label>
-            <input type="text" id="merge-good-search" placeholder="Search Player..." autocomplete="off" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-500 text-sm">
-            <div id="merge-good-suggestions" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto hidden"></div>
+    <!-- Search Bar -->
+    <div class="bg-slate-900/90 border border-white/15 p-5 rounded-2xl shadow-xl relative">
+        <label class="text-[10px] text-slate-400 uppercase font-extrabold tracking-widest block mb-2">Search Any Club Competitor</label>
+        <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input type="text" id="admin-multirat-search" placeholder="Type player name (e.g. Luke Luca, Jane Lee)..." class="w-full bg-black/50 border border-white/15 text-white text-sm rounded-xl pl-11 pr-4 py-3.5 focus:border-purple-500 outline-none transition font-bold" autocomplete="off">
+            <div id="admin-multirat-sugg" class="absolute z-50 left-0 right-0 top-full mt-1.5 bg-slate-900/95 backdrop-blur-xl border border-white/15 rounded-xl shadow-2xl max-h-60 overflow-y-auto hidden custom-scrollbar"></div>
         </div>
     </div>
-    <button onclick="window.submitPlayerMerge && window.submitPlayerMerge()" id="btn-merge-exec" class="w-full mt-4 bg-red-900/50 hover:bg-red-600 text-white font-bold py-2.5 rounded-lg border border-red-500/30 transition text-xs uppercase tracking-wider shadow-lg">Execute Merge</button>
-</div>
 
-<!-- UNLINK / RESET LOGIN ACCOUNT -->
-<div class="bg-slate-800 p-5 rounded-xl border border-red-500/30 mb-6 shadow-lg relative">
-    <div class="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-lg">Danger Zone</div>
-    <h3 class="text-sm font-black text-white uppercase tracking-wider mb-1"><i class="fa-solid fa-user-slash text-red-400 mr-2"></i> Unlink App Login</h3>
-    <p class="text-xs text-slate-400 mb-4 leading-relaxed">Deletes a player's app login account so they can sign up again. <strong class="text-red-400">Does NOT delete their stats or match history.</strong></p>
-    
-    <div class="relative">
-        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Search Player Name</label>
-        <input type="text" id="unlink-search" placeholder="Type a name..." class="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-red-500 outline-none mb-4 text-sm" autocomplete="off">
-        <div id="unlink-suggestions" class="hidden absolute z-50 w-full bg-slate-800 border border-white/10 rounded-lg mt-[-12px] shadow-2xl overflow-hidden max-h-48 overflow-y-auto custom-scrollbar"></div>
-    </div>
-    
-    <button onclick="window.unlinkPlayerAccount && window.unlinkPlayerAccount()" class="w-full bg-red-900/50 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 font-bold py-2.5 rounded-lg transition-colors text-xs uppercase tracking-wider flex items-center justify-center gap-2">
-        <i class="fa-solid fa-trash-can"></i> Force Account Reset
-    </button>
-</div>
-
-<!-- DATE-LOCKED RATING & SD CHECKPOINT EDITOR -->
-<div class="bg-slate-800 p-5 rounded-xl border border-indigo-500/30 mb-6 shadow-lg relative">
-    <h3 class="text-indigo-400 font-bold uppercase tracking-widest text-xs mb-1.5"><i class="fa-solid fa-calculator mr-2"></i> True Rating &amp; SD Checkpoint Editor</h3>
-    <p class="text-[11px] text-slate-400 mb-4">Lock a player's True Rating &amp; SD on a specific date (or retroactively from the start). All matches after the checkpoint date automatically recalculate from that rating.</p>
-    
-    <div class="grid grid-cols-1 md:grid-cols-6 gap-3 items-start relative">
-        <div class="md:col-span-2 relative">
-            <label class="text-[10px] text-slate-400 uppercase font-bold tracking-widest block mb-1">Search Player</label>
-            <input type="hidden" id="override-id">
-            <input type="text" id="override-search" placeholder="Type player name..." autocomplete="off" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 text-sm font-mono">
-            <div id="override-suggestions" class="absolute z-50 left-0 right-0 top-[60px] bg-slate-700 border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto hidden"></div>
-            <div id="override-context" class="mt-2 text-xs text-slate-400 font-mono"></div>
-        </div>
+    <!-- Command Center Player Card -->
+    <div id="admin-player-breakdown-card" class="hidden glass-panel rounded-2xl p-6 border border-purple-500/30 shadow-2xl relative overflow-hidden">
+        <div class="absolute -right-16 -top-16 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
         
-        <div class="md:col-span-1">
-            <label class="text-[10px] text-slate-400 uppercase font-bold tracking-widest block mb-1">Exact True Rating</label>
-            <input type="number" id="override-score" placeholder="e.g. 1700" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 text-sm font-mono">
-            <div class="mt-2 flex items-center gap-2">
-                <input type="checkbox" id="override-retro" checked class="w-3.5 h-3.5 bg-slate-900 border-white/10 rounded text-indigo-500 focus:ring-indigo-500 cursor-pointer">
-                <label for="override-retro" class="text-[10px] text-slate-400 cursor-pointer uppercase tracking-wider font-bold">Retroactive</label>
+        <input type="hidden" id="brk-player-id">
+        <input type="hidden" id="brk-player-name-hidden">
+        
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b border-white/10">
+            <div>
+                <div class="flex items-center gap-2.5">
+                    <h3 id="brk-name" class="text-2xl font-black text-white">Player Name</h3>
+                    <span id="brk-div-badge" class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30">Div 3</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Permanent Division Bracket Cap: <span id="brk-cap-desc" class="text-white font-mono font-bold">601 - 900 (Div 3)</span></p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="window.submitAdminPlayerOverride()" class="bg-purple-600 hover:bg-purple-500 text-white text-xs font-black px-4 py-2.5 rounded-xl uppercase tracking-wider shadow transition">Apply Rating Lock</button>
             </div>
         </div>
 
-        <div class="md:col-span-1">
-            <label class="text-[10px] text-slate-400 uppercase font-bold tracking-widest block mb-1">Exact SD (RD)</label>
-            <input type="number" id="override-sd" placeholder="Default 35" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 text-sm font-mono">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-black/40 border border-sky-500/30 rounded-xl p-4 text-center">
+                <div class="text-[10px] font-extrabold uppercase tracking-widest text-sky-400 mb-2"><i class="fa-solid fa-shield-halved mr-1"></i> Public Clamped Rating</div>
+                <div id="brk-public-rating" class="text-3xl font-black text-white font-mono">865</div>
+            </div>
+            <div class="bg-black/40 border border-purple-500/30 rounded-xl p-4 text-center">
+                <div class="text-[10px] font-extrabold uppercase tracking-widest text-purple-400 mb-2"><i class="fa-solid fa-eye mr-1"></i> Admin True Rating</div>
+                <div class="flex items-center justify-center gap-2">
+                    <input type="number" id="brk-input-rating" class="w-24 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-center font-mono font-bold outline-none focus:border-purple-500">
+                    <span class="text-slate-500">±</span>
+                    <input type="number" id="brk-input-sd" class="w-16 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-center font-mono font-bold outline-none focus:border-purple-500">
+                </div>
+            </div>
+            <div class="bg-black/40 border border-blue-500/30 rounded-xl p-4 text-center">
+                <div class="text-[10px] font-extrabold uppercase tracking-widest text-blue-400 mb-2"><i class="fa-solid fa-globe mr-1"></i> RC ID Link</div>
+                <div class="flex items-center justify-center gap-2">
+                    <input type="number" id="brk-rc-input" placeholder="RC ID" class="w-24 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-center font-mono font-bold outline-none focus:border-blue-500">
+                    <button type="button" onclick="window.saveRCLink()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">Save Link</button>
+                </div>
+            </div>
         </div>
 
-        <div class="md:col-span-1">
-            <label class="text-[10px] text-slate-400 uppercase font-bold tracking-widest block mb-1">Checkpoint Date</label>
-            <input type="date" id="override-effective-date" class="w-full bg-black/40 border border-white/10 rounded-lg px-2.5 py-2 text-white focus:outline-none focus:border-indigo-500 text-xs font-mono" style="color-scheme: dark;">
-            <span class="text-[9px] text-slate-500 block mt-1">Optional (Overrides Retro)</span>
-        </div>
-
-        <div class="md:col-span-1">
-            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">&nbsp;</label>
-            <button onclick="window.submitRatingOverride && window.submitRatingOverride()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-3 rounded-lg border border-indigo-400/30 transition text-xs uppercase tracking-wider shadow-lg">
-                <i class="fa-solid fa-lock mr-1"></i> Save Lock
-            </button>
-            <button onclick="window.bulkSetRatings && window.bulkSetRatings()" class="w-full mt-2 text-[10px] uppercase font-bold tracking-widest text-slate-400 hover:text-indigo-400 transition underline">
-                Bulk Import Sheet
-            </button>
+        <!-- Danger Zone -->
+        <div class="bg-rose-900/20 p-5 rounded-xl border border-rose-500/30 space-y-4">
+            <h4 class="text-xs font-black uppercase tracking-wider text-rose-400"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Danger Zone</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-black/40 p-4 rounded-xl border border-rose-500/20">
+                    <label class="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-2">Merge Duplicate Account</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="brk-merge-bad" placeholder="Name of duplicate to delete..." class="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-rose-500">
+                        <button type="button" onclick="window.mergePlayerDuplicate()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded-lg text-xs transition whitespace-nowrap">Merge</button>
+                    </div>
+                </div>
+                <div class="bg-black/40 p-4 rounded-xl border border-rose-500/20 flex flex-col justify-center">
+                    <button type="button" onclick="window.deletePlayerPermanently()" class="w-full bg-slate-900 hover:bg-rose-600 text-rose-500 hover:text-white border border-rose-500/50 font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider transition">Permanently Delete Player</button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- EDIT PLAYER PROFILE (RATINGS CENTRAL LINK) -->
-<div class="relative">
-    <input type="text" id="profile-edit-search" placeholder="Search players by name or ID to link Ratings Central..." class="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white mb-4 focus:outline-none focus:border-purple-500 text-sm" autocomplete="off">
-    <div id="profile-edit-sugg" class="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-700 border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto hidden"></div>
-</div>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof window.loadPlayerDirectory === 'function') window.loadPlayerDirectory();
+        
+        const searchInput = document.getElementById('admin-multirat-search');
+        const suggBox = document.getElementById('admin-multirat-sugg');
+        
+        if (searchInput && suggBox) {
+            searchInput.addEventListener('input', (e) => {
+                const q = e.target.value.toLowerCase().trim();
+                if (q.length < 1) { suggBox.classList.add('hidden'); return; }
+                
+                const matches = (window.playerDirectoryData || []).filter(p => p.name.toLowerCase().includes(q));
+                if (matches.length === 0) {
+                    suggBox.innerHTML = '<div class="px-4 py-3 text-slate-400 text-xs italic">No players found</div>';
+                    suggBox.classList.remove('hidden');
+                    return;
+                }
 
-<div class="bg-slate-800 p-6 rounded-xl border border-white/5 shadow-xl mb-10">
-    <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-2">
-        <h3 class="text-white font-bold uppercase tracking-widest text-xs">Edit Player Profile</h3>
-        <span id="rc-sync-status" class="text-[10px] font-mono text-slate-400"></span>
-    </div>
-    
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-            <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Ratings Central ID</label>
-            <input type="text" id="profile-rc-id" placeholder="e.g. 123456" disabled class="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500 font-mono disabled:opacity-50">
-        </div>
-        <div class="flex items-end gap-2">
-            <button onclick="window.forceRCSync && window.forceRCSync()" id="profile-sync-btn" disabled class="bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 px-4 rounded-lg transition shadow-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed" title="Force Live Scrape"><i class="fa-solid fa-bolt"></i></button>
-            <button onclick="window.savePlayerProfile && window.savePlayerProfile()" id="profile-save-btn" disabled class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 rounded-lg transition shadow-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed">Save Profile</button>
-        </div>
-    </div>
-</div>
+                suggBox.innerHTML = matches.slice(0, 10).map(p => `
+                    <div class="px-4 py-3 hover:bg-purple-600/30 cursor-pointer text-sm text-white font-bold border-b border-white/5 flex justify-between items-center transition"
+                         onclick="window.selectCommandCenterPlayer('${p.name.replace(/'/g, "\\'")}')">
+                        <span>${p.name}</span>
+                        <span class="text-xs text-purple-300 font-mono">Pub: ${p.rating} | True: ${p.true_rating}</span>
+                    </div>
+                `).join('');
+                suggBox.classList.remove('hidden');
+            });
+        }
+    });
+
+    window.selectCommandCenterPlayer = function(name) {
+        document.getElementById('admin-multirat-search').value = name;
+        document.getElementById('admin-multirat-sugg').classList.add('hidden');
+        
+        const player = (window.playerDirectoryData || []).find(p => p.name.toLowerCase() === name.toLowerCase());
+        if (!player) return;
+
+        document.getElementById('brk-player-id').value = player.id;
+        document.getElementById('brk-player-name-hidden').value = player.name;
+        document.getElementById('brk-name').innerText = player.name;
+        document.getElementById('brk-public-rating').innerText = player.rating;
+        document.getElementById('brk-div-badge').innerText = player.division_cap || 'Division 3';
+        document.getElementById('brk-cap-desc').innerText = player.division_cap ? `${player.division_cap}` : 'Division 3 Cap';
+        document.getElementById('brk-input-rating').value = player.true_rating;
+        document.getElementById('brk-input-sd').value = player.rd || 35;
+        document.getElementById('brk-rc-input').value = player.rc_id || '';
+
+        document.getElementById('admin-player-breakdown-card').classList.remove('hidden');
+    };
+
+    window.submitAdminPlayerOverride = async function() {
+        const id = document.getElementById('brk-player-id').value;
+        const rating = document.getElementById('brk-input-rating').value;
+        const sd = document.getElementById('brk-input-sd').value;
+
+        if (!id || !rating) return alert("Missing player or rating value.");
+
+        try {
+            const res = await fetch('/api/admin/override_rating', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ player_id: id, rating: rating, sd: sd, retroactive: true })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert("✅ True Rating applied successfully!");
+                window.loadPlayerDirectory();
+            } else { alert("❌ Failed to apply override."); }
+        } catch(e) { alert("Network error."); }
+    };
+
+    window.saveRCLink = async function() {
+        const name = document.getElementById('brk-player-name-hidden').value;
+        const rcId = document.getElementById('brk-rc-input').value;
+        if (!name) return;
+
+        try {
+            const res = await fetch('/api/admin/update_player_profile', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ player_name: name, ratings_central_id: rcId })
+            });
+            const data = await res.json();
+            if(data.success) alert("✅ RC Link Saved! Fetching data in background.");
+            else alert("❌ Failed to link.");
+        } catch(e) { alert("Network error."); }
+    };
+
+    window.mergePlayerDuplicate = async function() {
+        const goodName = document.getElementById('brk-player-name-hidden').value;
+        const badName = document.getElementById('brk-merge-bad').value.trim();
+        if(!badName || !goodName) return;
+        if(!confirm(`MERGE WARNING:\n\nAre you sure you want to merge '${badName}' into '${goodName}'?\nAll matches from '${badName}' will be transferred and the duplicate will be deleted.`)) return;
+
+        try {
+            const res = await fetch('/api/admin/merge', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ good_name: goodName, bad_name: badName })
+            });
+            const data = await res.json();
+            if(data.success) {
+                alert("✅ Merge successful!");
+                document.getElementById('brk-merge-bad').value = '';
+                window.loadPlayerDirectory();
+            } else { alert("❌ Failed to merge."); }
+        } catch(e) { alert("Network error."); }
+    };
+</script>

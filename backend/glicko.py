@@ -31,49 +31,20 @@ DIVISION_LABELS = {
     0: "All Stars (0–785)"
 }
 
-# Strength hierarchy (higher number = higher division priority for multi-division players)
 DIV_STRENGTH_ORDER = {
-    1: 60,  # Division 1 (1201-9999)
-    2: 50,  # Division 2 (901-1200)
-    3: 40,  # Division 3 (601-900)
-    0: 35,  # All Stars (0-785)
-    4: 20,  # Division 4 (301-600)
-    5: 10   # Division 5 (1-300)
+    1: 60,
+    2: 50,
+    3: 40,
+    0: 35,
+    4: 20,
+    5: 10
 }
 
 VOLATILITY_GUIDE = [
-    {
-        "min": 1,
-        "max": 25,
-        "tier": "The Metronome",
-        "label": "Low Volatility",
-        "color": "emerald",
-        "description": "Rock-solid consistency. Beats lower-rated players reliably, loses to higher-rated players as expected, and rarely experiences random blowouts."
-    },
-    {
-        "min": 26,
-        "max": 55,
-        "tier": "Standard Form",
-        "label": "Normal Volatility",
-        "color": "blue",
-        "description": "Typical competitive club form. Capable of pulling off a solid upset on a good night or dropping a tight 5-setter on an off night."
-    },
-    {
-        "min": 56,
-        "max": 80,
-        "tier": "Wildcard",
-        "label": "High Volatility",
-        "color": "amber",
-        "description": "Streaky and dangerous. Form fluctuates heavily from match to match—ratings rarely predict which version of this player is showing up at the table."
-    },
-    {
-        "min": 81,
-        "max": 100,
-        "tier": "Pure Chaos",
-        "label": "Extreme Volatility",
-        "color": "rose",
-        "description": "Could push Fan Zhendong to 7 sets at 7:30 PM and lose 3-0 (11-0, 11-0, 11-0) to the lowest-rated player in the club at 8:15 PM. Completely immune to expectations."
-    }
+    {"min": 1, "max": 25, "tier": "The Metronome", "label": "Low Volatility", "color": "emerald", "description": "Rock-solid consistency."},
+    {"min": 26, "max": 55, "tier": "Standard Form", "label": "Normal Volatility", "color": "blue", "description": "Typical competitive club form."},
+    {"min": 56, "max": 80, "tier": "Wildcard", "label": "High Volatility", "color": "amber", "description": "Streaky and dangerous."},
+    {"min": 81, "max": 100, "tier": "Pure Chaos", "label": "Extreme Volatility", "color": "rose", "description": "Completely immune to expectations."}
 ]
 
 
@@ -103,12 +74,6 @@ def parse_division_number(div_str):
     return None
 
 
-def format_division_label(div_num):
-    if div_num in DIVISION_LABELS:
-        return DIVISION_LABELS[div_num]
-    return "Unassigned Bracket"
-
-
 def clamp_public_rating(true_rating, div_num):
     r = max(0.0, float(true_rating))
     if div_num is None or div_num not in DIVISION_BRACKETS:
@@ -118,10 +83,6 @@ def clamp_public_rating(true_rating, div_num):
 
 
 def compute_next_rd(current_rd, matches_played_before, anti_riot_bump=0.0):
-    """
-    Hard steps for brand-new players (first 3 matches): 200 -> 130 -> 80 -> 60.
-    Fluid mathematical curve for everyone else settling around ~35 SD (min floor 25).
-    """
     if matches_played_before == 0:
         return 130.0
     elif matches_played_before == 1:
@@ -143,10 +104,6 @@ def compute_next_rd(current_rd, matches_played_before, anti_riot_bump=0.0):
 
 
 def compute_match_volatility(expected_win_prob, actual_set_share, current_vol, matches_played):
-    """
-    Calculates a 1-100 Volatility Score using an exponentially weighted moving average
-    of how far actual match set margins deviate from rating expectations.
-    """
     surprise = abs(actual_set_share - expected_win_prob)
     instant_chaos = min(100.0, max(5.0, (surprise / 0.52) * 85.0))
     alpha = 0.28 if matches_played < 8 else 0.18
@@ -191,23 +148,19 @@ def calculate_match(w, l, s1, s2, k_win=1.0, k_loss=1.4, anti_riot=True, point_s
     w_matches = int(w.get('matches_played', 0))
     l_matches = int(l.get('matches_played', 0))
 
-    # Update Volatility Score (1-100)
     w_set_share = s1 / float(total_sets)
     l_set_share = s2 / float(total_sets)
     w['vol'] = compute_match_volatility(E_w, w_set_share, float(w.get('vol', DEFAULT_VOL_SCORE)), w_matches)
     l['vol'] = compute_match_volatility(E_l, l_set_share, float(l.get('vol', DEFAULT_VOL_SCORE)), l_matches)
 
-    # Update Unclamped True Ratings
     w['true_rating'] = max(1.0, w_true + w_shift)
     l['true_rating'] = max(1.0, l_true + l_shift)
 
-    # Update Public Fixture Ratings (Clamped by active permanent division)
     w['public_rating'] = clamp_public_rating(w['true_rating'], w.get('home_div'))
     l['public_rating'] = clamp_public_rating(l['true_rating'], l.get('home_div'))
     w['rating'] = w['public_rating']
     l['rating'] = l['public_rating']
 
-    # Update Standard Deviation
     w['rd'] = compute_next_rd(w_rd, w_matches, w_bump)
     l['rd'] = compute_next_rd(l_rd, l_matches, l_bump)
 
@@ -222,8 +175,8 @@ class RatingEngine:
         self.players = {}
 
     def get_rating(self, name, div_str=None):
+        div_num = parse_division_number(div_str)
         if name not in self.players:
-            div_num = parse_division_number(div_str)
             if div_num is not None and div_num in DIVISION_BRACKETS:
                 seed_rating = DIVISION_BRACKETS[div_num][2]
             else:
@@ -240,6 +193,15 @@ class RatingEngine:
                 'active_season': None,
                 'matches_played': 0
             }
+        else:
+            # Enforce strict division cap clamping even on existing memory lookup
+            p = self.players[name]
+            if div_num is not None:
+                if p.get('home_div') is None:
+                    p['home_div'] = div_num
+                # If player is playing in a specific division match, ensure their public rating respects that active division ceiling!
+                p['public_rating'] = clamp_public_rating(p['true_rating'], div_num)
+                p['rating'] = p['public_rating']
         return self.players[name]
 
     def set_seed(self, name, rating, rd=None, vol=None, div_str=None):
@@ -272,14 +234,6 @@ class RatingEngine:
             pass
 
     def update_player_division(self, name, div_str, is_fillin=False, season_str=None):
-        """
-        Tracks a player's permanent division(s) per season and enforces promotion/demotion rules.
-        - Fill-ins are strictly ignored so filling in never increases or alters a player's division cap.
-        - Multi-division permanent players (e.g., Jane Lee playing Div 2 and Div 3 permanent in the
-          same season) automatically lock to their HIGHEST permanent division for that season.
-        - If a player moves down a permanent division in a new season (e.g., Div 1 -> Div 2),
-          their rating is pulled below the new division ceiling (1200) and SD increases to recalibrate.
-        """
         stats = self.get_rating(name, div_str)
         if is_fillin:
             return None
@@ -294,7 +248,6 @@ class RatingEngine:
         divs_in_season.add(new_div)
         stats['active_season'] = s_key
 
-        # Determine highest permanent division in the active season
         effective_new_div = max(divs_in_season, key=lambda d: DIV_STRENGTH_ORDER.get(d, 0))
 
         old_div = stats.get('home_div')
@@ -317,17 +270,11 @@ class RatingEngine:
         old_strength = DIV_STRENGTH_ORDER.get(old_div, 0)
         new_strength = DIV_STRENGTH_ORDER.get(effective_new_div, 0)
 
-        # Demotion to a lower permanent division in a new season
         if new_strength < old_strength:
             event_type = "DEMOTION"
-            _, new_ceil, _ = DIVISION_BRACKETS[effective_new_div]
-            # Increase SD to recalibrate rating in the new lower division
             stats['rd'] = min(MAX_RD, max(stats['rd'] + 30.0, 75.0))
         else:
-            # Promotion to a higher permanent division
             event_type = "PROMOTION"
-            new_floor, _, _ = DIVISION_BRACKETS[effective_new_div]
-            # Bump SD slightly so they can climb/settle into the new division
             stats['rd'] = min(MAX_RD, max(stats['rd'] + 15.0, 55.0))
 
         stats['home_div'] = effective_new_div
@@ -344,44 +291,6 @@ class RatingEngine:
             'new_true': stats['true_rating'],
             'old_rd': old_rd,
             'new_rd': stats['rd']
-        }
-
-    def apply_time_decay(self, name, days_since_last, max_rd=MAX_RD, c_value=16.5):
-        """
-        Fluid inactivity decay after 21 days (3 weeks):
-        - SD grows continuously via square-root time curve up to 400.0.
-        - True Rating drifts down by ~5.5 points per missed week beyond 3 weeks.
-        """
-        stats = self.get_rating(name)
-        if days_since_last <= 21:
-            return {'rd_delta': 0.0, 'pub_delta': 0.0, 'true_delta': 0.0}
-
-        weeks_missed = (days_since_last - 21) / 7.0
-        old_rd = stats['rd']
-        old_true = stats['true_rating']
-        old_pub = stats['public_rating']
-
-        new_rd = min(max_rd, math.sqrt((old_rd ** 2) + ((c_value ** 2) * weeks_missed)))
-
-        drift = min(35.0, round(weeks_missed * 5.5, 1))
-        new_true = max(1.0, old_true - drift)
-        new_pub = clamp_public_rating(new_true, stats.get('home_div'))
-
-        stats['rd'] = new_rd
-        stats['true_rating'] = new_true
-        stats['public_rating'] = new_pub
-        stats['rating'] = new_pub
-
-        return {
-            'rd_delta': new_rd - old_rd,
-            'pub_delta': new_pub - old_pub,
-            'true_delta': new_true - old_true,
-            'old_rd': old_rd,
-            'new_rd': new_rd,
-            'old_pub': old_pub,
-            'new_pub': new_pub,
-            'old_true': old_true,
-            'new_true': new_true
         }
 
     def update_match(self, p1_name, p2_name, s1, s2, game_history='', k_win=1.0, k_loss=1.4, anti_riot=True, div_str=None, p1_fill=False, p2_fill=False, season_str=None):
