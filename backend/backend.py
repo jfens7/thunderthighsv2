@@ -66,23 +66,10 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
         
         if self.db:
             try:
-                self.sync_logs.append("🔍 SEEDER: Scanning database for linked RC profiles and Admin overrides...")
+                self.sync_logs.append("🔍 SEEDER: Scanning database for Admin overrides...")
                 override_count = 0
-                for doc in self.db.collection('player_profiles').stream():
-                    data = doc.to_dict()
-                    name = data.get('name')
-                    rc_rating = data.get('rc_rating')
-                    if name and rc_rating:
-                        p = self.rating_engine.get_rating(name)
-                        try:
-                            val = float(rc_rating)
-                            p['true_rating'] = val
-                            p['true_rd'] = float(data.get('rc_sd', 150.0))
-                            p['rating'] = clamp_public_rating(val, p.get('home_div'))
-                            override_count += 1
-                        except Exception:
-                            pass
-
+                
+                # Exclusively apply hard admin overrides
                 for doc in self.db.collection('rating_overrides').stream():
                     data = doc.to_dict()
                     name = data.get('name')
