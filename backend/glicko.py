@@ -11,6 +11,11 @@ MAX_RD = 400.0
 DEFAULT_VOL_SCORE = 25.0
 RATING_START_DATE = datetime.date(2022, 1, 1)
 
+def format_division_label(div_num):
+    if div_num in DIVISION_LABELS:
+        return DIVISION_LABELS[div_num]
+    return "Unassigned Bracket"
+
 # Division Brackets: (Floor, Ceiling, Default Starting Seed)
 # Note: 0 represents "All Stars" (0 to 785)
 DIVISION_BRACKETS = {
