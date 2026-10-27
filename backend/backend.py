@@ -3,7 +3,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore, auth
 import datetime, re, os, json, sys, logging, random, string, hashlib, threading
 
-from backend.glicko import RatingEngine, clamp_public_rating, parse_division_number, DIVISION_LABELS, VOLATILITY_GUIDE
+from backend.glicko import RatingEngine, clamp_public_rating, parse_division_number, format_division_label, VOLATILITY_GUIDE
 from backend.rc_scraper import RatingsCentralScraper
 from backend.sheets_sync import SheetsSyncEngine
 from backend.league_engine import LeagueEngineMixin
@@ -92,11 +92,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
     def _extract_week(self, text):
         match = re.search(r'\d+', str(text))
         return match.group() if match else str(text).strip().lower()
-
-    def _format_div_label(self, div_num):
-        if div_num in DIVISION_LABELS:
-            return DIVISION_LABELS[div_num]
-        return "Division 3 (601–900)"
 
     def get_volatility_guide(self):
         return VOLATILITY_GUIDE
@@ -796,7 +791,7 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
                 "public_rating": pub_r,
                 "true_rating": true_r,
                 "rd": rd_val,
-                "division_cap": self._format_div_label(home_div),
+                "division_cap": format_division_label(home_div),
                 "rc_id": rc_info.get('rc_id', ''),
                 "rc_rating": rc_info.get('rc_rating', '')
             })

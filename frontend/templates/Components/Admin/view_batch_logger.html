@@ -9,17 +9,17 @@
     </div>
 
     <!-- Shorthand Guide / Instructions -->
-    <div class="bg-emerald-900/10 border border-emerald-500/30 p-4 rounded-2xl flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+    <div class="bg-emerald-950/30 border border-emerald-500/30 p-4 rounded-2xl flex flex-col md:flex-row gap-4 items-start md:items-center justify-between shadow-lg">
         <div class="flex gap-4 items-start">
             <div class="text-emerald-400 text-2xl mt-1"><i class="fa-solid fa-keyboard"></i></div>
             <div>
                 <h4 class="text-emerald-400 font-black text-sm uppercase tracking-widest mb-1">How to use Shorthand Input</h4>
                 <p class="text-xs text-slate-300 leading-relaxed max-w-3xl">
-                    Instead of typing full scores (<span class="font-mono text-slate-400">11-9, 3-11, 11-4</span>), just type the loser's score separated by spaces. The system already knows who won the overall match.
+                    Instead of typing full scores (<span class="font-mono text-slate-400">11-9, 3-11, 11-4</span>), just type the <span class="text-rose-400 font-bold">loser's score</span> separated by spaces. The system already knows who won the overall match.
                     <br><br>
                     • <span class="font-bold text-white">Positive Number (e.g. 9):</span> The match winner won this set. (Auto-converts to 11-9)
                     <br>
-                    • <span class="font-bold text-white">Negative Number (e.g. -3):</span> The match loser won this set. (Auto-converts to 3-11)
+                    • <span class="font-bold text-rose-400">Negative Number (e.g. -3):</span> The match loser won this set. (Auto-converts to 3-11)
                 </p>
             </div>
         </div>
@@ -85,7 +85,6 @@
 </div>
 
 <script>
-    // Fetch dynamic seasons on load
     document.addEventListener('DOMContentLoaded', async () => {
         try {
             const res = await fetch('/api/seasons');
@@ -109,7 +108,8 @@
             const res = await fetch(`/api/week/${encodeURIComponent(season)}/${encodeURIComponent(week)}`);
             const matches = await res.json();
             
-            const filtered = division === 'All' ? matches : matches.filter(m => m.division === division);
+            // Only show matches that actually exist and belong to the selected division
+            const filtered = matches.filter(m => m.division === division && m.s1 !== undefined && m.s2 !== undefined);
 
             if (filtered.length === 0) {
                 container.innerHTML = '<div class="text-center text-slate-500 py-12 bg-slate-900/50 rounded-2xl border border-white/10 text-xs font-bold uppercase tracking-widest">No matches found for this week in this division.</div>';
@@ -117,23 +117,34 @@
             }
 
             container.innerHTML = filtered.map((m, idx) => {
-                const s1 = m.s1 || 0;
-                const s2 = m.s2 || 0;
-                const existingDetails = m.details && m.details.includes('-') ? m.details : '';
+                const s1 = parseInt(m.s1) || 0;
+                const s2 = parseInt(m.s2) || 0;
                 const isP1Win = s1 > s2;
+                
+                // Explicit Winner Display Logic
+                const winnerName = isP1Win ? m.p1 : m.p2;
+                const loserName = isP1Win ? m.p2 : m.p1;
+                const winnerScore = isP1Win ? s1 : s2;
+                const loserScore = isP1Win ? s2 : s1;
+                
+                const existingDetails = m.details && m.details.includes('-') ? m.details : '';
 
                 return `
                 <div id="batch-row-${idx}" class="bg-slate-900 border border-white/10 rounded-2xl p-5 shadow-xl flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 transition-colors">
                     <div class="min-w-0 flex-1">
                         <div class="flex items-center gap-2 mb-1.5">
                             <span class="text-[9px] font-black uppercase tracking-wider bg-black/50 text-slate-400 px-2 py-0.5 rounded border border-white/10">ID: ${m.match_id || m.id || 'N/A'}</span>
-                            <span class="text-[9px] font-black uppercase tracking-wider bg-sky-500/15 text-sky-400 px-2 py-0.5 rounded border border-sky-500/30">Result: ${s1}-${s2}</span>
                             <span class="text-[9px] text-slate-500 font-mono">${m.date || ''}</span>
                         </div>
-                        <div class="text-lg font-black text-white truncate flex items-center gap-2">
-                            <span class="${isP1Win ? 'text-white' : 'text-slate-500'}">${m.p1}</span> 
-                            <span class="text-slate-600 text-[10px] uppercase">vs</span> 
-                            <span class="${!isP1Win ? 'text-white' : 'text-slate-500'}">${m.p2}</span>
+                        
+                        <!-- EXPLICIT WINNER DECLARATION -->
+                        <div class="text-xl font-black text-white truncate flex items-center gap-2 mb-1">
+                            <span class="text-emerald-400">${winnerName}</span> 
+                            <span class="text-slate-400 text-sm uppercase tracking-widest">WINS</span> 
+                            <span class="text-white">${winnerScore}-${loserScore}</span>
+                        </div>
+                        <div class="text-xs text-slate-500 font-bold uppercase tracking-widest">
+                            Defeated ${loserName}
                         </div>
                     </div>
 
@@ -156,9 +167,7 @@
         }
     };
 
-    // Core Shorthand Parser Engine
     window.expandShorthand = function(val, s1, s2) {
-        // If they already typed standard format (e.g. "11-9"), skip expanding
         if (val.includes('-') && /\d+-\d+/.test(val)) return val;
         
         const isP1Winner = s1 > s2;
@@ -170,7 +179,6 @@
             let loserScore = Math.abs(parseInt(t));
             if (isNaN(loserScore)) return val; 
             
-            // Auto-calculate the winner's score (Deuce support included)
             let winnerScore = loserScore >= 10 ? loserScore + 2 : 11;
             
             if (isP1Winner) {
@@ -197,7 +205,6 @@
 
         const expanded = window.expandShorthand(rawVal, s1, s2);
         
-        // Show auto-converted preview only if shorthand was used
         if (expanded !== rawVal && expanded.includes('-')) {
             preview.innerText = `Mapped: ${expanded}`;
         } else {
@@ -227,7 +234,7 @@
         if (!isValid) {
             errBox.innerText = `⚠️ ${errMsg}`;
             errBox.classList.remove('hidden');
-            preview.innerText = ''; // Hide preview if there's an error
+            preview.innerText = ''; 
             input.classList.add('border-rose-500');
             return false;
         } else {
@@ -264,7 +271,6 @@
                 btn.innerHTML = '<i class="fa-solid fa-check"></i> Saved';
                 btn.classList.replace('bg-emerald-600', 'bg-slate-700');
                 
-                // Automatically focus the next input row
                 const nextInput = document.getElementById(`batch-sets-${idx + 1}`);
                 if (nextInput) nextInput.focus();
             } else {

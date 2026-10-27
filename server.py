@@ -81,23 +81,23 @@ def _decode_cbor_item(data: bytes, offset: int = 0):
     else:
         raise ValueError("Unsupported CBOR additional info")
 
-    if major == 0:  # Unsigned int
+    if major == 0:
         return val, offset
-    elif major == 1:  # Negative int
+    elif major == 1:
         return -1 - val, offset
-    elif major == 2:  # Byte string
+    elif major == 2:
         res = data[offset:offset + val]
         return res, offset + val
-    elif major == 3:  # Text string
+    elif major == 3:
         res = data[offset:offset + val].decode('utf-8', errors='replace')
         return res, offset + val
-    elif major == 4:  # Array
+    elif major == 4:
         arr = []
         for _ in range(val):
             item, offset = _decode_cbor_item(data, offset)
             arr.append(item)
         return arr, offset
-    elif major == 5:  # Map
+    elif major == 5:
         mp = {}
         for _ in range(val):
             k, offset = _decode_cbor_item(data, offset)
@@ -113,20 +113,18 @@ def _extract_cose_from_attestation(attestation_b64: str) -> dict:
     att_obj, _ = _decode_cbor_item(att_bytes, 0)
     auth_data: bytes = att_obj['authData']
 
-    # 32 bytes rpIdHash + 1 byte flags + 4 bytes signCount = 37 bytes
     flags = auth_data[32]
     sign_count = struct.unpack(">I", auth_data[33:37])[0]
     has_attested_cred = bool(flags & 0x40)
     if not has_attested_cred:
         raise ValueError("No attested credential data in authData")
 
-    # Skip 16 bytes AAGUID (offset 37..53)
     cred_id_len = struct.unpack(">H", auth_data[53:55])[0]
     cred_id = auth_data[55:55 + cred_id_len]
     cose_key_map, _ = _decode_cbor_item(auth_data, 55 + cred_id_len)
 
-    kty = cose_key_map.get(1)  # 2 = EC2 (Apple ES256), 3 = RSA (RS256)
-    alg = cose_key_map.get(3)  # -7 = ES256, -257 = RS256
+    kty = cose_key_map.get(1)
+    alg = cose_key_map.get(3)
 
     if kty == 2:
         x_bytes = cose_key_map.get(-2)
@@ -173,7 +171,7 @@ def _verify_webauthn_assertion(stored_cred: dict, auth_response: dict, expected_
         raise ValueError("RP ID hash mismatch")
 
     flags = auth_data_bytes[32]
-    if not (flags & 0x01):  # User Present bit
+    if not (flags & 0x01):
         raise ValueError("User presence flag not set")
 
     signature_bytes = _b64url_decode(resp_block['signature'])
@@ -224,10 +222,6 @@ def scheduled_refresh(commit_history=False):
 
 
 def check_friday_auto_sync():
-    """
-    Guarantees Friday morning Google Sheets pull happens even if APScheduler thread
-    was recycled by Gunicorn workers.
-    """
     global db
     if not db or not db.db or sync_lock.locked():
         return
@@ -336,7 +330,6 @@ def get_admin_tier(email, role):
 
 
 def login_required(f):
-    """Allows Tier 1 (God), Tier 2 (GM), and Tier 3 (Temp/Data Entry Admins)."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not session.get('admin_logged_in'):
@@ -346,7 +339,6 @@ def login_required(f):
 
 
 def gm_required(f):
-    """Allows Tier 1 (God) and Tier 2 (General Manager). Blocks Tier 3 Data Entry admins."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not session.get('admin_logged_in'):
@@ -359,7 +351,6 @@ def gm_required(f):
 
 
 def god_required(f):
-    """Strictly allows Tier 1 (jakobwill7@gmail.com) only."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not session.get('admin_logged_in'):
@@ -371,7 +362,6 @@ def god_required(f):
     return decorated_function
 
 
-# Alias for backward compatibility across routes where GM + God are permitted
 super_admin_required = gm_required
 
 
@@ -508,7 +498,6 @@ def auth_admin_login():
 
 # ==========================================
 # PASSKEY (WEBAUTHN ICLOUD KEYCHAIN SYNC) ROUTES
-# Supports both /generate-options & /login-options aliases
 # ==========================================
 
 @app.route('/api/auth/passkey/register-options', methods=['POST'])
@@ -541,8 +530,8 @@ def passkey_register_options():
             "displayName": f"GCTTA Admin ({email})"
         },
         "pubKeyCredParams": [
-            {"type": "public-key", "alg": -7},   # ES256 (Apple iCloud Keychain / Touch ID / Face ID)
-            {"type": "public-key", "alg": -257}  # RS256 (Windows Hello / Android fallback)
+            {"type": "public-key", "alg": -7},   # ES256
+            {"type": "public-key", "alg": -257}  # RS256
         ],
         "timeout": 60000,
         "attestation": "none",
@@ -633,7 +622,6 @@ def passkey_generate_options():
     data = doc.to_dict()
     role = data.get('role', 'pending')
 
-    # Check if temporary admin access has expired
     expires_at = data.get('expires_at')
     if role in ['temp_super_admin', 'temp_admin'] and expires_at and datetime.datetime.now(datetime.timezone.utc) > expires_at:
         doc_ref.update({'role': 'pending', 'expires_at': firestore.DELETE_FIELD})
@@ -1799,10 +1787,6 @@ def audit_logs():
 @app.route('/api/admin/undo_action', methods=['POST'])
 @gm_required
 def undo_action():
-    """
-    Tier 1 (God Mode) can undo any action.
-    Tier 2 (General Manager) can only undo actions taken by themselves or Tier 3 (Temp/Data Entry) admins.
-    """
     if not db or not db.db:
         return jsonify({"success": False, "error": "Database offline"}), 500
 
@@ -1818,7 +1802,6 @@ def undo_action():
         log_data = log_doc.to_dict()
         target_author = (log_data.get('admin') or '').lower().strip()
 
-        # If caller is General Manager (Tier 2), block them from undoing God Mode actions
         if caller_tier > 1:
             if target_author == GOD_ADMIN_EMAIL:
                 return jsonify({"success": False, "error": "Permission Denied: General Managers cannot undo God Mode actions."}), 403
@@ -1838,11 +1821,6 @@ def admin_users():
 @app.route('/api/admin/approve_user', methods=['POST'])
 @gm_required
 def approve_user():
-    """
-    Enforces 3-Tier Role Hierarchy:
-    - Tier 1 (God Mode - jakobwill7@gmail.com): Can grant permanent access ('approve', 'make_gm'), temporary access ('temp_admin', 'temp_super'), revoke, or delete.
-    - Tier 2 (General Manager - gctta...): Can ONLY grant temporary access ('temp_admin', 'temp_super') or revoke temporary admins. Cannot grant permanent access or modify God/GM accounts.
-    """
     if not db or not db.db:
         return jsonify({"success": False, "error": "Database offline"}), 500
 
@@ -1857,7 +1835,6 @@ def approve_user():
     if not target_email or not action:
         return jsonify({"success": False, "error": "Missing target email or action."}), 400
 
-    # Nobody can touch God Mode
     if target_email == GOD_ADMIN_EMAIL:
         return jsonify({"success": False, "error": "Cannot modify God Mode account."}), 403
 
@@ -1866,7 +1843,6 @@ def approve_user():
     target_current_role = target_doc.to_dict().get('role', 'pending') if target_doc.exists else 'pending'
     target_tier = get_admin_tier(target_email, target_current_role)
 
-    # General Manager restrictions
     if caller_tier == 2:
         if action in ['approve', 'make_gm', 'permanent']:
             return jsonify({"success": False, "error": "Only God Mode (Jakob) can grant permanent admin access."}), 403
