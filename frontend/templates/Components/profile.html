@@ -1,5 +1,6 @@
-<!-- Hidden fallback so legacy global scripts looking for 'playerName' don't crash -->
+<!-- Bulletproof fallbacks so any legacy global scripts looking for these IDs never crash the page -->
 <div id="playerName" class="hidden"></div>
+<div id="gcttaRatingBadge" class="hidden"></div>
 
 <div id="statsContainer" class="hidden w-full max-w-4xl mx-auto px-4 animate-fade-in relative z-10 pb-12 mt-4 md:mt-8">
     
@@ -116,9 +117,12 @@
         if (typeof window.switchTab === 'function') window.switchTab('profile', false);
         window.currentProfileName = playerName;
 
-        // Populate legacy elements safely if they exist globally
+        // Populate all legacy elements safely so external global scripts never throw null errors
         const legacyNameEl = document.getElementById('playerName');
         if (legacyNameEl) legacyNameEl.innerText = playerName;
+
+        const badgeEl = document.getElementById('gcttaRatingBadge');
+        if (badgeEl) badgeEl.innerHTML = `GCTTA: --`;
 
         const histContainer = document.getElementById('pHistory');
         const insightsGrid = document.getElementById('pInsightsGrid');
@@ -136,6 +140,11 @@
             if(!res.ok) throw new Error("Not found");
             const data = await res.json();
             window._currentProfileData = data;
+
+            // Safely update badge elements if other scripts try to read them
+            if (badgeEl) {
+                badgeEl.innerHTML = `<i class="fa-solid fa-chart-line text-sky-400 text-[10px]"></i><span>GCTTA: ${data.rating}</span>`;
+            }
 
             // Populate Header safely
             const nameEl = document.getElementById('pName');
