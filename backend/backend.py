@@ -3,7 +3,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore, auth
 import datetime, re, os, json, sys, logging, random, string, hashlib, threading
 
-from backend.glicko import RatingEngine, clamp_public_rating, parse_division_number, format_division_label, VOLATILITY_GUIDE
+from backend.glicko import RatingEngine, clamp_public_rating, parse_division_number, DIVISION_LABELS, VOLATILITY_GUIDE
 from backend.rc_scraper import RatingsCentralScraper
 from backend.sheets_sync import SheetsSyncEngine
 from backend.league_engine import LeagueEngineMixin
@@ -93,9 +93,17 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
         match = re.search(r'\d+', str(text))
         return match.group() if match else str(text).strip().lower()
 
+    def _format_div_label(self, div_num):
+        if div_num in DIVISION_LABELS:
+            return DIVISION_LABELS[div_num]
+        return "Division 3 (601–900)"
+
     def get_volatility_guide(self):
         return VOLATILITY_GUIDE
 
+    # ==========================================
+    # WEB TRAFFIC, BOT DETECTION & DEVICE ANALYTICS
+    # ==========================================
     def record_page_view(self, ip_address, user_agent=""):
         if not self.db:
             return
@@ -108,19 +116,19 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             doc = doc_ref.get()
 
             ua_lower = user_agent.lower()
-            is_bot = any(bot in ua_lower for bot in ['bot', 'crawl', 'spider', 'slurp', 'inspect', 'lighthouse', 'headless'])
+            is_bot = any(bot in ua_lower for bot in ['bot', 'crawl', 'spider', 'slurp', 'inspect', 'lighthouse', 'headless', 'python-requests', 'curl', ' render'])
             
             device_name = "Unknown Device"
             if is_bot:
                 device_name = "Search Bot / Crawler"
             elif "iphone" in ua_lower:
-                device_name = "iPhone"
+                device_name = "iPhone (iOS)"
             elif "ipad" in ua_lower:
-                device_name = "iPad"
+                device_name = "iPad (iPadOS)"
             elif "android" in ua_lower:
-                device_name = "Android Device"
+                device_name = "Android Mobile"
             elif "macintosh" in ua_lower or "mac os x" in ua_lower:
-                device_name = "Mac"
+                device_name = "Mac (macOS)"
             elif "windows" in ua_lower:
                 device_name = "Windows PC"
             elif "linux" in ua_lower:
@@ -136,16 +144,18 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
 
                 update_data = {'views': firestore.Increment(1)}
                 
-                if is_bot and ip_address not in bot_ips:
-                    bot_ips.append(ip_address)
-                    logs.insert(0, log_entry) 
-                    update_data['bot_ips'] = bot_ips
-                    update_data['visitor_logs'] = logs[:100] 
-                elif not is_bot and ip_address not in ips:
-                    ips.append(ip_address)
+                if is_bot:
+                    if ip_address not in bot_ips:
+                        bot_ips.append(ip_address)
+                        update_data['bot_ips'] = bot_ips
                     logs.insert(0, log_entry)
-                    update_data['ips'] = ips
-                    update_data['visitor_logs'] = logs[:100]
+                    update_data['visitor_logs'] = logs[:150]
+                else:
+                    if ip_address not in ips:
+                        ips.append(ip_address)
+                        update_data['ips'] = ips
+                    logs.insert(0, log_entry)
+                    update_data['visitor_logs'] = logs[:150]
 
                 doc_ref.update(update_data)
             else:
@@ -162,7 +172,7 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
 
     def get_traffic_stats(self):
         if not self.db:
-            return {'views': 0, 'uniques': 0, 'humans': 0, 'bots': 0, 'logs': []}
+            return {'views': 0, 'uniques': 0, 'humans': 0, 'bots': 0, 'logs': [], 'device_breakdown': {}}
         try:
             now = datetime.datetime.utcnow() + datetime.timedelta(hours=10)
             today_str = now.strftime("%Y-%m-%d")
@@ -172,16 +182,25 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
                 data = doc.to_dict()
                 real_humans = len(data.get('ips', []))
                 bots = len(data.get('bot_ips', []))
+                logs = data.get('visitor_logs', [])
+                
+                device_counts = {}
+                for l in logs:
+                    if not l.get('is_bot'):
+                        dev = l.get('device', 'Unknown Device')
+                        device_counts[dev] = device_counts.get(dev, 0) + 1
+
                 return {
                     'views': data.get('views', 0),
                     'uniques': real_humans + bots,
                     'humans': real_humans,
                     'bots': bots,
-                    'logs': data.get('visitor_logs', [])
+                    'logs': logs,
+                    'device_breakdown': device_counts
                 }
-            return {'views': 0, 'uniques': 0, 'humans': 0, 'bots': 0, 'logs': []}
+            return {'views': 0, 'uniques': 0, 'humans': 0, 'bots': 0, 'logs': [], 'device_breakdown': {}}
         except Exception:
-            return {'views': 0, 'uniques': 0, 'humans': 0, 'bots': 0, 'logs': []}
+            return {'views': 0, 'uniques': 0, 'humans': 0, 'bots': 0, 'logs': [], 'device_breakdown': {}}
 
     # ==========================================
     # 3-TIER ROLE-BASED ACCESS CONTROL (RBAC)
@@ -329,8 +348,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
                 return False
             data = doc.to_dict()
 
-            # Hierarchy Check: Only God Mode (Jakob) can undo God Mode actions.
-            # General Managers (gctta) can undo their own actions and any Temp/Data Entry admin actions.
             caller_clean = str(caller_admin_email or '').lower().strip()
             author_clean = str(data.get('admin') or '').lower().strip()
             if caller_clean != SUPER_ADMIN_EMAIL.lower() and author_clean == SUPER_ADMIN_EMAIL.lower():
@@ -373,6 +390,45 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
         except Exception as e:
             logger.error(f"Undo Audit Error: {e}")
             return False
+
+    # ==========================================
+    # MATCH TIME MACHINE & SEARCH HISTORY
+    # ==========================================
+    def admin_search_history(self, query="", source_filter="All"):
+        try:
+            q_clean = str(query or "").lower().strip()
+            matches = []
+            history_source = getattr(self, 'match_history_log', getattr(self, 'match_history', []))
+
+            for idx, m in enumerate(reversed(history_source)):
+                p1 = str(m.get('p1', '')).lower()
+                p2 = str(m.get('p2', '')).lower()
+                match_id = str(m.get('match_id', m.get('id', f"m_{idx}"))).lower()
+                date_str = str(m.get('date', '')).lower()
+
+                if q_clean and (q_clean not in p1 and q_clean not in p2 and q_clean not in match_id and q_clean not in date_str):
+                    continue
+
+                source_type = m.get('source', 'Spreadsheet')
+                if source_filter != "All":
+                    if source_filter.lower() == "spreadsheet" and source_type.lower() != "spreadsheet":
+                        continue
+                    elif source_filter.lower() in ["live app", "app"] and source_type.lower() == "spreadsheet":
+                        continue
+
+                entry = dict(m)
+                entry['id'] = m.get('id', m.get('match_id', f"hist_{idx}"))
+                entry['match_id'] = m.get('match_id', entry['id'])
+                entry['game_history'] = m.get('game_history', m.get('details', ''))
+                matches.append(entry)
+
+                if len(matches) >= 100:
+                    break
+
+            return matches
+        except Exception as e:
+            logger.error(f"admin_search_history error: {e}")
+            return []
 
     def search_ratings_central_by_name(self, player_name, target_club=None): 
         if not self.db:
@@ -641,10 +697,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             return False
 
     def admin_update_historical_match(self, p1, p2, old_date, s1, s2, new_date=None, admin_email="Unknown", game_scores=None, match_id=None):
-        """
-        Handles both full match edits from Match Time Machine and shorthand set-score logging
-        from the Batch Points Logger.
-        """
         if not self.db:
             return False
         try:
@@ -687,7 +739,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
 
             self.db.collection('match_corrections').document(str(corr_key)).set(payload, merge=True)
 
-            # Update in-memory structures immediately so UI reflects set scores without waiting for full Sheet re-pull
             if game_scores:
                 for m in getattr(self, 'match_history_log', []):
                     if (m.get('match_id') == match_id) or (m.get('p1') == p1_clean and m.get('p2') == p2_clean and m.get('date') == old_date):
@@ -713,10 +764,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             return False
 
     def admin_get_player_directory(self):
-        """
-        Enriches the Admin Player Directory with both Clamped Public Rating and Unclamped True Rating,
-        RD, Division Bracket label, and linked RC data for the Command Center.
-        """
         rc_map = {}
         if self.db:
             try:
@@ -749,7 +796,7 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
                 "public_rating": pub_r,
                 "true_rating": true_r,
                 "rd": rd_val,
-                "division_cap": format_division_label(home_div),
+                "division_cap": self._format_div_label(home_div),
                 "rc_id": rc_info.get('rc_id', ''),
                 "rc_rating": rc_info.get('rc_rating', '')
             })
@@ -786,10 +833,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             return False
     
     def get_seasons(self):
-        """
-        Chronologically sorts seasons by (Year, Season_Order) descending so the newest active
-        season (e.g., 'Spring 2026') is always index 0 instead of alphabetical 'Winter 2026'.
-        """
         seasons = set()
         if hasattr(self, 'seasons_list') and self.seasons_list:
             seasons.update(self.seasons_list)
@@ -804,8 +847,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
         if not raw_seasons:
             return ["Spring 2026"]
 
-        # Australian / GCTTA chronological progression within a calendar year:
-        # Summer (Term 1) -> Autumn (Term 2) -> Winter (Term 3) -> Spring (Term 4)
         season_rank = {
             'spring': 4,
             'term 4': 4,
@@ -1055,7 +1096,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             if first_year_candidates:
                 first_year = min(first_year_candidates)
 
-        # Infer home division from regular match history if not yet set on rating engine
         home_div = rat.get('home_div')
         if home_div is None and career_hist:
             for m in reversed(career_hist):
@@ -1105,6 +1145,7 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
         temp_engine.players[p1_clean] = p1_stats
         temp_engine.players[p2_clean] = p2_stats
         res = temp_engine.update_match(p1_clean, p2_clean, s1, s2, '', kw, kl, True)
+        h2h_info = self.get_head_to_head(p1_clean, p2_clean)
 
         return {
             "p1": {
@@ -1117,7 +1158,8 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
                 "true_delta": round(res.get('p1_true_delta', res['p1_delta']), 1),
                 "old_rd": int(round(res['p1_rd_before'])),
                 "new_rd": int(round(res['p1_rd_after'])),
-                "rd_delta": round(res['p1_rd_after'] - res['p1_rd_before'], 1)
+                "rd_delta": round(res['p1_rd_after'] - res['p1_rd_before'], 1),
+                "expected_win_pct": h2h_info.get('p1_prob', 50.0)
             }, 
             "p2": {
                 "name": p2_clean,
@@ -1129,9 +1171,10 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
                 "true_delta": round(res.get('p2_true_delta', res['p2_delta']), 1),
                 "old_rd": int(round(res['p2_rd_before'])),
                 "new_rd": int(round(res['p2_rd_after'])),
-                "rd_delta": round(res['p2_rd_after'] - res['p2_rd_before'], 1)
+                "rd_delta": round(res['p2_rd_after'] - res['p2_rd_before'], 1),
+                "expected_win_pct": h2h_info.get('p2_prob', 50.0)
             },
-            "h2h": self.get_head_to_head(p1_clean, p2_clean)
+            "h2h": h2h_info
         }
 
     def admin_glicko_math(self, p1, p2, s1, s2):

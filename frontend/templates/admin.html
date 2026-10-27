@@ -46,6 +46,7 @@
             <button onclick="window.switchAdminTab('diagnostics', 'active')" id="nav-diagnostics" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left"><i class="fa-solid fa-stethoscope w-5 text-center"></i> Diagnostics</button>
             <button onclick="window.switchAdminTab('audit', 'active')" id="nav-audit" class="sidebar-btn flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left super-admin-only"><i class="fa-solid fa-shield-halved w-5 text-center"></i> Audit Logs</button>
         </div>
+        if (tabId === 'diagnostics' && typeof window.loadSystemDiagnostics === 'function') window.loadSystemDiagnostics();
 
         <div class="p-4 border-t border-white/5 space-y-2 bg-black/20">
             <button onclick="window.forceRefresh()" class="w-full bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 text-[10px] font-black px-4 py-2.5 rounded-lg uppercase tracking-widest transition flex items-center justify-center gap-2"><i class="fa-solid fa-bolt"></i> Sync Sheets</button>

@@ -1,136 +1,148 @@
-<div id="admin-diagnostics" class="hidden animate-fade-in w-full max-w-5xl mx-auto space-y-6">
+<div class="space-y-6 animate-fade-in w-full max-w-5xl mx-auto pb-12">
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4 border-b border-white/10 pb-4">
         <div>
-            <h2 class="text-2xl font-black text-white"><i class="fa-solid fa-stethoscope text-indigo-500 mr-2"></i> System Diagnostics</h2>
-            <p class="text-sm text-slate-400 mt-1">Live web traffic, bot detection, error logs, and system controls.</p>
+            <h2 class="text-2xl font-black text-white flex items-center gap-2">
+                <i class="fa-solid fa-stethoscope text-indigo-400"></i> System Diagnostics &amp; Live Traffic
+            </h2>
+            <p class="text-xs text-slate-400 mt-1">Real-time human vs. bot detection, device breakdown for UI optimization, and rating math sandbox.</p>
         </div>
-        <button onclick="window.loadSystemDiagnostics()" class="bg-slate-800 hover:bg-slate-700 text-white border border-white/10 font-bold py-2.5 px-4 rounded-xl text-xs uppercase tracking-widest shadow transition flex items-center gap-2">
-            <i class="fa-solid fa-rotate-right"></i> Refresh Data
+        <button onclick="window.loadSystemDiagnostics()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black py-2.5 px-5 rounded-xl text-xs uppercase tracking-widest shadow-lg transition flex items-center gap-2">
+            <i class="fa-solid fa-rotate-right"></i> Refresh Traffic
         </button>
     </div>
 
-    <div class="bg-slate-800 p-6 rounded-2xl border border-indigo-500/20 shadow-xl relative overflow-hidden">
-        <div class="absolute -right-10 -top-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl"></div>
-        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2 relative z-10"><i class="fa-solid fa-satellite-dish text-indigo-400"></i> Daily Web Traffic</h3>
-        
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 relative z-10 mb-6">
-            <div class="bg-black/30 p-5 rounded-xl border border-white/5 text-center shadow-inner">
-                <div class="text-[10px] text-slate-500 uppercase tracking-widest font-black mb-1">Total Page Views</div>
-                <div id="diag-views" class="text-3xl font-black text-white font-mono">--</div>
+    <!-- Top Traffic Counters -->
+    <div class="bg-slate-900/90 p-6 rounded-2xl border border-indigo-500/30 shadow-2xl relative overflow-hidden">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-black/40 p-5 rounded-xl border border-white/10 text-center">
+                <div class="text-[10px] text-slate-400 uppercase tracking-widest font-black mb-1">Total Page Views</div>
+                <div id="diag-views" class="text-3xl font-black text-white font-mono">0</div>
             </div>
-            <div class="bg-emerald-900/10 p-5 rounded-xl border border-emerald-500/20 text-center shadow-inner">
-                <div class="text-[10px] text-emerald-500/70 uppercase tracking-widest font-black mb-1"><i class="fa-solid fa-user-check mr-1"></i> Real Humans</div>
-                <div id="diag-humans" class="text-3xl font-black text-emerald-400 font-mono">--</div>
+            <div class="bg-emerald-950/30 p-5 rounded-xl border border-emerald-500/30 text-center">
+                <div class="text-[10px] text-emerald-400 uppercase tracking-widest font-black mb-1"><i class="fa-solid fa-user-check mr-1"></i> Real Humans</div>
+                <div id="diag-humans" class="text-3xl font-black text-emerald-400 font-mono">0</div>
             </div>
-            <div class="bg-amber-900/10 p-5 rounded-xl border border-amber-500/20 text-center shadow-inner">
-                <div class="text-[10px] text-amber-500/70 uppercase tracking-widest font-black mb-1"><i class="fa-solid fa-robot mr-1"></i> Search Bots</div>
-                <div id="diag-bots" class="text-3xl font-black text-amber-400 font-mono">--</div>
+            <div class="bg-amber-950/30 p-5 rounded-xl border border-amber-500/30 text-center">
+                <div class="text-[10px] text-amber-400 uppercase tracking-widest font-black mb-1"><i class="fa-solid fa-robot mr-1"></i> Search Bots</div>
+                <div id="diag-bots" class="text-3xl font-black text-amber-400 font-mono">0</div>
             </div>
-            <div class="bg-black/30 p-5 rounded-xl border border-white/5 flex flex-col justify-center items-center shadow-inner">
-                <div class="text-[10px] text-slate-500 uppercase tracking-widest font-black mb-2">Bot Filter Status</div>
-                <div class="flex items-center gap-2 bg-indigo-900/30 border border-indigo-500/30 text-indigo-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest">
-                    <i class="fa-solid fa-shield-halved"></i> Active
-                </div>
+            <div class="bg-blue-950/30 p-5 rounded-xl border border-blue-500/30 text-center">
+                <div class="text-[10px] text-blue-400 uppercase tracking-widest font-black mb-1"><i class="fa-solid fa-mobile-screen mr-1"></i> Top Device</div>
+                <div id="diag-top-device" class="text-lg font-black text-blue-300 font-mono mt-1.5 truncate">--</div>
             </div>
         </div>
 
-        <div class="relative z-10 border-t border-white/10 pt-6">
-            <h4 class="text-sm font-bold text-slate-300 mb-3 uppercase tracking-widest flex items-center gap-2"><i class="fa-solid fa-list text-indigo-400"></i> Live Visitor Log (Today)</h4>
-            <div class="bg-black/20 rounded-xl border border-white/5 overflow-hidden">
-                <div class="grid grid-cols-4 gap-4 p-3 bg-slate-900/50 border-b border-white/5 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+        <!-- Device Optimization Breakdown -->
+        <div class="mb-6">
+            <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3"><i class="fa-solid fa-laptop-mobile text-sky-400 mr-1.5"></i> Human Device Breakdown (What to Optimize For)</h4>
+            <div id="diag-device-bars" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
+                <div class="text-xs text-slate-500 italic">Loading device metrics...</div>
+            </div>
+        </div>
+
+        <!-- Live Visitor Log Table -->
+        <div class="border-t border-white/10 pt-5">
+            <h4 class="text-xs font-black text-slate-300 mb-3 uppercase tracking-widest flex items-center gap-2">
+                <i class="fa-solid fa-list-ul text-indigo-400"></i> Live Visitor Stream (Today AEST)
+            </h4>
+            <div class="bg-black/40 rounded-xl border border-white/10 overflow-hidden">
+                <div class="grid grid-cols-4 gap-4 p-3 bg-slate-950 border-b border-white/10 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     <div>Time (AEST)</div>
                     <div>IP Address</div>
-                    <div>Device/Platform</div>
-                    <div>Visitor Type</div>
+                    <div>Device / OS</div>
+                    <div>Classification</div>
                 </div>
-                <div id="visitor-log-table" class="max-h-64 overflow-y-auto custom-scrollbar">
-                    <div class="text-center py-6 text-slate-500 text-xs italic">Loading logs...</div>
+                <div id="visitor-log-table" class="max-h-72 overflow-y-auto custom-scrollbar divide-y divide-white/5">
+                    <div class="text-center py-8 text-slate-500 text-xs italic">Click Refresh Traffic or open tab to load visitor logs...</div>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div class="bg-slate-800 p-6 rounded-2xl border border-white/5 shadow-xl">
-            <h3 class="text-lg font-bold text-white mb-4"><i class="fa-solid fa-calculator text-blue-500 mr-2"></i> Rating Math Sandbox</h3>
-            <p class="text-sm text-slate-400 mb-6">Test the live algorithm against real players to debug points logic. Does not affect the database.</p>
-
-            <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="relative">
-                        <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Player 1</label>
-                        <input type="text" id="diag-p1-search" placeholder="Search..." class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" autocomplete="off">
-                        <div id="diag-p1-suggestions" class="hidden absolute left-0 right-0 top-16 bg-slate-800 border border-white/10 rounded-lg shadow-xl z-20 max-h-40 overflow-y-auto"></div>
-                    </div>
-                    <div>
-                        <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Sets Won</label>
-                        <input type="number" id="diag-s1" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-blue-500 outline-none font-mono" value="3">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="relative">
-                        <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Player 2</label>
-                        <input type="text" id="diag-p2-search" placeholder="Search..." class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" autocomplete="off">
-                        <div id="diag-p2-suggestions" class="hidden absolute left-0 right-0 top-16 bg-slate-800 border border-white/10 rounded-lg shadow-xl z-20 max-h-40 overflow-y-auto"></div>
-                    </div>
-                    <div>
-                        <label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block mb-1">Sets Won</label>
-                        <input type="number" id="diag-s2" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-blue-500 outline-none font-mono" value="0">
-                    </div>
-                </div>
-
-                <button onclick="window.runMathDiagnostic()" id="diag-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-xl uppercase tracking-widest text-sm transition shadow mt-2">
-                    Run Calculation
-                </button>
-            </div>
-
-            <div id="diag-results" class="hidden mt-6 p-4 bg-black/40 rounded-xl border border-white/5 text-sm space-y-2 font-mono"></div>
-        </div>
-
-        <div class="bg-slate-800 p-6 rounded-2xl border border-white/5 shadow-xl flex flex-col">
-            <h3 class="text-lg font-bold text-white mb-4"><i class="fa-solid fa-sliders text-yellow-500 mr-2"></i> Global Glicko Multipliers</h3>
-            <p class="text-xs text-slate-400 mb-6">If the Loss Multiplier is higher than the Win Multiplier, the system is actively punishing losers. Set both to 1.0 for pure exchanges.</p>
-            
-            <div class="flex justify-center items-center gap-8 mb-auto">
-                <div class="text-center w-full">
-                    <label class="text-[10px] text-emerald-500 font-bold uppercase tracking-widest block mb-2">Win Multiplier</label>
-                    <input type="number" step="0.1" id="math-k-win" value="1.0" class="w-full bg-black/50 border border-emerald-500/30 text-emerald-400 text-center font-mono font-bold py-3 rounded-xl focus:outline-none focus:border-emerald-500">
-                </div>
-                <div class="text-center w-full">
-                    <label class="text-[10px] text-red-500 font-bold uppercase tracking-widest block mb-2">Loss Multiplier</label>
-                    <input type="number" step="0.1" id="math-k-loss" value="1.4" class="w-full bg-black/50 border border-red-500/30 text-red-400 text-center font-mono font-bold py-3 rounded-xl focus:outline-none focus:border-red-500">
-                </div>
-            </div>
-            <button onclick="window.saveMathMultipliers()" class="mt-6 w-full bg-slate-900 hover:bg-slate-700 text-white font-bold py-3 rounded-xl border border-white/10 transition-colors text-xs uppercase tracking-widest shadow">SAVE & RECALCULATE HISTORY</button>
-        </div>
-        <div class="bg-slate-800 p-6 rounded-2xl border border-white/5 shadow-xl flex flex-col">
-            <h3 class="text-lg font-bold text-white mb-4"><i class="fa-solid fa-server text-rose-500 mr-2"></i> Core Engine Controls</h3>
-            <p class="text-xs text-slate-400 mb-6">Master controls to rebuild player rating and variance ledgers from historical matches. Warning: The Full Recalculate is a heavy operation.</p>
-            
-            <div class="space-y-4 mb-auto">
-                <button onclick="window.recalcRecent()" id="btn-recalc-recent" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-4 rounded-xl border border-white/10 transition flex items-center justify-between text-sm shadow-inner group">
-                    <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-clock-rotate-left"></i></div>
-                        <div class="text-left">
-                            <div class="text-white">Recalculate Last 3 Weeks</div>
-                            <div class="text-[10px] text-slate-400 font-normal">Rebuilds recent matches & deltas</div>
-                        </div>
-                    </div>
-                    <i class="fa-solid fa-chevron-right text-slate-500 text-xs group-hover:text-white"></i>
-                </button>
-
-                <button onclick="window.recalcFull()" id="btn-recalc-full" class="w-full bg-rose-900/40 hover:bg-rose-900/60 text-white font-bold py-3 px-4 rounded-xl border border-rose-500/30 transition flex items-center justify-between text-sm shadow-inner group">
-                    <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-radiation"></i></div>
-                        <div class="text-left">
-                            <div class="text-white">Full Database Recalculation</div>
-                            <div class="text-[10px] text-rose-300/70 font-normal">Replays history chronologically + decays</div>
-                        </div>
-                    </div>
-                    <i class="fa-solid fa-chevron-right text-rose-500/50 text-xs group-hover:text-rose-400"></i>
-                </button>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+    window.loadSystemDiagnostics = async function() {
+        const viewsEl = document.getElementById('diag-views');
+        const humansEl = document.getElementById('diag-humans');
+        const botsEl = document.getElementById('diag-bots');
+        const topDevEl = document.getElementById('diag-top-device');
+        const devBarsEl = document.getElementById('diag-device-bars');
+        const logTable = document.getElementById('visitor-log-table');
+
+        if (logTable) logTable.innerHTML = '<div class="text-center py-8 text-indigo-400"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
+
+        try {
+            const res = await fetch('/api/admin/traffic');
+            const data = await res.json();
+
+            if (viewsEl) viewsEl.innerText = data.views ?? 0;
+            if (humansEl) humansEl.innerText = data.humans ?? 0;
+            if (botsEl) botsEl.innerText = data.bots ?? 0;
+
+            const logs = data.logs || [];
+            const devCounts = data.device_breakdown || {};
+            if (Object.keys(devCounts).length === 0 && logs.length > 0) {
+                logs.forEach(l => {
+                    if (!l.is_bot) {
+                        const d = l.device || 'Unknown';
+                        devCounts[d] = (devCounts[d] || 0) + 1;
+                    }
+                });
+            }
+
+            const sortedDevs = Object.entries(devCounts).sort((a, b) => b[1] - a[1]);
+            if (topDevEl) {
+                topDevEl.innerText = sortedDevs.length > 0 ? `${sortedDevs[0][0]} (${sortedDevs[0][1]})` : 'No human visits yet';
+            }
+
+            if (devBarsEl) {
+                if (sortedDevs.length === 0) {
+                    devBarsEl.innerHTML = '<div class="col-span-full text-xs text-slate-500 italic">No human device data recorded today yet.</div>';
+                } else {
+                    const totalHumanLogs = sortedDevs.reduce((acc, curr) => acc + curr[1], 0) || 1;
+                    devBarsEl.innerHTML = sortedDevs.map(([devName, count]) => {
+                        const pct = Math.round((count / totalHumanLogs) * 100);
+                        return `
+                        <div class="bg-black/50 border border-white/10 rounded-xl p-3">
+                            <div class="flex justify-between items-center text-xs font-bold text-white mb-1">
+                                <span class="truncate">${devName}</span>
+                                <span class="text-sky-400 font-mono">${pct}%</span>
+                            </div>
+                            <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                <div class="bg-sky-500 h-full" style="width: ${pct}%"></div>
+                            </div>
+                            <div class="text-[10px] text-slate-400 font-mono mt-1">${count} hits</div>
+                        </div>`;
+                    }).join('');
+                }
+            }
+
+            if (logTable) {
+                if (logs.length === 0) {
+                    logTable.innerHTML = '<div class="text-center py-8 text-slate-500 text-xs italic">No visitor logs recorded yet today.</div>';
+                } else {
+                    logTable.innerHTML = logs.map(l => {
+                        const badge = l.is_bot
+                            ? '<span class="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30"><i class="fa-solid fa-robot mr-1"></i>Bot</span>'
+                            : '<span class="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"><i class="fa-solid fa-user mr-1"></i>Human</span>';
+                        return `
+                        <div class="grid grid-cols-4 gap-4 p-3 text-xs items-center hover:bg-white/5 transition">
+                            <div class="font-mono text-slate-300">${l.time || '--'}</div>
+                            <div class="font-mono text-slate-400 truncate">${l.ip || '--'}</div>
+                            <div class="font-bold text-white truncate">${l.device || 'Unknown'}</div>
+                            <div>${badge}</div>
+                        </div>`;
+                    }).join('');
+                }
+            }
+        } catch (e) {
+            if (logTable) logTable.innerHTML = '<div class="text-center py-8 text-rose-400 text-xs font-bold">Failed to load traffic diagnostics.</div>';
+        }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+            if (typeof window.loadSystemDiagnostics === 'function') window.loadSystemDiagnostics();
+        }, 600);
+    });
+</script>
