@@ -58,10 +58,43 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
 
     def refresh_data(self, commit_history=False):
         # HARD WIPE: Nuke the cached rating engine memory.
-        # This forces the sync engine to mathematically recalculate EVERY historical match 
-        # from scratch using the new Dual Glicko-2 rules.
         self.rating_engine = RatingEngine()
         
+        # ============================================================
+        # AUTO-SEEDER: Give known players a head-start before math runs
+        # ============================================================
+        if self.db:
+            try:
+                # 1. Seed from RC Profiles (Automatic Baseline)
+                for doc in self.db.collection('player_profiles').stream():
+                    data = doc.to_dict()
+                    name = data.get('name')
+                    rc_rating = data.get('rc_rating')
+                    if name and rc_rating:
+                        p = self.rating_engine.get_rating(name)
+                        try:
+                            val = float(rc_rating)
+                            p['true_rating'] = val
+                            p['true_rd'] = float(data.get('rc_sd', 150.0))
+                            p['rating'] = clamp_public_rating(val, p.get('home_div'))
+                        except Exception:
+                            pass
+
+                # 2. Hard Overrides from Admin Command Center (Highest Priority)
+                for doc in self.db.collection('rating_overrides').stream():
+                    data = doc.to_dict()
+                    name = data.get('name')
+                    if name:
+                        p = self.rating_engine.get_rating(name)
+                        val = float(data.get('rating', 1050.0))
+                        p['true_rating'] = val
+                        p['true_rd'] = float(data.get('rd', 350.0))
+                        p['rating'] = clamp_public_rating(val, p.get('home_div'))
+                        p['rd'] = p['true_rd']
+            except Exception as e:
+                logger.error(f"Seeder Error: {e}")
+
+        # Now run the matches chronologically using the seeded baselines!
         if hasattr(self, 'sync_engine') and self.sync_engine:
             try:
                 self.sync_engine.run_sync(commit_history=commit_history)
@@ -101,9 +134,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
     def get_volatility_guide(self):
         return VOLATILITY_GUIDE
 
-    # ==========================================
-    # WEB TRAFFIC, BOT DETECTION & DEVICE ANALYTICS
-    # ==========================================
     def record_page_view(self, ip_address, user_agent=""):
         if not self.db:
             return
@@ -202,9 +232,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
         except Exception:
             return {'views': 0, 'uniques': 0, 'humans': 0, 'bots': 0, 'logs': [], 'device_breakdown': {}}
 
-    # ==========================================
-    # 3-TIER ROLE-BASED ACCESS CONTROL (RBAC)
-    # ==========================================
     def _get_email_tier(self, email, role=None):
         email_clean = str(email or '').lower().strip()
         role_clean = str(role or '').lower().strip()
@@ -495,7 +522,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             data = doc.to_dict() if doc.exists else {}
             rat = self.rating_engine.get_rating(player_name)
             
-            # Surface True Rating data to the Admin Profile Endpoint
             data['gctta_sd'] = rat.get('true_rd', 300.0)
             data['public_rating'] = int(round(rat.get('rating', 1050.0)))
             data['true_rating'] = int(round(rat.get('true_rating', 1050.0)))
@@ -787,7 +813,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             pub_r = int(round(rat.get('rating', 1050.0)))
             true_r = int(round(rat.get('true_rating', 1050.0)))
             
-            # DISPLAY TRUE SD IN THE ADMIN PANEL
             rd_val = int(round(rat.get('true_rd', rat.get('rd', 350.0))))
             rc_info = rc_map.get(name.lower(), {})
 
