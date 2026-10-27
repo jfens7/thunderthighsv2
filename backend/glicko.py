@@ -8,8 +8,6 @@ RATING_START_DATE = datetime.date(2020, 1, 1)
 # ==========================================
 # DIVISION MAPPINGS & CAPS
 # ==========================================
-# Caps match the exact GCTTA tier logic: 
-# All Stars: 0-900 | Div 2: 901-1200 | Div 1: 1201-Uncapped
 DIVISION_CAPS = {
     1: {"floor": 1300, "ceiling": 9999, "label": "Division 1 (1300+)"},
     2: {"floor": 901,  "ceiling": 1299, "label": "Division 2 (901–1299)"},
@@ -28,9 +26,7 @@ VOLATILITY_GUIDE = [
     {"label": "Erratic", "range": "0.07+", "desc": "Highly unpredictable match outcomes."}
 ]
 
-
 def parse_division_number(div_str):
-    """Safely extracts the division integer, mapping All Stars to its unique cap ID."""
     if not div_str:
         return None
     ds = str(div_str).lower().strip()
@@ -41,26 +37,18 @@ def parse_division_number(div_str):
         return int(match.group())
     return None
 
-
 def format_division_label(div_num):
-    """Returns the formatted UI string for a given division integer. Fixes the Gunicorn crash."""
     if div_num in DIVISION_CAPS:
         return DIVISION_CAPS[div_num]["label"]
     return "Unassigned Bracket"
 
-
 def clamp_public_rating(true_rating, home_div):
-    """
-    Restricts the public-facing rating to the absolute ceiling of their permanent home division.
-    If they are playing as a fill-in, their true rating moves, but this display cap holds firm.
-    """
+    # HARD FLOOR: Ensure public rating never drops below 0
     if home_div is None or home_div not in DIVISION_CAPS:
-        return true_rating
+        return max(0.0, float(true_rating))
     
     ceiling = DIVISION_CAPS[home_div]["ceiling"]
-    # We only clamp the ceiling so players can drop below the floor if they lose heavily
-    return min(float(true_rating), float(ceiling))
-
+    return max(0.0, min(float(true_rating), float(ceiling)))
 
 # ==========================================
 # GLICKO RATING ENGINE
@@ -68,12 +56,10 @@ def clamp_public_rating(true_rating, home_div):
 class RatingEngine:
     def __init__(self):
         self.players = {}
-        # Glicko scale constants
         self.q = math.log(10) / 400
         self.pi_sq = math.pi ** 2
 
     def get_rating(self, player_name, current_match_div=None):
-        """Fetches or initializes a player profile."""
         if player_name not in self.players:
             self.players[player_name] = {
                 'rating': 1050.0,
@@ -83,11 +69,9 @@ class RatingEngine:
                 'home_div': None
             }
             
-        # Initialize true_rating if migrating from older schema
         if 'true_rating' not in self.players[player_name]:
             self.players[player_name]['true_rating'] = self.players[player_name]['rating']
 
-        # Determine home division on the fly if provided (ignoring fill-ins handled at the backend layer)
         if current_match_div:
             parsed_div = parse_division_number(current_match_div)
             if parsed_div is not None and self.players[player_name]['home_div'] is None:
@@ -107,10 +91,6 @@ class RatingEngine:
         return 1.0 / ((self.q ** 2) * (g_val ** 2) * e_val * (1.0 - e_val))
 
     def update_match(self, p1_name, p2_name, s1, s2, division=None, k_win=1.0, k_loss=1.4, return_payload=True):
-        """
-        Executes a head-to-head rating recalculation based on actual sets won.
-        Processes mathematically using the True Rating, not the public clamped rating.
-        """
         p1 = self.get_rating(p1_name, division)
         p2 = self.get_rating(p2_name, division)
 
@@ -119,7 +99,6 @@ class RatingEngine:
         r2 = p2['true_rating']
         rd2 = p2['rd']
 
-        # Determine outcome weights based on set differences
         if s1 > s2:
             outcome_p1 = 1.0
             outcome_p2 = 0.0
@@ -133,31 +112,30 @@ class RatingEngine:
             outcome_p2 = 0.5
             weight = 1.0
 
-        # Player 1 Math
         g_rd2 = self._g_rd(rd2)
         e1 = self._e(r1, r2, rd2)
         d_sq1 = self._d_sq(r1, r2, rd2)
         new_r1 = r1 + (self.q / (1.0 / (rd1 ** 2) + 1.0 / d_sq1)) * g_rd2 * (outcome_p1 - e1) * weight
         new_rd1 = math.sqrt(1.0 / (1.0 / (rd1 ** 2) + 1.0 / d_sq1))
 
-        # Player 2 Math
         g_rd1 = self._g_rd(rd1)
         e2 = self._e(r2, r1, rd1)
         d_sq2 = self._d_sq(r2, r1, rd1)
         new_r2 = r2 + (self.q / (1.0 / (rd2 ** 2) + 1.0 / d_sq2)) * g_rd1 * (outcome_p2 - e2) * weight
         new_rd2 = math.sqrt(1.0 / (1.0 / (rd2 ** 2) + 1.0 / d_sq2))
 
-        # Apply limits
         new_rd1 = max(35.0, min(new_rd1, 350.0))
         new_rd2 = max(35.0, min(new_rd2, 350.0))
+        
+        # HARD FLOOR TO PREVENT NEGATIVE SPIRALS
+        new_r1 = max(0.0, new_r1)
+        new_r2 = max(0.0, new_r2)
 
-        # Save true ratings
         self.players[p1_name]['true_rating'] = new_r1
         self.players[p1_name]['rd'] = new_rd1
         self.players[p2_name]['true_rating'] = new_r2
         self.players[p2_name]['rd'] = new_rd2
 
-        # Lock public ratings behind the home division cap
         self.players[p1_name]['rating'] = clamp_public_rating(new_r1, self.players[p1_name].get('home_div'))
         self.players[p2_name]['rating'] = clamp_public_rating(new_r2, self.players[p2_name].get('home_div'))
 

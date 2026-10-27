@@ -775,9 +775,9 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
         directory = []
         all_names = set(self.player_ids.keys()) | set(self.all_players.keys())
         for name in sorted(all_names):
-            # FILTER DOUBLES TEAMS: If the name has more than 4 words, it's likely a scraped doubles team
-            # We don't want these cluttering the singles Command Center
-            if len(name.split()) > 4 or '/' in name or '&' in name:
+            # FILTER DOUBLES TEAMS: A standard first + last name is 2 words. 
+            # >= 4 words (e.g. "Stephen Bounds Stephen Eaton") aggressively purges all scraped doubles teams.
+            if len(name.split()) >= 4 or '/' in name or '&' in name:
                 continue
 
             pid = self.player_ids.get(name, name)
