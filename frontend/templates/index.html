@@ -283,14 +283,12 @@
 
             <!-- Action Controls -->
             <div class="flex items-center gap-2 shrink-0">
-                <!-- Quick Search (Desktop) -->
                 <div class="relative w-44 xl:w-56 group hidden md:block">
                     <input type="text" id="playerSearch" placeholder="Find player..." class="w-full bg-black/40 border border-white/20 text-white text-xs font-semibold rounded-xl px-3.5 py-2 pl-9 focus:outline-none focus:border-yellow-400 transition-all placeholder-slate-400" autocomplete="off">
                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 group-hover:text-yellow-400 transition-colors"></i>
                     <div id="suggestions-list" class="absolute border border-white/20 z-[99] top-full mt-1 left-0 right-0 rounded-xl bg-blue-950/95 backdrop-blur-xl max-h-[50vh] overflow-y-auto shadow-2xl hidden"></div>
                 </div>
 
-                <!-- Admin Button -->
                 <a href="/login" class="bg-blue-900/50 hover:bg-blue-800 border border-blue-500/30 text-blue-200 hover:text-white text-[11px] tracking-wider font-extrabold px-3 py-2 rounded-xl transition-all shadow flex items-center gap-1.5" title="Admin Control Tower">
                     <i class="fa-solid fa-shield-halved text-yellow-400"></i>
                     <span class="hidden sm:inline">ADMIN</span>
@@ -631,9 +629,9 @@
                 const seasons = await sRes.json();
                 const divisions = await dRes.json();
                 
-                const latestSeason = seasons.includes("Winter 2026")
-                    ? "Winter 2026"
-                    : (seasons.length > 0 ? seasons[0] : "Career");
+                // Dynamically select the newest active season (ignoring 'Career')
+                const activeSeasons = seasons.filter(s => s !== "Career");
+                const latestSeason = activeSeasons.length > 0 ? activeSeasons[0] : "Career";
                 window.currentSeason = latestSeason;
 
                 const sSelect = document.getElementById('seasonSelect');

@@ -56,8 +56,18 @@
     window.loadHomeLeaderboard = async function() {
         const container = document.getElementById('home-leaderboard-preview');
         if(!container) return;
+        
+        let targetSeason = window.currentSeason;
+        if (!targetSeason) {
+            try {
+                const sRes = await fetch('/api/seasons');
+                const seasons = await sRes.json();
+                targetSeason = seasons.filter(s => s !== "Career")[0] || "Spring 2026";
+            } catch(e) { targetSeason = "Spring 2026"; }
+        }
+
         try {
-            const res = await fetch(`/api/rankings/Winter 2026/Division 1`);
+            const res = await fetch(`/api/rankings/${encodeURIComponent(targetSeason)}/Division 1`);
             let rankings = await res.json();
             rankings = rankings.filter(r => r.regular && r.regular.matches > 0).sort((a, b) => {
                 const wrA = a.regular.wins / a.regular.matches;
@@ -96,6 +106,5 @@
             container.innerHTML = '<div class="text-center text-rose-400 text-xs py-12 font-bold uppercase tracking-widest">Failed to load</div>';
         }
     }
-    // Auto-load after a brief delay so it doesn't block initial render
     document.addEventListener('DOMContentLoaded', () => setTimeout(window.loadHomeLeaderboard, 500));
 </script>
