@@ -1,6 +1,7 @@
 <!-- Bulletproof fallbacks so any legacy global scripts looking for these IDs never crash the page -->
 <div id="playerName" class="hidden"></div>
 <div id="gcttaRatingBadge" class="hidden"></div>
+<div id="rcRatingBadge" class="hidden"></div>
 
 <div id="statsContainer" class="hidden w-full max-w-4xl mx-auto px-4 animate-fade-in relative z-10 pb-12 mt-4 md:mt-8">
     
@@ -123,6 +124,9 @@
 
         const badgeEl = document.getElementById('gcttaRatingBadge');
         if (badgeEl) badgeEl.innerHTML = `GCTTA: --`;
+        
+        const rcBadgeEl = document.getElementById('rcRatingBadge');
+        if (rcBadgeEl) rcBadgeEl.innerHTML = `RC: --`;
 
         const histContainer = document.getElementById('pHistory');
         const insightsGrid = document.getElementById('pInsightsGrid');
