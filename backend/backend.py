@@ -59,7 +59,7 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
     def refresh_data(self, commit_history=False):
         # HARD WIPE: Nuke the cached rating engine memory.
         # This forces the sync engine to mathematically recalculate EVERY historical match 
-        # from scratch using the new Advanced Glicko-2 rules.
+        # from scratch using the new Dual Glicko-2 rules.
         self.rating_engine = RatingEngine()
         
         if hasattr(self, 'sync_engine') and self.sync_engine:
@@ -226,7 +226,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
                 return None
             email_lower = email.lower().strip()
 
-            # Tier 1: God Mode (Jakob)
             if email_lower == SUPER_ADMIN_EMAIL.lower():
                 self.db.collection('admin_users').document(email_lower).set({
                     'email': email_lower,
@@ -238,7 +237,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             doc_ref = self.db.collection('admin_users').document(email_lower)
             doc = doc_ref.get()
 
-            # Tier 2 Auto-Recognition for permanent GCTTA General Manager account
             if 'gctta' in email_lower:
                 if not doc.exists or doc.to_dict().get('role') == 'pending':
                     doc_ref.set({'email': email_lower, 'role': 'gm', 'tier': 2}, merge=True)
@@ -391,9 +389,6 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             logger.error(f"Undo Audit Error: {e}")
             return False
 
-    # ==========================================
-    # MATCH TIME MACHINE & SEARCH HISTORY
-    # ==========================================
     def admin_search_history(self, query="", source_filter="All"):
         try:
             q_clean = str(query or "").lower().strip()
@@ -499,9 +494,12 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             doc = self.db.collection('player_profiles').document(re.sub(r'[^a-zA-Z0-9]', '_', player_name).lower()).get()
             data = doc.to_dict() if doc.exists else {}
             rat = self.rating_engine.get_rating(player_name)
-            data['gctta_sd'] = rat.get('rd', 300.0)
-            data['public_rating'] = int(round(rat.get('public_rating', rat.get('rating', 1050.0))))
-            data['true_rating'] = int(round(rat.get('true_rating', rat.get('rating', 1050.0))))
+            
+            # Surface True Rating data to the Admin Profile Endpoint
+            data['gctta_sd'] = rat.get('true_rd', 300.0)
+            data['public_rating'] = int(round(rat.get('rating', 1050.0)))
+            data['true_rating'] = int(round(rat.get('true_rating', 1050.0)))
+            data['vol'] = rat.get('true_vol', 0.060)
             return data
         except Exception:
             return {}
@@ -612,8 +610,8 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             
             p_obj = self.rating_engine.get_rating(player_name)
             p_obj['true_rating'] = float(new_rating)
-            p_obj['public_rating'] = clamp_public_rating(float(new_rating), p_obj.get('home_div'))
-            p_obj['rating'] = p_obj['public_rating']
+            p_obj['true_rd'] = final_sd
+            p_obj['rating'] = clamp_public_rating(float(new_rating), p_obj.get('home_div'))
             p_obj['rd'] = final_sd
 
             self._log_audit(admin_email, 'OVERRIDE_RATING', f"Forced {player_name} to True Rating: {new_rating}, SD: {final_sd}", {"name": player_name})
@@ -780,17 +778,17 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
         directory = []
         all_names = set(self.player_ids.keys()) | set(self.all_players.keys())
         for name in sorted(all_names):
-            # FILTER DOUBLES TEAMS: A standard first + last name is 2 words. 
-            # >= 4 words (e.g. "Stephen Bounds Stephen Eaton") aggressively purges all scraped doubles teams.
             if len(name.split()) >= 4 or '/' in name or '&' in name:
                 continue
 
             pid = self.player_ids.get(name, name)
             rat = self.rating_engine.get_rating(name)
             home_div = rat.get('home_div')
-            pub_r = int(round(clamp_public_rating(rat.get('true_rating', rat.get('rating', 1050.0)), home_div)))
-            true_r = int(round(rat.get('true_rating', rat.get('rating', 1050.0))))
-            rd_val = int(round(rat.get('rd', 35.0)))
+            pub_r = int(round(rat.get('rating', 1050.0)))
+            true_r = int(round(rat.get('true_rating', 1050.0)))
+            
+            # DISPLAY TRUE SD IN THE ADMIN PANEL
+            rd_val = int(round(rat.get('true_rd', rat.get('rd', 350.0))))
             rc_info = rc_map.get(name.lower(), {})
 
             directory.append({
@@ -931,14 +929,14 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
 
             true_val = float(rat.get('true_rating', rat.get('rating', 1050.0)))
             target_div = rat.get('home_div') if rat.get('home_div') is not None else div_num
-            clamped_pub = int(round(clamp_public_rating(true_val, target_div)))
+            clamped_pub = int(round(rat.get('rating', 1050.0)))
             
             ranking_list.append({
                 'name': player_name, 
                 'rating_val': clamped_pub,
                 'true_rating': int(round(true_val)),
-                'sigma': int(round(rat.get('rd', 350))), 
-                'vol': rat.get('vol', 25.0), 
+                'sigma': int(round(rat.get('true_rd', 350))), 
+                'vol': rat.get('true_vol', 0.06), 
                 'regular': calc_summary(reg_hist), 
                 'fillin': calc_summary(fill_hist)
             })
@@ -1101,26 +1099,16 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             if first_year_candidates:
                 first_year = min(first_year_candidates)
 
-        home_div = rat.get('home_div')
-        if home_div is None and career_hist:
-            for m in reversed(career_hist):
-                if m.get('type', 'Regular') == 'Regular' and m.get('division'):
-                    parsed_d = parse_division_number(m.get('division'))
-                    if parsed_d is not None:
-                        home_div = parsed_d
-                        rat['home_div'] = home_div
-                        break
-
         true_val = float(rat.get('true_rating', rat.get('rating', 1050.0)))
-        public_clamped = int(round(clamp_public_rating(true_val, home_div)))
+        public_clamped = int(round(rat.get('rating', 1050.0)))
 
         return {
             'name': player_name, 
             'rating': public_clamped,
             'public_rating': public_clamped,
             'true_rating': int(round(true_val)),
-            'rd': int(round(rat.get('rd', 350))), 
-            'vol': rat.get('vol', 25.0), 
+            'rd': int(round(rat.get('true_rd', 350))), 
+            'vol': rat.get('true_vol', 0.06), 
             'combined': format_bucket(raw.get('combined', {})), 
             'regular': format_bucket(raw.get('regular', {})), 
             'fillin': format_bucket(raw.get('fillin', {})), 
@@ -1235,8 +1223,9 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
         
         rat1 = self.rating_engine.get_rating(p1_clean)
         rat2 = self.rating_engine.get_rating(p2_clean)
-        r1 = clamp_public_rating(rat1.get('true_rating', rat1.get('rating', 1050.0)), rat1.get('home_div'))
-        r2 = clamp_public_rating(rat2.get('true_rating', rat2.get('rating', 1050.0)), rat2.get('home_div'))
+        
+        r1 = float(rat1.get('rating', 1050.0))
+        r2 = float(rat2.get('rating', 1050.0))
         rd1 = rat1.get('rd', 350)
         rd2 = rat2.get('rd', 350)
         
