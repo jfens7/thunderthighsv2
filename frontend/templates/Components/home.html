@@ -1,82 +1,101 @@
-<div id="tab-home" class="w-full flex flex-col items-center animate-fade-in relative z-10 space-y-8 md:space-y-12">
-
-    <div class="text-center px-4 max-w-3xl mx-auto mt-8 md:mt-12 relative w-full">
-        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+<div id="tab-home" class="w-full flex flex-col items-center animate-fade-in relative z-10 space-y-8 pb-12">
+    
+    <div class="w-full max-w-6xl mx-auto mt-6 md:mt-10 px-4 flex flex-col lg:flex-row gap-6">
         
-        <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-slate-800/80 border border-white/10 text-4xl mb-6 shadow-2xl text-emerald-400 relative z-10">
-            <i class="fa-solid fa-table-tennis-paddle-ball"></i>
-        </div>
-        
-        <h1 class="text-4xl md:text-6xl font-black text-white mb-4 tracking-tighter uppercase relative z-10 drop-shadow-lg">
-            GCTTA <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-sky-400">Competitor Portal</span>
-        </h1>
-        
-        <p class="text-sm md:text-base text-slate-400 font-medium max-w-xl mx-auto mb-8 relative z-10 flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3">
-            <span>Real-Time Tracking</span>
-            <span class="hidden md:inline text-slate-700">•</span>
-            <span>Division Standings</span>
-            <span class="hidden md:inline text-slate-700">•</span>
-            <span>Match Diagnostics</span>
-        </p>
-
-        <div class="auth-logged-out flex flex-col items-center gap-4 relative z-10 w-full max-w-sm mx-auto">
-            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-900/30 border border-emerald-500/30 text-[10px] uppercase font-bold tracking-widest text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)] animate-pulse mb-2">
-                <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Player Hub is Live
+        <!-- Hero Section (Left) -->
+        <div class="flex-1 bg-gradient-to-br from-blue-900 to-[#0a1122] p-8 md:p-10 rounded-3xl border border-yellow-500/30 shadow-2xl relative overflow-hidden flex flex-col justify-center">
+            <div class="absolute -right-20 -top-20 w-64 h-64 bg-yellow-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-950/80 border border-blue-500/30 text-3xl mb-6 shadow-lg text-yellow-400 relative z-10">
+                <i class="fa-solid fa-table-tennis-paddle-ball"></i>
             </div>
             
-            <button onclick="window.openRegisterModal()" class="w-full bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black py-4 px-10 rounded-2xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] hover:scale-[1.02] uppercase tracking-widest flex items-center justify-center gap-3">
-                <i class="fa-solid fa-user-plus text-lg"></i> Create Free Account
-            </button>
+            <h1 class="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-4 tracking-tighter uppercase relative z-10 drop-shadow-lg leading-tight">
+                GCTTA <span class="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-200">Portal</span>
+            </h1>
             
-            <button onclick="window.toggleAuthDropdown()" class="text-xs text-slate-400 hover:text-white font-bold transition-colors border-b border-transparent hover:border-white/30 pb-0.5">
-                Already have an account? Sign in
-            </button>
-        </div>
-        
-        <div class="auth-logged-in hidden flex flex-col items-center gap-4 relative z-10 w-full max-w-sm mx-auto">
-            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-900/30 border border-yellow-500/30 text-[10px] uppercase font-bold tracking-widest text-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.2)] mb-2">
-                <i class="fa-solid fa-shield-check"></i> Authenticated
-            </div>
-            <button onclick="window.switchTab('player-hub')" class="w-full bg-gradient-to-r from-yellow-600 to-amber-500 hover:from-yellow-500 hover:to-amber-400 text-black font-black py-4 px-10 rounded-2xl transition-all shadow-[0_0_20px_rgba(234,179,8,0.4)] hover:shadow-[0_0_30px_rgba(234,179,8,0.6)] hover:scale-[1.02] uppercase tracking-widest flex items-center justify-center gap-3">
-                <i class="fa-solid fa-rocket text-lg"></i> Enter Player Hub
-            </button>
-        </div>
-    </div>
-
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full max-w-5xl px-4 relative z-10">
-        
-        <div class="glass-panel p-6 rounded-3xl relative overflow-hidden group hover:border-sky-500/30 transition-colors">
-            <div class="absolute top-0 right-0 w-32 h-32 bg-sky-500/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none transition-all group-hover:bg-sky-500/20"></div>
-            <div class="text-sky-400 text-2xl mb-4"><i class="fa-solid fa-satellite-dish"></i></div>
-            <h3 class="text-white font-black text-xl mb-2">Data Engine Active</h3>
-            <p class="text-sm text-slate-400 leading-relaxed">
-                The portal is currently tracking hundreds of players across the Gold Coast. Create an account and link your Ratings Central profile to unlock personalized historical tracking and predictive match math.
+            <p class="text-sm md:text-base text-blue-200 font-medium max-w-md mb-8 relative z-10 leading-relaxed">
+                Live match tracking, dynamic division standings, and deep performance analytics for Gold Coast competitors.
             </p>
-            <div class="mt-5 pt-5 border-t border-white/5 flex flex-wrap gap-2">
-                <button onclick="window.switchTab('search')" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded uppercase font-bold tracking-widest transition-colors shadow flex items-center gap-1.5"><i class="fa-solid fa-magnifying-glass"></i> Player Directory</button>
-                <button onclick="window.switchTab('sheets')" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded uppercase font-bold tracking-widest transition-colors shadow flex items-center gap-1.5"><i class="fa-solid fa-table-list"></i> Match Centre</button>
-            </div>
-        </div>
 
-        <div class="glass-panel p-6 rounded-3xl border border-yellow-500/20 shadow-lg relative overflow-hidden flex flex-col h-full min-h-[250px]">
-            <div class="absolute top-0 right-0 bg-yellow-500 text-black text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl shadow-md">Support</div>
-            <h3 class="text-lg font-black text-white mb-2 flex items-center gap-2">
-                <i class="fa-solid fa-crown text-yellow-500 drop-shadow-[0_0_5px_rgba(234,179,8,0.8)]"></i> Club Honour Board
-            </h3>
-            <p class="text-xs text-slate-400 mb-4">A massive thank you to our top supporters keeping the servers running.</p>
-            
-            <div id="donorsList" class="space-y-2 flex-grow overflow-y-auto max-h-48 custom-scrollbar pr-2">
-                <div class="flex items-center justify-center h-full text-slate-500 text-sm italic py-4">
-                    <i class="fa-solid fa-spinner fa-spin mr-2"></i> Loading Honour Board...
-                </div>
+            <div class="auth-logged-out flex flex-col sm:flex-row gap-3 relative z-10">
+                <button onclick="window.openRegisterModal()" class="bg-gradient-to-r from-yellow-500 to-yellow-400 hover:from-yellow-400 hover:to-yellow-300 text-black font-black py-3.5 px-8 rounded-xl shadow-[0_0_20px_rgba(255,215,0,0.3)] hover:shadow-[0_0_25px_rgba(255,215,0,0.5)] transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-user-plus"></i> Create Account
+                </button>
+                <button onclick="window.toggleAuthDropdown()" class="bg-blue-950/50 hover:bg-blue-900 border border-blue-500/50 text-blue-300 hover:text-white font-bold py-3.5 px-8 rounded-xl transition-colors text-xs uppercase tracking-widest text-center">
+                    Sign In
+                </button>
             </div>
 
-            <div class="mt-4 pt-4 border-t border-white/5 shrink-0">
-                <button onclick="document.getElementById('donateModal').classList.remove('hidden')" class="w-full bg-slate-800 hover:bg-slate-700 border border-yellow-500/30 text-yellow-400 hover:text-yellow-300 font-bold py-3 rounded-xl transition-colors text-xs uppercase tracking-widest shadow-inner flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-bolt"></i> Boost the Servers
+            <div class="auth-logged-in hidden flex-col sm:flex-row gap-3 relative z-10">
+                <button onclick="window.switchTab('player-hub')" class="bg-gradient-to-r from-yellow-500 to-yellow-400 text-black font-black py-3.5 px-8 rounded-xl shadow-[0_0_20px_rgba(255,215,0,0.3)] transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-rocket"></i> Enter Player Hub
                 </button>
             </div>
         </div>
-
+        
+        <!-- Live Leaderboard Preview (Right) -->
+        <div class="lg:w-[400px] glass-panel p-6 rounded-3xl border border-blue-500/30 shadow-xl flex flex-col relative overflow-hidden">
+            <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-3">
+                <h3 class="text-base font-black text-yellow-400 uppercase tracking-widest flex items-center gap-2">
+                    <i class="fa-solid fa-trophy"></i> Division 1 Top 5
+                </h3>
+                <button onclick="window.switchTab('week')" class="text-[10px] uppercase tracking-widest text-blue-300 font-bold hover:text-white transition-colors">
+                    View All <i class="fa-solid fa-arrow-right ml-1"></i>
+                </button>
+            </div>
+            
+            <div id="home-leaderboard-preview" class="flex-1 flex flex-col gap-2 relative z-10">
+                <div class="text-center py-12 text-blue-400"><i class="fa-solid fa-spinner fa-spin text-3xl"></i></div>
+            </div>
+        </div>
     </div>
 </div>
+
+<script>
+    window.loadHomeLeaderboard = async function() {
+        const container = document.getElementById('home-leaderboard-preview');
+        if(!container) return;
+        try {
+            const res = await fetch(`/api/rankings/Winter 2026/Division 1`);
+            let rankings = await res.json();
+            rankings = rankings.filter(r => r.regular && r.regular.matches > 0).sort((a, b) => {
+                const wrA = a.regular.wins / a.regular.matches;
+                const wrB = b.regular.wins / b.regular.matches;
+                if (wrB !== wrA) return wrB - wrA;
+                return b.regular.wins - a.regular.wins;
+            }).slice(0, 5);
+            
+            if(rankings.length === 0) {
+                container.innerHTML = '<div class="text-center text-blue-300/50 text-xs py-12 font-bold uppercase tracking-widest">No matches recorded yet</div>'; 
+                return;
+            }
+            
+            container.innerHTML = rankings.map((r, i) => {
+                let badge = `<div class="w-7 h-7 rounded-lg bg-black/50 text-slate-400 flex items-center justify-center font-mono font-black text-xs border border-white/10 shrink-0">${i+1}</div>`;
+                if(i===0) badge = `<div class="w-7 h-7 rounded-lg bg-yellow-500 text-black flex items-center justify-center font-black text-xs shrink-0 shadow-[0_0_10px_rgba(255,215,0,0.5)]"><i class="fa-solid fa-crown"></i></div>`;
+                if(i===1) badge = `<div class="w-7 h-7 rounded-lg bg-slate-300 text-black flex items-center justify-center font-mono font-black text-xs shrink-0">2</div>`;
+                if(i===2) badge = `<div class="w-7 h-7 rounded-lg bg-amber-600 text-white flex items-center justify-center font-mono font-black text-xs shrink-0">3</div>`;
+
+                return `
+                <div onclick="window.loadStats('${r.name.replace(/'/g, "\\'")}')" class="flex justify-between items-center p-3 bg-black/40 hover:bg-blue-900/40 rounded-xl border border-white/5 hover:border-blue-500/30 transition-colors cursor-pointer group">
+                    <div class="flex items-center gap-3 min-w-0">
+                        ${badge}
+                        <div class="truncate">
+                            <div class="font-bold text-sm text-white group-hover:text-yellow-400 transition-colors truncate">${r.name}</div>
+                            <div class="text-[10px] text-slate-400 font-mono">Rating: ${r.rating_val}</div>
+                        </div>
+                    </div>
+                    <div class="text-right shrink-0">
+                        <div class="text-xs font-mono font-bold text-blue-300">${r.regular.wins}W - ${r.regular.losses}L</div>
+                        <div class="text-[10px] font-bold text-emerald-400 mt-0.5">${Math.round((r.regular.wins/r.regular.matches)*100)}%</div>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch(e) {
+            container.innerHTML = '<div class="text-center text-rose-400 text-xs py-12 font-bold uppercase tracking-widest">Failed to load</div>';
+        }
+    }
+    // Auto-load after a brief delay so it doesn't block initial render
+    document.addEventListener('DOMContentLoaded', () => setTimeout(window.loadHomeLeaderboard, 500));
+</script>

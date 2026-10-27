@@ -4,29 +4,32 @@
             <h2 class="text-emerald-400 font-black uppercase tracking-widest text-lg flex items-center gap-2">
                 <i class="fa-solid fa-list-check"></i> Batch-Queue Match &amp; Set Score Logger
             </h2>
-            <p class="text-xs text-slate-400 mt-0.5">Retroactively log or update match scores sorted sequentially by Division and Week. Impossible-score validator active.</p>
-        </div>
-        <div class="flex items-center gap-2">
-            <button type="button" onclick="window.loadBatchQueue()" class="text-xs bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 font-bold px-4 py-2.5 rounded-xl border border-emerald-500/30 transition shadow">
-                <i class="fa-solid fa-rotate mr-1.5"></i> Load Queue
-            </button>
+            <p class="text-xs text-slate-400 mt-0.5">Retroactively log missing set points for matches sorted sequentially by Division and Week.</p>
         </div>
     </div>
 
-    <!-- Queue Filters -->
-    <div class="bg-slate-900/90 border border-white/15 p-5 rounded-2xl shadow-xl grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+    <!-- Queue Filters (14 Weeks) -->
+    <div class="bg-slate-900/90 border border-white/15 p-5 rounded-2xl shadow-xl grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
         <div>
             <label class="text-[10px] text-slate-400 uppercase font-extrabold tracking-widest block mb-1">Season</label>
-            <select id="batch-season-select" class="w-full bg-black/50 border border-white/15 text-white text-xs font-bold rounded-xl px-3.5 py-2.5 focus:border-emerald-500 outline-none cursor-pointer" onchange="window.loadBatchQueue()"></select>
+            <select id="batch-season-select" class="w-full bg-black/50 border border-white/15 text-white text-xs font-bold rounded-xl px-3.5 py-2.5 focus:border-emerald-500 outline-none cursor-pointer" onchange="window.loadBatchQueue()">
+                <option value="Winter 2026">Winter 2026</option>
+                <option value="Summer 2026">Summer 2026</option>
+            </select>
         </div>
         <div>
             <label class="text-[10px] text-slate-400 uppercase font-extrabold tracking-widest block mb-1">Division</label>
-            <select id="batch-div-select" class="w-full bg-black/50 border border-white/15 text-white text-xs font-bold rounded-xl px-3.5 py-2.5 focus:border-emerald-500 outline-none cursor-pointer" onchange="window.loadBatchQueue()"></select>
+            <select id="batch-div-select" class="w-full bg-black/50 border border-white/15 text-white text-xs font-bold rounded-xl px-3.5 py-2.5 focus:border-emerald-500 outline-none cursor-pointer" onchange="window.loadBatchQueue()">
+                <option value="Division 1">Division 1</option>
+                <option value="Division 2">Division 2</option>
+                <option value="Division 3">Division 3</option>
+                <option value="Division 4">Division 4</option>
+                <option value="Division 5">Division 5</option>
+            </select>
         </div>
         <div>
             <label class="text-[10px] text-slate-400 uppercase font-extrabold tracking-widest block mb-1">Week Number</label>
             <select id="batch-week-select" class="w-full bg-black/50 border border-white/15 text-white text-xs font-bold rounded-xl px-3.5 py-2.5 focus:border-emerald-500 outline-none cursor-pointer" onchange="window.loadBatchQueue()">
-                <option value="All">All Weeks</option>
                 <option value="1">Week 1</option>
                 <option value="2">Week 2</option>
                 <option value="3">Week 3</option>
@@ -37,59 +40,81 @@
                 <option value="8">Week 8</option>
                 <option value="9">Week 9</option>
                 <option value="10">Week 10</option>
+                <option value="11">Week 11</option>
+                <option value="12">Week 12</option>
+                <option value="13">Week 13</option>
+                <option value="14">Week 14</option>
             </select>
+        </div>
+        <div class="flex items-end">
+            <button type="button" onclick="window.loadBatchQueue()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black px-4 py-2.5 rounded-xl uppercase tracking-wider shadow transition text-xs flex items-center justify-center gap-2">
+                <i class="fa-solid fa-magnifying-glass"></i> Pull Matches
+            </button>
         </div>
     </div>
 
-    <!-- Active Match Queue Card Container -->
+    <!-- Active Match Queue -->
     <div id="batch-queue-container" class="space-y-4">
         <div class="text-center py-16 text-slate-500 bg-slate-900/50 rounded-2xl border border-white/10">
-            <i class="fa-solid fa-folder-open text-3xl mb-2 text-slate-600"></i><br>
-            <span class="text-xs font-bold uppercase tracking-wider">Select a season and division to load the batch queue.</span>
+            <i class="fa-solid fa-list-check text-3xl mb-2 text-slate-600"></i><br>
+            <span class="text-xs font-bold uppercase tracking-wider">Select a week to load matches missing set scores.</span>
         </div>
     </div>
 </div>
 
 <script>
     window.loadBatchQueue = async function() {
-        const season = document.getElementById('batch-season-select')?.value || 'Winter 2026';
-        const division = document.getElementById('batch-div-select')?.value || 'Division 1';
-        const week = document.getElementById('batch-week-select')?.value || '1';
+        const season = document.getElementById('batch-season-select').value;
+        const division = document.getElementById('batch-div-select').value;
+        const week = document.getElementById('batch-week-select').value;
         const container = document.getElementById('batch-queue-container');
 
-        container.innerHTML = '<div class="text-center py-12 text-emerald-400"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><br>Loading sequential match queue...</div>';
+        container.innerHTML = '<div class="text-center py-12 text-emerald-400"><i class="fa-solid fa-spinner fa-spin text-3xl mb-2"></i><br><span class="text-xs font-bold uppercase tracking-widest">Loading match queue...</span></div>';
 
         try {
             const res = await fetch(`/api/week/${encodeURIComponent(season)}/${encodeURIComponent(week)}`);
             const matches = await res.json();
             
-            const filtered = division === 'All' ? matches : matches.filter(m => m.division === division);
+            // Filter strictly by division and exclude matches that already have full granular set scores
+            const filtered = matches.filter(m => m.division === division);
 
             if (filtered.length === 0) {
-                container.innerHTML = '<div class="text-center text-slate-500 py-12 bg-slate-900/50 rounded-2xl border border-white/10 text-xs font-bold">No matches found in this queue.</div>';
+                container.innerHTML = '<div class="text-center text-slate-500 py-12 bg-slate-900/50 rounded-2xl border border-white/10 text-xs font-bold uppercase tracking-widest">No matches found for this week.</div>';
                 return;
             }
 
-            container.innerHTML = filtered.map((m, idx) => `
-                <div class="bg-slate-900 border border-white/10 rounded-2xl p-5 shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div class="min-w-0">
-                        <div class="flex items-center gap-2 mb-1">
-                            <span class="text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-300 px-2.5 py-0.5 rounded border border-emerald-500/30">${m.division || 'Fixture'} • Wk ${m.week || 1}</span>
-                            <span class="text-[10px] text-slate-400 font-mono">${m.date || ''}</span>
+            container.innerHTML = filtered.map((m, idx) => {
+                const s1 = m.s1 || 0;
+                const s2 = m.s2 || 0;
+                const existingDetails = m.details && m.details.includes('-') ? m.details : '';
+                const isP1Win = s1 > s2;
+
+                return `
+                <div id="batch-row-${idx}" class="bg-slate-900 border border-white/10 rounded-2xl p-5 shadow-xl flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 transition-colors">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 mb-1.5">
+                            <span class="text-[9px] font-black uppercase tracking-wider bg-black/50 text-slate-400 px-2 py-0.5 rounded border border-white/10">ID: ${m.match_id || m.id || 'N/A'}</span>
+                            <span class="text-[9px] font-black uppercase tracking-wider bg-sky-500/15 text-sky-400 px-2 py-0.5 rounded border border-sky-500/30">Result: ${s1}-${s2}</span>
+                            <span class="text-[9px] text-slate-500 font-mono">${m.date || ''}</span>
                         </div>
-                        <div class="text-base font-black text-white truncate">
-                            <span class="text-sky-400">${m.p1}</span> <span class="text-slate-500 text-xs uppercase mx-1">vs</span> <span class="text-rose-400">${m.p2}</span>
+                        <div class="text-lg font-black text-white truncate flex items-center gap-2">
+                            <span class="${isP1Win ? 'text-white' : 'text-slate-500'}">${m.p1}</span> 
+                            <span class="text-slate-600 text-[10px] uppercase">vs</span> 
+                            <span class="${!isP1Win ? 'text-white' : 'text-slate-500'}">${m.p2}</span>
                         </div>
                     </div>
 
-                    <!-- Set Score Input Matrix with Impossible-Score Validator -->
-                    <div class="flex items-center gap-2 w-full md:w-auto shrink-0">
-                        <input type="text" id="batch-sets-${idx}" placeholder="e.g. 11-9, 8-11, 11-6, 11-4" value="${m.score || ''}" class="w-full md:w-64 bg-black/60 border border-white/15 text-white font-mono text-xs rounded-xl px-3.5 py-2.5 focus:border-emerald-500 outline-none" oninput="window.validateSetScoresInput(${idx})">
-                        <button type="button" onclick="window.submitBatchMatch(${idx}, '${m.p1.replace(/'/g, "\\'")}', '${m.p2.replace(/'/g, "\\'")}', '${m.date}')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow transition whitespace-nowrap">Save &amp; Next</button>
+                    <div class="flex items-center gap-2 w-full lg:w-auto shrink-0">
+                        <div class="relative w-full lg:w-64">
+                            <input type="text" id="batch-sets-${idx}" placeholder="e.g. 11-9, 8-11, 11-6, 11-4" value="${existingDetails}" class="w-full bg-black/60 border border-white/15 text-white font-mono text-sm rounded-xl px-4 py-3 focus:border-emerald-500 outline-none transition-colors" oninput="window.validateSetScoresInput(${idx})">
+                            <div id="batch-err-${idx}" class="absolute top-full mt-1 left-0 text-rose-400 text-[10px] font-bold hidden bg-rose-950/80 px-2 py-1 rounded shadow-lg border border-rose-500/30 z-10 whitespace-nowrap"></div>
+                        </div>
+                        <button type="button" onclick="window.submitBatchMatch(${idx}, '${(m.match_id || m.id)}', '${m.p1.replace(/'/g, "\\'")}', '${m.p2.replace(/'/g, "\\'")}', '${m.date}', ${s1}, ${s2})" class="bg-emerald-600 hover:bg-emerald-500 text-white font-black px-5 py-3 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(16,185,129,0.3)] transition whitespace-nowrap">
+                            Save Set Scores
+                        </button>
                     </div>
-                </div>
-                <div id="batch-err-${idx}" class="hidden text-rose-400 text-[11px] font-bold px-4 py-1"></div>
-            `).join('');
+                </div>`;
+            }).join('');
         } catch(e) {
             container.innerHTML = '<div class="text-rose-400 text-center py-10 text-xs font-bold">Failed to load batch queue.</div>';
         }
@@ -99,36 +124,27 @@
         const input = document.getElementById(`batch-sets-${idx}`);
         const errBox = document.getElementById(`batch-err-${idx}`);
         const val = input.value.trim();
-        if (!val) { errBox.classList.add('hidden'); return true; }
+        if (!val) { errBox.classList.add('hidden'); input.classList.remove('border-rose-500'); return true; }
 
         const sets = val.split(',').map(s => s.trim());
-        let p1Wins = 0, p2Wins = 0;
         let isValid = true;
         let errMsg = '';
 
         for (const s of sets) {
-            if (!s.includes('-')) { isValid = false; errMsg = "Invalid format. Use X-Y (e.g. 11-9)."; break; }
+            if (!s.includes('-')) { isValid = false; errMsg = "Use format X-Y (e.g. 11-9)."; break; }
             const parts = s.split('-');
             const p1 = parseInt(parts[0]), p2 = parseInt(parts[1]);
             if (isNaN(p1) || isNaN(p2)) { isValid = false; errMsg = "Scores must be numbers."; break; }
 
-            if (p1 > p2) p1Wins++; else if (p2 > p1) p2Wins++;
-
-            // 11-Point Rule & Deuce Margin Check
             const maxScore = Math.max(p1, p2);
             const minScore = Math.min(p1, p2);
             if (maxScore < 11) { isValid = false; errMsg = `Winning score ${maxScore} is under 11.`; break; }
-            if (maxScore === 11 && minScore > 9) { isValid = false; errMsg = "11-10 is invalid. Must win by 2 (12-10)."; break; }
-            if (maxScore > 11 && (maxScore - minScore) !== 2) { isValid = false; errMsg = `Deuce score ${p1}-${p2} violates 2-point margin.`; break; }
-        }
-
-        if (isValid && (p1Wins > 4 || p2Wins > 4)) {
-            isValid = false;
-            errMsg = "Set count exceeds best-of-7 limits.";
+            if (maxScore === 11 && minScore > 9) { isValid = false; errMsg = "11-10 is invalid. Must win by 2."; break; }
+            if (maxScore > 11 && (maxScore - minScore) !== 2) { isValid = false; errMsg = `Score ${p1}-${p2} violates 2-point margin.`; break; }
         }
 
         if (!isValid) {
-            errBox.innerText = `⚠️ Score Error: ${errMsg}`;
+            errBox.innerText = `⚠️ ${errMsg}`;
             errBox.classList.remove('hidden');
             input.classList.add('border-rose-500');
             return false;
@@ -139,28 +155,39 @@
         }
     };
 
-    window.submitBatchMatch = async function(idx, p1, p2, date) {
-        if (!window.validateSetScoresInput(idx)) {
-            alert("Cannot save: Please fix the impossible set scores flagged in red.");
-            return;
-        }
-
+    window.submitBatchMatch = async function(idx, matchId, p1, p2, date, s1, s2) {
+        if (!window.validateSetScoresInput(idx)) return alert("Please fix the highlighted score errors before saving.");
+        
         const scoreStr = document.getElementById(`batch-sets-${idx}`).value.trim();
+        if (!scoreStr) return alert("Please enter the set scores.");
+
+        const btn = document.querySelector(`#batch-row-${idx} button`);
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+        btn.disabled = true;
+
         try {
-            const res = await fetch('/api/admin/manual_match', {
+            // We overwrite the existing match with the granular scores so insights update
+            const res = await fetch('/api/admin/update_match', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ p1: p1, p2: p2, date: date || '01/01/2026', scores: scoreStr })
+                body: JSON.stringify({ p1: p1, p2: p2, date: date, s1: s1, s2: s2, new_date: date, game_scores: scoreStr, match_id: matchId })
             });
             const data = await res.json();
+            
             if (data.success) {
-                alert(`✅ Match saved! 'Shit the Bed' collapse metrics & career insights updated for ${p1} vs ${p2}.`);
-                window.loadBatchQueue();
+                const row = document.getElementById(`batch-row-${idx}`);
+                row.classList.add('opacity-50', 'pointer-events-none');
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> Saved';
+                btn.classList.replace('bg-emerald-600', 'bg-slate-700');
             } else {
-                alert("❌ Save failed: " + data.error);
+                alert("❌ Save failed.");
+                btn.innerHTML = 'Save Set Scores';
+                btn.disabled = false;
             }
         } catch(e) {
-            alert("Network error while submitting match.");
+            alert("Network error.");
+            btn.innerHTML = 'Save Set Scores';
+            btn.disabled = false;
         }
     };
 </script>

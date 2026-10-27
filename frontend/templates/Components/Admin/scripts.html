@@ -162,7 +162,7 @@
             'live', 'manual', 'history', 'date-errors', 'tournaments', 
             'players', 'ratings-central', 'diagnostics', 'schedules', 'team-editor', 'broadcast', 
             'sms-inbox', 'notices', 'community-mod', 'inbox-feedback', 'donations', 'audit', 'chat',
-            'pending-accounts'
+            'pending-accounts', 'batch-logger'
         ];
 
         allTabs.forEach(t => {
@@ -188,6 +188,7 @@
         if (tabId === 'community-mod') window.loadCommunityMod();
         if (tabId === 'team-editor') window.loadTeams();
         if (tabId === 'pending-accounts') window.loadPendingAccounts();
+        if (tabId === 'batch-logger') window.loadBatchQueue();
         
         if (tabId === 'history') {
             const histDivFilter = document.getElementById('hist-div-filter');
@@ -200,7 +201,7 @@
             }
         }
         
-        if (['players', 'diagnostics', 'manual'].includes(tabId) && playerDirectoryData.length === 0) {
+        if (['players', 'diagnostics', 'manual'].includes(tabId) && window.playerDirectoryData.length === 0) {
             window.loadPlayerDirectory();
         }
         
@@ -250,12 +251,13 @@
     // ==========================================
     // PLAYER SEARCH UTILITIES
     // ==========================================
-    let playerDirectoryData = [];
+    window.playerDirectoryData = [];
     
     window.loadPlayerDirectory = async function() { 
         try { 
             const res = await fetch('/api/admin/player_directory'); 
-            playerDirectoryData = await res.json(); 
+            window.playerDirectoryData = await res.json(); 
+            console.log(`Loaded ${window.playerDirectoryData.length} players into directory.`);
         } catch(e) {
             console.error("Failed to load player directory", e);
         } 
@@ -274,7 +276,7 @@
                 return; 
             }
             
-            const matches = playerDirectoryData.filter(p => p.name.toLowerCase().includes(q));
+            const matches = window.playerDirectoryData.filter(p => p.name.toLowerCase().includes(q));
             
             if (matches.length === 0) { 
                 sugg.innerHTML = '<div class="px-3 py-2 text-slate-400 text-xs italic">No players found</div>'; 
@@ -319,7 +321,246 @@
         attachPlayerSearch('manual-p1', 'sugg-p1');
         attachPlayerSearch('manual-p2', 'sugg-p2');
         attachPlayerSearch('unlink-search', 'unlink-suggestions');
+        
+        // Command Center Player Search Listener
+        const cmdSearch = document.getElementById('admin-multirat-search');
+        const cmdSugg = document.getElementById('admin-multirat-sugg');
+        if (cmdSearch && cmdSugg) {
+            cmdSearch.addEventListener('input', (e) => {
+                const q = e.target.value.toLowerCase().trim();
+                if (q.length < 1) { cmdSugg.classList.add('hidden'); return; }
+                const matches = (window.playerDirectoryData || []).filter(p => p.name.toLowerCase().includes(q));
+                if (matches.length === 0) {
+                    cmdSugg.innerHTML = '<div class="px-4 py-3 text-slate-400 text-xs italic">No players found</div>';
+                    cmdSugg.classList.remove('hidden');
+                    return;
+                }
+                cmdSugg.innerHTML = matches.slice(0, 10).map(p => `
+                    <div class="px-4 py-3 hover:bg-purple-600/30 cursor-pointer text-sm text-white font-bold border-b border-white/5 flex justify-between items-center transition"
+                         onclick="window.selectCommandCenterPlayer('${p.name.replace(/'/g, "\\'")}')">
+                        <span>${p.name}</span>
+                        <span class="text-xs text-purple-300 font-mono">Pub: ${p.rating} | True: ${p.true_rating}</span>
+                    </div>
+                `).join('');
+                cmdSugg.classList.remove('hidden');
+            });
+        }
     });
+
+    // ==========================================
+    // COMMAND CENTER (ADVANCED PLAYER ENGINE)
+    // ==========================================
+    window.selectCommandCenterPlayer = function(name) {
+        document.getElementById('admin-multirat-search').value = name;
+        document.getElementById('admin-multirat-sugg').classList.add('hidden');
+        
+        const player = (window.playerDirectoryData || []).find(p => p.name.toLowerCase() === name.toLowerCase());
+        if (!player) return;
+
+        document.getElementById('brk-player-id').value = player.id;
+        document.getElementById('brk-player-name-hidden').value = player.name;
+        document.getElementById('brk-name').innerText = player.name;
+        document.getElementById('brk-public-rating').innerText = player.rating;
+        document.getElementById('brk-div-badge').innerText = player.division_cap || 'Division 3';
+        if(document.getElementById('brk-cap-desc')) document.getElementById('brk-cap-desc').innerText = player.division_cap ? `${player.division_cap}` : 'Division 3 Cap';
+        document.getElementById('brk-input-rating').value = player.true_rating;
+        document.getElementById('brk-input-sd').value = player.rd || 35;
+        if(document.getElementById('brk-rc-input')) document.getElementById('brk-rc-input').value = player.rc_id || '';
+
+        document.getElementById('admin-player-breakdown-card').classList.remove('hidden');
+    };
+
+    window.submitAdminPlayerOverride = async function() {
+        const id = document.getElementById('brk-player-id').value;
+        const rating = document.getElementById('brk-input-rating').value;
+        const sd = document.getElementById('brk-input-sd').value;
+
+        if (!id || !rating) return alert("Missing player or rating value.");
+
+        try {
+            const res = await fetch('/api/admin/override_rating', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ player_id: id, rating: rating, sd: sd, retroactive: true })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert("✅ True Rating applied successfully!");
+                window.loadPlayerDirectory();
+            } else { alert("❌ Failed to apply override."); }
+        } catch(e) { alert("Network error."); }
+    };
+
+    window.saveRCLink = async function() {
+        const name = document.getElementById('brk-player-name-hidden').value;
+        const rcId = document.getElementById('brk-rc-input').value;
+        if (!name) return;
+
+        try {
+            const res = await fetch('/api/admin/update_player_profile', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ player_name: name, ratings_central_id: rcId })
+            });
+            const data = await res.json();
+            if(data.success) alert("✅ RC Link Saved! Fetching data in background.");
+            else alert("❌ Failed to link.");
+        } catch(e) { alert("Network error."); }
+    };
+
+    window.deletePlayerPermanently = async function() {
+        alert("This feature requires direct Firebase Console access to prevent accidental total data loss.");
+    };
+
+    window.mergePlayerDuplicate = async function() {
+        const goodName = document.getElementById('brk-player-name-hidden').value;
+        const badName = document.getElementById('brk-merge-bad').value.trim();
+        if(!badName || !goodName) return;
+        if(!confirm(`MERGE WARNING:\n\nAre you sure you want to merge '${badName}' into '${goodName}'?\nAll matches from '${badName}' will be transferred and the duplicate will be deleted.`)) return;
+
+        try {
+            const res = await fetch('/api/admin/merge', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ good_name: goodName, bad_name: badName })
+            });
+            const data = await res.json();
+            if(data.success) {
+                alert("✅ Merge successful!");
+                document.getElementById('brk-merge-bad').value = '';
+                window.loadPlayerDirectory();
+            } else { alert("❌ Failed to merge."); }
+        } catch(e) { alert("Network error."); }
+    };
+
+    // ==========================================
+    // BATCH-QUEUE MATCH LOGGER
+    // ==========================================
+    window.loadBatchQueue = async function() {
+        const season = document.getElementById('batch-season-select')?.value || 'Winter 2026';
+        const division = document.getElementById('batch-div-select')?.value || 'Division 1';
+        const week = document.getElementById('batch-week-select')?.value || '1';
+        const container = document.getElementById('batch-queue-container');
+        if(!container) return;
+
+        container.innerHTML = '<div class="text-center py-12 text-emerald-400"><i class="fa-solid fa-spinner fa-spin text-3xl mb-2"></i><br><span class="text-xs font-bold uppercase tracking-widest">Loading match queue...</span></div>';
+
+        try {
+            let fetchUrl = `/api/week/${encodeURIComponent(season)}/${encodeURIComponent(week)}`;
+            const res = await fetch(fetchUrl);
+            let matches = await res.json();
+            
+            // Filter strictly by division and only show matches that don't have set scores yet
+            const filtered = division === 'All' ? matches : matches.filter(m => m.division === division);
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="text-center text-slate-500 py-12 bg-slate-900/50 rounded-2xl border border-white/10 text-xs font-bold uppercase tracking-widest">No matches found for this week in this division.</div>';
+                return;
+            }
+
+            container.innerHTML = filtered.map((m, idx) => {
+                const s1 = m.s1 || 0;
+                const s2 = m.s2 || 0;
+                // Pre-fill if there's already details
+                const existingDetails = m.details && m.details.includes('-') ? m.details : '';
+                const isP1Win = s1 > s2;
+
+                return `
+                <div id="batch-row-${idx}" class="bg-slate-900 border border-white/10 rounded-2xl p-5 shadow-xl flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 transition-colors">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 mb-1.5">
+                            <span class="text-[9px] font-black uppercase tracking-wider bg-black/50 text-slate-400 px-2 py-0.5 rounded border border-white/10">ID: ${m.match_id || m.id || 'N/A'}</span>
+                            <span class="text-[9px] font-black uppercase tracking-wider bg-sky-500/15 text-sky-400 px-2 py-0.5 rounded border border-sky-500/30">Result: ${s1}-${s2}</span>
+                            <span class="text-[9px] text-slate-500 font-mono">${m.date || ''}</span>
+                        </div>
+                        <div class="text-lg font-black text-white truncate flex items-center gap-2">
+                            <span class="${isP1Win ? 'text-white' : 'text-slate-500'}">${m.p1}</span> 
+                            <span class="text-slate-600 text-[10px] uppercase">vs</span> 
+                            <span class="${!isP1Win ? 'text-white' : 'text-slate-500'}">${m.p2}</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 w-full lg:w-auto shrink-0 relative">
+                        <input type="text" id="batch-sets-${idx}" placeholder="e.g. 11-9, 8-11, 11-6, 11-4" value="${existingDetails}" class="w-full lg:w-64 bg-black/60 border border-white/15 text-white font-mono text-sm rounded-xl px-4 py-3 focus:border-emerald-500 outline-none transition-colors" oninput="window.validateSetScoresInput(${idx})">
+                        <button type="button" onclick="window.submitBatchMatch(${idx}, '${(m.match_id || m.id)}', '${m.p1.replace(/'/g, "\\'")}', '${m.p2.replace(/'/g, "\\'")}', '${m.date}', ${s1}, ${s2})" class="bg-emerald-600 hover:bg-emerald-500 text-white font-black px-5 py-3 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(16,185,129,0.3)] transition whitespace-nowrap">
+                            Save Set Scores
+                        </button>
+                        <div id="batch-err-${idx}" class="absolute top-full mt-1 left-0 text-rose-400 text-[10px] font-bold hidden bg-rose-950/80 px-2 py-1 rounded shadow-lg border border-rose-500/30 z-10 whitespace-nowrap"></div>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch(e) {
+            container.innerHTML = '<div class="text-rose-400 text-center py-10 text-xs font-bold">Failed to load batch queue.</div>';
+        }
+    };
+
+    window.validateSetScoresInput = function(idx) {
+        const input = document.getElementById(`batch-sets-${idx}`);
+        const errBox = document.getElementById(`batch-err-${idx}`);
+        const val = input.value.trim();
+        if (!val) { errBox.classList.add('hidden'); input.classList.remove('border-rose-500'); return true; }
+
+        const sets = val.split(',').map(s => s.trim());
+        let isValid = true;
+        let errMsg = '';
+
+        for (const s of sets) {
+            if (!s.includes('-')) { isValid = false; errMsg = "Use format X-Y (e.g. 11-9)."; break; }
+            const parts = s.split('-');
+            const p1 = parseInt(parts[0]), p2 = parseInt(parts[1]);
+            if (isNaN(p1) || isNaN(p2)) { isValid = false; errMsg = "Scores must be numbers."; break; }
+
+            const maxScore = Math.max(p1, p2);
+            const minScore = Math.min(p1, p2);
+            if (maxScore < 11) { isValid = false; errMsg = `Winning score ${maxScore} is under 11.`; break; }
+            if (maxScore === 11 && minScore > 9) { isValid = false; errMsg = "11-10 is invalid. Must win by 2."; break; }
+            if (maxScore > 11 && (maxScore - minScore) !== 2) { isValid = false; errMsg = `Score ${p1}-${p2} violates 2-point margin.`; break; }
+        }
+
+        if (!isValid) {
+            errBox.innerText = `⚠️ ${errMsg}`;
+            errBox.classList.remove('hidden');
+            input.classList.add('border-rose-500');
+            return false;
+        } else {
+            errBox.classList.add('hidden');
+            input.classList.remove('border-rose-500');
+            return true;
+        }
+    };
+
+    window.submitBatchMatch = async function(idx, matchId, p1, p2, date, s1, s2) {
+        if (!window.validateSetScoresInput(idx)) return alert("Please fix the highlighted score errors before saving.");
+        
+        const scoreStr = document.getElementById(`batch-sets-${idx}`).value.trim();
+        if (!scoreStr) return alert("Please enter the set scores.");
+
+        const btn = document.querySelector(`#batch-row-${idx} button`);
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch('/api/admin/update_match', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ p1: p1, p2: p2, date: date, s1: s1, s2: s2, new_date: date, game_scores: scoreStr, match_id: matchId })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                const row = document.getElementById(`batch-row-${idx}`);
+                row.classList.add('opacity-50', 'pointer-events-none');
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> Saved';
+                btn.classList.replace('bg-emerald-600', 'bg-slate-700');
+            } else {
+                alert("❌ Save failed.");
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        } catch(e) {
+            alert("Network error.");
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    };
 
     // ==========================================
     // ACCOUNT LINKING APPROVALS
@@ -329,7 +570,7 @@
         if (!list) return;
         list.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-indigo-500"></i></div>';
 
-        if (playerDirectoryData.length === 0) await window.loadPlayerDirectory();
+        if (window.playerDirectoryData.length === 0) await window.loadPlayerDirectory();
 
         try {
             const res = await fetch('/api/admin/pending_accounts');
@@ -435,6 +676,7 @@
         const sourceFilter = sourceFilterObj ? sourceFilterObj.value : 'All';
         
         const list = document.getElementById('historyList'); 
+        if (!list) return;
         list.innerHTML = '<div class="text-center py-10 text-indigo-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
         
         try {
@@ -500,14 +742,14 @@
                             <div class="bg-slate-800 p-3 rounded-lg border border-white/5 relative overflow-hidden">
                                 <div class="absolute left-0 top-0 bottom-0 w-1 ${m.p1_delta > 0 ? 'bg-green-500' : 'bg-red-500'}"></div>
                                 <div class="text-sky-400 font-bold mb-1 border-b border-white/10 pb-1 pl-3">${m.p1}</div>
-                                <div class="text-sm text-slate-300 font-mono mt-2 pl-3">Rating: ${Math.round(m.p1_before)} <i class="fa-solid fa-arrow-right text-slate-600 mx-1 text-[10px]"></i> ${Math.round(m.p1_after)} <span class="${m.p1_delta > 0 ? 'text-green-400' : 'text-red-400'} ml-1 text-xs">(${m.p1_delta > 0 ? '+' : ''}${Math.round(m.p1_delta)})</span></div>
-                                <div class="text-xs text-slate-500 font-mono mt-1 pl-3">RD: ±${Math.round(m.p1_rd_before)} <i class="fa-solid fa-arrow-right mx-1 text-[10px]"></i> ±${Math.round(m.p1_rd_after)}</div>
+                                <div class="text-sm text-slate-300 font-mono mt-2 pl-3">Rating: ${Math.round(m.p1_before||1500)} <i class="fa-solid fa-arrow-right text-slate-600 mx-1 text-[10px]"></i> ${Math.round(m.p1_after||1500)} <span class="${m.p1_delta > 0 ? 'text-green-400' : 'text-red-400'} ml-1 text-xs">(${m.p1_delta > 0 ? '+' : ''}${Math.round(m.p1_delta||0)})</span></div>
+                                <div class="text-xs text-slate-500 font-mono mt-1 pl-3">SD: ±${Math.round(m.p1_rd_before||35)} <i class="fa-solid fa-arrow-right mx-1 text-[10px]"></i> ±${Math.round(m.p1_rd_after||35)}</div>
                             </div>
                             <div class="bg-slate-800 p-3 rounded-lg border border-white/5 relative overflow-hidden">
                                 <div class="absolute left-0 top-0 bottom-0 w-1 ${m.p2_delta > 0 ? 'bg-green-500' : 'bg-red-500'}"></div>
                                 <div class="text-red-400 font-bold mb-1 border-b border-white/10 pb-1 pl-3">${m.p2}</div>
-                                <div class="text-sm text-slate-300 font-mono mt-2 pl-3">Rating: ${Math.round(m.p2_before)} <i class="fa-solid fa-arrow-right text-slate-600 mx-1 text-[10px]"></i> ${Math.round(m.p2_after)} <span class="${m.p2_delta > 0 ? 'text-green-400' : 'text-red-400'} ml-1 text-xs">(${m.p2_delta > 0 ? '+' : ''}${Math.round(m.p2_delta)})</span></div>
-                                <div class="text-xs text-slate-500 font-mono mt-1 pl-3">RD: ±${Math.round(m.p2_rd_before)} <i class="fa-solid fa-arrow-right mx-1 text-[10px]"></i> ±${Math.round(m.p2_rd_after)}</div>
+                                <div class="text-sm text-slate-300 font-mono mt-2 pl-3">Rating: ${Math.round(m.p2_before||1500)} <i class="fa-solid fa-arrow-right text-slate-600 mx-1 text-[10px]"></i> ${Math.round(m.p2_after||1500)} <span class="${m.p2_delta > 0 ? 'text-green-400' : 'text-red-400'} ml-1 text-xs">(${m.p2_delta > 0 ? '+' : ''}${Math.round(m.p2_delta||0)})</span></div>
+                                <div class="text-xs text-slate-500 font-mono mt-1 pl-3">SD: ±${Math.round(m.p2_rd_before||35)} <i class="fa-solid fa-arrow-right mx-1 text-[10px]"></i> ±${Math.round(m.p2_rd_after||35)}</div>
                             </div>
                         </div>
                         ${gameHistoryHtml}
@@ -784,164 +1026,6 @@
         } catch(e) { 
             alert("Network Error"); 
         }
-    };
-
-    // ==========================================
-    // PLAYER EDITOR & RATING OVERRIDES
-    // ==========================================
-    window.fetchRatingContext = async function(playerId) {
-        const contextDiv = document.getElementById('override-context');
-        if (!contextDiv) return;
-        
-        contextDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading recent rating context...';
-        
-        try {
-            const res = await fetch(`/api/admin/rating_context/${playerId}`);
-            const data = await res.json();
-            
-            if (data.length === 0) {
-                contextDiv.innerHTML = '<div class="italic">No recent match history found for this player.</div>';
-                return;
-            }
-            
-            let html = '<div class="font-bold text-white mb-2 pb-1 border-b border-white/10"><i class="fa-solid fa-clock-rotate-left mr-2"></i>Last 6 Match Ratings:</div>';
-            data.forEach(m => {
-                const trueTag = m.true_rating !== undefined ? ` <span class="text-purple-400">(T: ${m.true_rating})</span>` : '';
-                html += `<div class="flex justify-between items-center py-1 border-b border-white/5 last:border-0"><span class="text-[10px] uppercase font-bold tracking-widest">${m.date} vs ${m.opponent}</span> <span class="text-emerald-400 font-mono font-bold">${m.rating}${trueTag}</span></div>`;
-            });
-            
-            contextDiv.innerHTML = `<div class="bg-black/30 p-3 rounded border border-white/5 shadow-inner">${html}</div>`;
-        } catch(e) {
-            contextDiv.innerHTML = '';
-        }
-    };
-
-    window.submitRatingOverride = async function() {
-        const id = document.getElementById('override-id').value; 
-        const rating = document.getElementById('override-score').value; 
-        const sd = document.getElementById('override-sd').value;
-        const isRetro = document.getElementById('override-retro') ? document.getElementById('override-retro').checked : true;
-        const effectiveDate = document.getElementById('override-effective-date') ? document.getElementById('override-effective-date').value : '';
-        
-        if (!id || !rating) return alert("Please select a player and provide a rating.");
-        
-        try {
-            const res = await fetch('/api/admin/override_rating', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({
-                    player_id: id,
-                    rating: rating,
-                    sd: sd,
-                    retroactive: isRetro,
-                    effective_date: effectiveDate
-                }) 
-            });
-            const data = await res.json();
-            
-            if (data.success) { 
-                alert(`✅ Successfully applied rating checkpoint override!`); 
-                document.getElementById('override-id').value = ''; 
-                document.getElementById('override-search').value = ''; 
-                document.getElementById('override-score').value = ''; 
-                document.getElementById('override-sd').value = '';
-                if (document.getElementById('override-effective-date')) document.getElementById('override-effective-date').value = '';
-                if (document.getElementById('override-context')) document.getElementById('override-context').innerHTML = '';
-                window.loadPlayerDirectory();
-            } else {
-                alert("❌ Error applying rating override.");
-            }
-        } catch(e) { 
-            alert("Network error."); 
-        }
-    };
-    
-    window.bulkSetRatings = async function() {
-        if (!confirm("⚠️ Are you sure you want to pull ALL ratings from the 'Ratings crap' sheet and apply them as of today?")) return;
-        const btn = document.querySelector('button[onclick="window.bulkSetRatings()"]'); 
-        const originalHtml = btn ? btn.innerHTML : "SET RATINGS";
-        
-        if (btn) { 
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> PULLING RATINGS...'; 
-            btn.disabled = true; 
-        }
-        
-        try {
-            const res = await fetch('/api/admin/bulk_pull_ratings', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({}) 
-            });
-            const text = await res.text(); 
-            let data;
-            try { 
-                data = JSON.parse(text); 
-            } catch(err) { 
-                alert("Server Crash!"); 
-                return; 
-            }
-            if (data.success) { 
-                alert(`✅ Successfully imported ${data.count} ratings!`); 
-                window.loadPlayerDirectory(); 
-            } else {
-                alert(`❌ Failed: ${data.error}`);
-            }
-        } catch(e) { 
-            alert("Network error: " + e.message); 
-        } finally { 
-            if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; } 
-        }
-    };
-
-    window.submitPlayerMerge = async function() {
-        const bad = document.getElementById('merge-bad-search').value; 
-        const good = document.getElementById('merge-good-search').value;
-        
-        if (!bad || !good) return alert("Please select both names.");
-        if (bad.toLowerCase() === good.toLowerCase()) return alert("Names must be different.");
-        if (!confirm(`⚠️ DANGER: You are about to PERMANENTLY merge "${bad}" into "${good}". Proceed?`)) return;
-        
-        try {
-            const res = await fetch('/api/admin/merge', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ bad_name: bad, good_name: good }) 
-            });
-            const data = await res.json();
-            if (data.success) { 
-                alert(`✅ Successfully merged profiles!`); 
-                document.getElementById('merge-bad-search').value = ''; 
-                document.getElementById('merge-good-search').value = ''; 
-            } else {
-                alert("❌ Error merging players.");
-            }
-        } catch(e) { 
-            alert("Network error."); 
-        }
-    };
-
-    window.unlinkPlayerAccount = async function() {
-        const pName = document.getElementById('unlink-search').value;
-        if (!pName) return alert("Please select a player to unlink.");
-        
-        if (!confirm(`⚠️ WARNING ⚠️\n\nAre you sure you want to delete the app login account for ${pName}?\n\nThis will NOT delete their matches or stats. It just allows them to link a new email and sign up again.`)) return;
-        
-        try {
-            const res = await fetch('/api/admin/unlink_account', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ player_name: pName })
-            });
-            const data = await res.json();
-            
-            if (data.success) {
-                alert(`✅ Successfully deleted the login account for ${pName}. They can now sign up again!`);
-                document.getElementById('unlink-search').value = '';
-                if (document.getElementById('admin-audit')) window.loadAuditLogs(); 
-            } else {
-                alert("❌ Failed to unlink account.");
-            }
-        } catch(e) { alert("Network Error"); }
     };
 
     // ==========================================
