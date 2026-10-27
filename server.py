@@ -58,7 +58,6 @@ def _get_rp_id() -> str:
 
 
 def _decode_cbor_item(data: bytes, offset: int = 0):
-    """Lightweight RFC 8949 CBOR decoder for WebAuthn attestation objects and COSE keys."""
     initial = data[offset]
     offset += 1
     major = initial >> 5
@@ -313,9 +312,6 @@ except Exception:
 
 # ==========================================
 # 3-TIER ROLE-BASED ACCESS CONTROL (RBAC)
-# Tier 1: God Mode (jakobwill7@gmail.com)
-# Tier 2: General Manager (gctta... / gm / super_admin / temp_super_admin)
-# Tier 3: Data Entry / Temp Admin (admin / temp_admin / moderator)
 # ==========================================
 def get_admin_tier(email, role):
     email_clean = str(email or '').lower().strip()
@@ -1703,6 +1699,26 @@ def glicko_calc():
     return jsonify({"success": False})
 
 
+@app.route('/api/refresh', methods=['POST'])
+@login_required
+def force_refresh():
+    if db:
+        db._log_audit(session.get('admin_email'), 'FORCE_REFRESH', "Manually pulled from Google Sheets and triggered recalculation.", {})
+    threading.Thread(target=scheduled_refresh, daemon=True).start()
+    return jsonify({"success": True, "status": "Refreshed"})
+
+
+@app.route('/api/admin/sync_status', methods=['GET'])
+@login_required
+def get_sync_status():
+    if not db:
+        return jsonify({"is_syncing": False, "logs": ["Database offline"]})
+    return jsonify({
+        "is_syncing": getattr(db, 'is_syncing', False),
+        "logs": getattr(db, 'sync_logs', [])
+    })
+
+
 # --- ADMIN: SYSTEM & COMMS ---
 
 @app.route('/api/admin/add_notice', methods=['POST'])
@@ -1903,15 +1919,6 @@ def approve_user():
             return jsonify({"success": db.approve_admin(target_email, action)})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route('/api/refresh', methods=['POST'])
-@login_required
-def force_refresh():
-    if db:
-        db._log_audit(session.get('admin_email'), 'FORCE_REFRESH', "Manually pulled from Google Sheets", {})
-    threading.Thread(target=scheduled_refresh, daemon=True).start()
-    return jsonify({"success": True, "status": "Refreshed"})
 
 
 # --- TOURNAMENTS & HUB ---

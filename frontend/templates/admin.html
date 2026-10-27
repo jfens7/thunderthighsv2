@@ -13,10 +13,10 @@
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col md:flex-row antialiased">
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col md:flex-row antialiased relative">
 
     <!-- SIDEBAR NAVIGATION -->
-    <aside class="w-full md:w-72 bg-slate-900 border-r border-white/10 flex flex-col shrink-0">
+    <aside class="w-full md:w-72 bg-slate-900 border-r border-white/10 flex flex-col shrink-0 z-10">
         <div class="p-6 border-b border-white/10 flex items-center justify-between">
             <div>
                 <h1 class="font-black text-white text-base tracking-wider uppercase flex items-center gap-2">
@@ -54,7 +54,8 @@
         </nav>
 
         <div class="p-4 border-t border-white/10 space-y-2">
-            <button onclick="window.triggerSync()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-2.5 px-4 rounded-xl text-xs uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-lg">
+            <!-- TRIGGER CHANGED TO OPEN THE TERMINAL MODAL -->
+            <button onclick="window.triggerLiveSync()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-2.5 px-4 rounded-xl text-xs uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-lg">
                 <i class="fa-solid fa-rotate-right"></i> Sync Google Sheets
             </button>
             <a href="/" class="w-full bg-black/40 hover:bg-black/60 text-slate-400 hover:text-white font-bold py-2 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 border border-white/5">
@@ -64,7 +65,7 @@
     </aside>
 
     <!-- MAIN CONTENT VIEWAREA -->
-    <main class="flex-1 p-6 md:p-10 overflow-y-auto custom-scrollbar">
+    <main class="flex-1 p-6 md:p-10 overflow-y-auto custom-scrollbar z-0 relative">
         
         <!-- Tab: Batch Logger -->
         <div id="tab-batch-logger" class="admin-tab-content">
@@ -106,7 +107,7 @@
                     </div>
                 </div>
 
-                <div class="bg-slate-900/90 rounded-2xl border border-white/10 shadow-xl overflow-hidden">
+                <div class="bg-slate-900/90 rounded-2xl border border-white/10 shadow-xl overflow-hidden mb-6">
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse min-w-[800px]">
                             <thead>
@@ -159,8 +160,32 @@
                 </div>
             </div>
         </div>
-
     </main>
+
+    <!-- SYNC TERMINAL UI -->
+    <div id="syncTerminalModal" class="hidden fixed inset-0 bg-black/95 backdrop-blur-md z-[300] flex items-center justify-center p-4 animate-fade-in">
+        <div class="bg-black border border-indigo-500/30 w-full max-w-3xl rounded-xl shadow-[0_0_50px_rgba(79,70,229,0.15)] overflow-hidden flex flex-col h-[70vh] font-mono relative">
+            <div class="bg-indigo-950/30 border-b border-indigo-500/30 p-3 flex justify-between items-center">
+                <div class="flex items-center gap-3 text-indigo-400 text-xs font-bold uppercase tracking-widest">
+                    <i class="fa-solid fa-terminal"></i> Neural Glicko-2 Recalculator
+                </div>
+                <button id="close-terminal-btn" onclick="window.closeSyncTerminal()" class="hidden text-slate-500 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <div id="sync-terminal-output" class="p-6 overflow-y-auto flex-1 text-[11px] md:text-xs text-emerald-400 space-y-2 leading-relaxed tracking-wide">
+                <div class="text-slate-500">Awaiting synchronization command...</div>
+            </div>
+            
+            <div class="bg-black p-3 border-t border-indigo-500/30 text-[10px] text-slate-500 uppercase tracking-widest flex justify-between items-center shrink-0">
+                <span id="sync-status-indicator" class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span> SYSTEM IDLE
+                </span>
+                <span>GCTTA Core v2.0</span>
+            </div>
+        </div>
+    </div>
 
     <!-- Command Center Edit Modal -->
     <div id="adminPlayerModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fade-in overflow-y-auto">
@@ -230,14 +255,65 @@
             }
         };
 
-        window.triggerSync = async function() {
-            if(!confirm("Trigger full Google Sheets synchronization?")) return;
+        // ==========================================
+        // LIVE TERMINAL SYNC VISUALIZER
+        // ==========================================
+        window.syncPollInterval = null;
+        
+        window.triggerLiveSync = async function() {
+            if(!confirm("Trigger full Google Sheets synchronization and recalculate all ratings?")) return;
+            
+            const modal = document.getElementById('syncTerminalModal');
+            const output = document.getElementById('sync-terminal-output');
+            const indicator = document.getElementById('sync-status-indicator');
+            const closeBtn = document.getElementById('close-terminal-btn');
+            
+            modal.classList.remove('hidden');
+            closeBtn.classList.add('hidden');
+            output.innerHTML = '<div class="text-indigo-400">Initializing connection to mainframes...</div>';
+            indicator.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> RECALCULATING...';
+
             try {
-                const res = await fetch('/api/refresh', { method: 'POST' });
-                const data = await res.json();
-                if(data.success) alert("✅ Sync triggered successfully!");
-                else alert("❌ Sync failed.");
-            } catch(e) { alert("Network error."); }
+                // Fire the sync request
+                fetch('/api/refresh', { method: 'POST' });
+                
+                // Poll the live tracker every 500ms
+                window.syncPollInterval = setInterval(async () => {
+                    try {
+                        const res = await fetch('/api/admin/sync_status');
+                        const data = await res.json();
+                        
+                        if (data.logs && data.logs.length > 0) {
+                            output.innerHTML = data.logs.map(log => {
+                                if (log.includes('ERROR') || log.includes('❌')) return `<div class="text-rose-400 font-bold">${log}</div>`;
+                                if (log.includes('COMPLETE') || log.includes('✅')) return `<div class="text-emerald-400 font-bold mt-2">${log}</div>`;
+                                if (log.includes('MATH') || log.includes('SEEDER')) return `<div class="text-amber-300">${log}</div>`;
+                                if (log.includes('Wiping')) return `<div class="text-rose-300">${log}</div>`;
+                                return `<div><span class="text-slate-600 mr-2">></span>${log}</div>`;
+                            }).join('');
+                            output.scrollTop = output.scrollHeight; // Auto scroll to bottom
+                        }
+
+                        // Stop polling when finished
+                        if (data.logs && data.logs.some(l => l.includes('COMPLETE')) && data.is_syncing === false) {
+                            clearInterval(window.syncPollInterval);
+                            indicator.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]"></span> SYSTEM ONLINE';
+                            closeBtn.classList.remove('hidden');
+                            if(typeof window.loadAdminDirectory === 'function') window.loadAdminDirectory(); // Refresh the table behind it
+                        }
+                    } catch(e) {}
+                }, 500);
+
+            } catch(e) {
+                output.innerHTML += '<div class="text-rose-500 font-bold mt-4">Fatal Network Error. Connection lost.</div>';
+                closeBtn.classList.remove('hidden');
+                clearInterval(window.syncPollInterval);
+            }
+        };
+
+        window.closeSyncTerminal = function() {
+            document.getElementById('syncTerminalModal').classList.add('hidden');
+            if(window.syncPollInterval) clearInterval(window.syncPollInterval);
         };
 
         // Time Machine Search
@@ -269,7 +345,7 @@
             }
         };
 
-        // Command Center Directory & Overrides
+        // Command Center Directory
         window._adminDirectoryData = [];
         window.loadAdminDirectory = async function() {
             const tbody = document.getElementById('admin-directory-tbody');
@@ -300,7 +376,7 @@
 
                 return `
                 <tr class="hover:bg-white/5 transition-colors group">
-                    <td class="p-4 font-bold text-white">${p.name} <span class="text-[9px] text-slate-500 ml-2 font-mono">${p.id}</span></td>
+                    <td class="p-4 font-bold text-white cursor-pointer hover:text-indigo-300 transition-colors" onclick="window.location.href='/#profile/${encodeURIComponent(p.name)}'">${p.name} <span class="text-[9px] text-slate-500 ml-2 font-mono">${p.id}</span></td>
                     <td class="p-4 text-center text-xs font-bold text-slate-300">${p.division_cap || 'Unassigned'}</td>
                     <td class="p-4 text-center font-mono font-black text-indigo-300 bg-indigo-950/20">${p.true_rating || '--'}</td>
                     <td class="p-4 text-center font-mono font-black text-yellow-400 bg-yellow-950/10">${p.public_rating || '--'}</td>

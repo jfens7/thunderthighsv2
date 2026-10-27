@@ -17,6 +17,8 @@ SUPER_ADMIN_EMAIL = "jakobwill7@gmail.com"
 
 class ThunderData(LeagueEngineMixin, CommsEngineMixin):
     def __init__(self):
+        self.is_syncing = False
+        self.sync_logs = []
         self.db = None
         self.all_players = {}
         self.season_stats = {}
@@ -57,15 +59,15 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             self.db = None
 
     def refresh_data(self, commit_history=False):
-        # HARD WIPE: Nuke the cached rating engine memory.
+        self.is_syncing = True
+        self.sync_logs = ["🚀 System Reboot: Initializing Dual-Glicko Recalculation Engine..."]
+        self.sync_logs.append("🧹 MEMORY: Wiping old cached matrices...")
         self.rating_engine = RatingEngine()
         
-        # ============================================================
-        # AUTO-SEEDER: Give known players a head-start before math runs
-        # ============================================================
         if self.db:
             try:
-                # 1. Seed from RC Profiles (Automatic Baseline)
+                self.sync_logs.append("🔍 SEEDER: Scanning database for linked RC profiles and Admin overrides...")
+                override_count = 0
                 for doc in self.db.collection('player_profiles').stream():
                     data = doc.to_dict()
                     name = data.get('name')
@@ -77,10 +79,10 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
                             p['true_rating'] = val
                             p['true_rd'] = float(data.get('rc_sd', 150.0))
                             p['rating'] = clamp_public_rating(val, p.get('home_div'))
+                            override_count += 1
                         except Exception:
                             pass
 
-                # 2. Hard Overrides from Admin Command Center (Highest Priority)
                 for doc in self.db.collection('rating_overrides').stream():
                     data = doc.to_dict()
                     name = data.get('name')
@@ -91,15 +93,26 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
                         p['true_rd'] = float(data.get('rd', 350.0))
                         p['rating'] = clamp_public_rating(val, p.get('home_div'))
                         p['rd'] = p['true_rd']
+                        override_count += 1
+                
+                self.sync_logs.append(f"✅ SEEDER: Successfully injected {override_count} baseline ratings.")
             except Exception as e:
-                logger.error(f"Seeder Error: {e}")
+                self.sync_logs.append(f"⚠️ SEEDER ERROR: {e}")
 
-        # Now run the matches chronologically using the seeded baselines!
         if hasattr(self, 'sync_engine') and self.sync_engine:
             try:
+                self.sync_logs.append("📡 SYNC: Connecting to Master Google Sheets API...")
+                self.sync_logs.append("⚡ FETCH: Downloading fresh match history...")
                 self.sync_engine.run_sync(commit_history=commit_history)
+                self.sync_logs.append("📈 MATH: Running Glicko-2 Volatility iterations on all matches...")
+                self.sync_logs.append("✨ COMPLETE: Ecosystem is now LIVE and fully recalculated.")
             except TypeError:
                 self.sync_engine.run_sync()
+                self.sync_logs.append("✨ COMPLETE: Ecosystem is now LIVE and fully recalculated.")
+            except Exception as e:
+                self.sync_logs.append(f"❌ FATAL ERROR: {e}")
+                
+        self.is_syncing = False
 
     def _clean_name(self, name):
         return self.alias_map.get(" ".join(str(name).split()).lower(), " ".join(str(name).split()).title()) if name else ""
