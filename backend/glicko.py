@@ -10,8 +10,8 @@ RATING_START_DATE = "01/01/2020"
 # Caps match the exact GCTTA tier logic: 
 # All Stars: 0-900 | Div 2: 901-1200 | Div 1: 1201-Uncapped
 DIVISION_CAPS = {
-    1: {"floor": 1351, "ceiling": 9999, "label": "Division 1 (1351+)"},
-    2: {"floor": 901,  "ceiling": 1350, "label": "Division 2 (901–1350)"},
+    1: {"floor": 1300, "ceiling": 9999, "label": "Division 1 (1300+)"},
+    2: {"floor": 901,  "ceiling": 1299, "label": "Division 2 (901–1299)"},
     3: {"floor": 601,  "ceiling": 900,  "label": "Division 3 (601–900)"},
     4: {"floor": 301,  "ceiling": 600,  "label": "Division 4 (301–600)"},
     5: {"floor": 0,    "ceiling": 300,  "label": "Division 5 (0–300)"},
