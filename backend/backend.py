@@ -57,6 +57,11 @@ class ThunderData(LeagueEngineMixin, CommsEngineMixin):
             self.db = None
 
     def refresh_data(self, commit_history=False):
+        # HARD WIPE: Nuke the cached rating engine memory.
+        # This forces the sync engine to mathematically recalculate EVERY historical match 
+        # from scratch using the new Advanced Glicko-2 rules.
+        self.rating_engine = RatingEngine()
+        
         if hasattr(self, 'sync_engine') and self.sync_engine:
             try:
                 self.sync_engine.run_sync(commit_history=commit_history)
