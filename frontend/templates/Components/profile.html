@@ -1,3 +1,6 @@
+<!-- Hidden fallback so legacy global scripts looking for 'playerName' don't crash -->
+<div id="playerName" class="hidden"></div>
+
 <div id="statsContainer" class="hidden w-full max-w-4xl mx-auto px-4 animate-fade-in relative z-10 pb-12 mt-4 md:mt-8">
     
     <!-- Profile Header -->
@@ -85,7 +88,6 @@
 </div>
 
 <script>
-    // FIX: Attach to window to prevent redeclaration crashes in dynamic environments
     window._currentProfileData = null;
 
     window.toggleProfileTab = function(tab) {
@@ -114,6 +116,10 @@
         if (typeof window.switchTab === 'function') window.switchTab('profile', false);
         window.currentProfileName = playerName;
 
+        // Populate legacy elements safely if they exist globally
+        const legacyNameEl = document.getElementById('playerName');
+        if (legacyNameEl) legacyNameEl.innerText = playerName;
+
         const histContainer = document.getElementById('pHistory');
         const insightsGrid = document.getElementById('pInsightsGrid');
         
@@ -131,7 +137,7 @@
             const data = await res.json();
             window._currentProfileData = data;
 
-            // Populate Header
+            // Populate Header safely
             const nameEl = document.getElementById('pName');
             if(nameEl) nameEl.innerText = data.name || playerName;
             
